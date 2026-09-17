@@ -1,6 +1,6 @@
 // SIH26237 — Crypto Decryption Provenance
-// Owner: Person B. RULE (§6.7): only B runs `prisma migrate dev`.
-// A and C run `npx prisma migrate deploy && npx prisma generate`.
+// Owner: Person B. Only B runs `prisma migrate dev` — everyone else runs
+// `npx prisma migrate deploy && npx prisma generate` to pick up the schema.
 
 generator client {
   provider = "prisma-client-js"

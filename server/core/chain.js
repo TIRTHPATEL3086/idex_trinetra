@@ -5,17 +5,17 @@ import { env, ROOT } from '../lib/env.js';
 import { chainError } from '../lib/errors.js';
 
 /**
- * ethers v6 wrapper around DecryptionProvenance. Owner: B.
+ * ethers v6 wrapper around the DecryptionProvenance contract.
  *
  * CHAIN_MODE decides everything:
- *   local   -> hardhat node on 127.0.0.1:8545. Use this at the venue.
- *   sepolia -> public testnet, gives the jury a clickable Etherscan link.
- *   off     -> writes are skipped and flagged. The demo still runs end to end.
+ *   local   -> hardhat node on 127.0.0.1:8545, no network dependency.
+ *   sepolia -> public testnet, yields a verifiable Etherscan link.
+ *   off     -> writes are skipped and flagged; the rest of the pipeline runs.
  *
- * A dead RPC must never kill the demo, so every call degrades instead of
- * throwing where it safely can. `logDecryption` is the one exception: if the
+ * A dead RPC must not take the whole service down, so every call degrades
+ * instead of throwing where it safely can. `logDecryption` is the one exception: if the
  * chain write genuinely fails in a chain-enabled mode, we refuse to release a
- * marked file (§5 of CONTRACTS.md — no marked file without a receipt).
+ * marked file — there must never be a marked copy without a receipt.
  */
 
 // Minimal ABI — the four things the backend actually calls.
@@ -181,7 +181,7 @@ export async function receiptsOfAsset(assetRefHex) {
   }
 }
 
-/** Only Sepolia has a public explorer. Local returns null and C hides the link. */
+/** Only Sepolia has a public explorer; local and off return null. */
 export function buildEtherscanUrl(txHash) {
   if (!txHash) return null;
   const cfg = chainConfig();
@@ -194,7 +194,7 @@ export function buildAddressUrl(address) {
   return cfg.explorer ? `${cfg.explorer}/address/${address}` : null;
 }
 
-/** For /api/health — tells C whether to expect Etherscan links. */
+/** Connection summary for /api/health. */
 export async function chainStatus() {
   const cfg = chainConfig();
   const c = getContract();

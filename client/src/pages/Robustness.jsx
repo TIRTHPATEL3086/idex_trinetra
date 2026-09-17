@@ -1,19 +1,20 @@
 import { Header, Panel } from './Assets.jsx';
 
 /**
- * C7 — the two charts that prove the watermark actually works.
+ * Evidence that the watermark survives real-world damage.
  *
- * TODO(C): Recharts against getMetrics()
- *   - bar chart: 8 attacks x bits recovered (out of 48), with the target line
- *   - line chart: PSNR vs DELTA — the invisibility/robustness trade-off
+ * TODO: Recharts against getMetrics()
+ *   - bar chart: eight attacks x bits recovered (out of 48), with target line
+ *   - line chart: PSNR vs delta — the invisibility/robustness trade-off
  *
- * /api/metrics returns `source: "fixture"` until Person A's attack suite has
- * run. Badge that state honestly — never present targets as measurements.
+ * /api/metrics returns `source: "not-run"` and empty arrays until the attack
+ * suite has been run. Render an empty state for that rather than placeholder
+ * numbers — a chart of invented robustness figures is worse than no chart.
  */
 export default function Robustness() {
   return (
     <section>
-      <Header title="Robustness" hint="C7" />
+      <Header title="Robustness" />
       <Panel title="">Not built yet — see the TODO block in this file.</Panel>
     </section>
   );

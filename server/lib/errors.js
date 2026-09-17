@@ -1,5 +1,5 @@
 /**
- * One error shape for every route (docs/CONTRACTS.md §3):
+ * One error shape for every route:
  *   { "error": { "code": "BAD_INPUT", "message": "..." } }
  *
  * Throw an ApiError anywhere; the middleware turns it into that JSON.
@@ -7,7 +7,7 @@
 export class ApiError extends Error {
   /**
    * @param {string} code    one of the codes in the table below
-   * @param {string} message human-readable, safe to show the jury
+   * @param {string} message human-readable, safe to surface in the UI
    * @param {number} status  HTTP status
    * @param {object} [meta]  extra fields merged into the error object
    */
@@ -23,6 +23,14 @@ export class ApiError extends Error {
     return { error: { code: this.code, message: this.message, ...(this.meta || {}) } };
   }
 }
+
+/**
+ * Thrown by a `server/core/` function Person A has not written yet. It carries
+ * a 503 so an unfinished module surfaces as a clean "not ready" response
+ * instead of a stack trace, and the message names the exact export.
+ */
+export const notImplemented = (what) =>
+  new ApiError('CORE_NOT_READY', `core:${what} is not implemented yet`, 503, { module: what });
 
 export const badInput = (msg, meta) => new ApiError('BAD_INPUT', msg, 400, meta);
 export const notFound = (msg = 'Not found') => new ApiError('NOT_FOUND', msg, 404);

@@ -1,14 +1,15 @@
 /**
  * ============================================================================
- *  OWNER: PERSON A  (deliverable A7)  —  THIS TABLE WINS THE ROUND
- *  B and C: do not edit. Run it with `npm run attack:suite`.
+ *  OWNER: PERSON A
+ *  Everyone else: do not edit. Run it with `npm run attack:suite`.
  * ============================================================================
  *
  * Embeds a known 48-bit payload, runs 8 attacks against the marked image, tries
  * to extract the payload back from each, prints a table, and writes
- * `test/metrics.json` — which B serves at /api/metrics and C charts (C7).
+ * `test/metrics.json`, which the API serves at /api/metrics and the frontend
+ * charts on the Robustness screen.
  *
- * TARGETS (§5.3). These are the numbers to beat, not the numbers we have:
+ * TARGETS — the numbers to beat, not the numbers currently achieved:
  *
  *  # | Attack              | How to produce it                        | Target
  * ---+---------------------+------------------------------------------+--------
@@ -21,8 +22,8 @@
  *  7 | Gaussian noise      | add N(0, sigma) per pixel                | >=42/48
  *  8 | Screenshot sim      | resize + JPEG q80 + slight brightness    | >=40/48
  *
- * The H8 GO/NO-GO gate is attack #2: 46+/48 bits must survive JPEG q75.
- * If it does not, switch to the DCT fallback immediately — do not keep tuning.
+ * The go/no-go gate is attack #2: 46+/48 bits must survive JPEG q75.
+ * If it does not, switch to a DCT-based embedding rather than tuning further.
  *
  * Also sweep DELTA over [4, 8, 12, 16, 24] to produce `psnrCurve`, which is the
  * "invisible vs robust" trade-off graph. That chart is what makes the choice of
@@ -62,16 +63,16 @@ async function main() {
   //   5. for each delta in DELTAS: record psnrDb + bitsRecovered after JPEG q75
   //   6. write metrics.json in the shape below
 
-  console.log('  NOT IMPLEMENTED — this is Person A (deliverable A7).');
+  console.log('  NOT IMPLEMENTED — owned by Person A.');
   console.log('  Targets:\n');
   for (const a of ATTACKS) {
     console.log(`    ${a.name.padEnd(16)} >= ${a.target}/48`);
   }
   console.log(`\n  Delta sweep: ${DELTAS.join(', ')}`);
   console.log(`\n  Writes: ${path.relative(process.cwd(), OUT)}`);
-  console.log('  Served by B at GET /api/metrics, charted by C (C7).\n');
+  console.log('  Served at GET /api/metrics.\n');
 
-  // Shape contract — do not change without telling B and C.
+  // Response shape consumed by /api/metrics — coordinate before changing it.
   const metrics = {
     source: 'not-run',
     generatedAt: new Date().toISOString(),

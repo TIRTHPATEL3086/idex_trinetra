@@ -1,5 +1,5 @@
 /**
- * BK-tree over 64-bit perceptual hashes, Hamming metric. Owner: B.
+ * BK-tree over 64-bit perceptual hashes, Hamming metric.
  *
  * Why not pgvector or a brute-force scan? A BK-tree is ~40 lines, needs no
  * extension install, and prunes by the triangle inequality: for a query q and
@@ -7,7 +7,7 @@
  * [d - maxDist, d + maxDist]. Everything else is skipped without comparing.
  * 10k files searched in well under a second, rebuilt from Postgres on boot.
  *
- * We keep three trees — dHash, pHash, aHash — and OR their results (§5.2).
+ * We keep three trees — dHash, pHash, aHash — and OR their results.
  * If ANY one hash is within threshold the row stays a candidate. That single
  * choice is what catches screenshot-of-a-screen leaks that pHash alone misses.
  */
@@ -149,7 +149,7 @@ export function insert({ id, pHash, dHash, aHash }) {
 }
 
 /**
- * OR-vote across all three hashes (§5.2). A row survives if ANY hash is close.
+ * OR-vote across all three hashes. A row survives if ANY hash is close.
  *
  * @returns {{ candidates: Array<{id:number, dHashDist:number|null,
  *             pHashDist:number|null, aHashDist:number|null, best:number}>,

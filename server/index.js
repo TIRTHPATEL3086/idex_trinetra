@@ -16,10 +16,8 @@ import auditRouter from './routes/audit.js';
 import metricsRouter from './routes/metrics.js';
 
 /**
- * B5 — the Express app.
- *
- * Owner: Person B. A owns server/core/{watermark,phash,crypto,ecc,psnr,
- * confidence}.js; C owns client/. Nobody edits a file they do not own (§8.2).
+ * The Express application: routes, CORS, the shared error shape, and a boot
+ * sequence that builds the search index from PostgreSQL.
  */
 
 const app = express();
@@ -69,7 +67,7 @@ async function start() {
   warnAboutConfig((msg) => console.log('  ' + msg));
 
   // Build the BK-tree from Postgres. A dead DB must not stop the server from
-  // booting — MOCK_MODE has to keep working for C regardless.
+  // booting; the health endpoint reports it instead.
   const db = await dbStatus();
   if (db === 'up') {
     try {
@@ -92,7 +90,7 @@ async function start() {
     console.log('  ' + '─'.repeat(58));
     console.log(`  API      http://localhost:${env.port}/api/health`);
     console.log(`  CORS     ${env.corsOrigin.join(', ')}`);
-    console.log(`  MOCKS    ${env.mockMode ? 'ON  (C is unblocked)' : 'off (real pipeline)'}`);
+    console.log(`  DELTA    ${env.watermarkDelta}`);
     console.log('');
   });
 }

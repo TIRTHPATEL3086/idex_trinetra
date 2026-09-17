@@ -9,22 +9,20 @@ import Timeline from './pages/Timeline.jsx';
 import Robustness from './pages/Robustness.jsx';
 
 /**
- * C1 — the shell. Owner: Person C, who owns this entire folder.
+ * Application shell: sidebar navigation, header, and a live health indicator.
  *
- * This is a skeleton, not the finished design. It exists so the routes, the API
- * client and the dev proxy are already wired and C can start on screens at
- * Hour 0 instead of scaffolding. Replace the styling freely — but keep:
- *   - the verdict colours (emerald / amber / slate, never red)
- *   - the visual split between "On-chain (hashed)" and "Internal registry"
- * Both are graded, and both are in docs/CONTRACTS.md.
+ * Two conventions the screens inherit and should not break:
+ *   - verdict colours are emerald / amber / slate, never red
+ *   - on-chain values (hashed) and registry values (real names) are always
+ *     rendered as separate, labelled groups
  */
 
 const NAV = [
-  { to: '/assets', label: 'Assets', hint: 'C2' },
-  { to: '/decrypt', label: 'Decrypt', hint: 'C3' },
-  { to: '/trace', label: 'Trace', hint: 'C5' },
-  { to: '/timeline', label: 'Timeline', hint: 'C6' },
-  { to: '/robustness', label: 'Robustness', hint: 'C7' },
+  { to: '/assets', label: 'Assets' },
+  { to: '/decrypt', label: 'Decrypt' },
+  { to: '/trace', label: 'Trace' },
+  { to: '/timeline', label: 'Timeline' },
+  { to: '/robustness', label: 'Robustness' },
 ];
 
 export default function App() {
@@ -35,7 +33,7 @@ export default function App() {
       <aside className="w-60 shrink-0 border-r border-slate-800 bg-slate-900/60 p-5">
         <div className="mb-8">
           <div className="text-sm font-semibold tracking-wide text-slate-100">PROVENANCE</div>
-          <div className="mono mt-0.5 text-[11px] text-slate-500">SIH26237</div>
+          <div className="mono mt-0.5 text-[11px] text-slate-500">Decryption Register</div>
         </div>
 
         <nav className="space-y-1">
@@ -44,15 +42,14 @@ export default function App() {
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
-                `flex items-center justify-between rounded-md px-3 py-2 text-sm transition ${
+                `block rounded-md px-3 py-2 text-sm transition ${
                   isActive
                     ? 'bg-slate-800 text-slate-100'
                     : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
                 }`
               }
             >
-              <span>{item.label}</span>
-              <span className="mono text-[10px] text-slate-600">{item.hint}</span>
+              {item.label}
             </NavLink>
           ))}
         </nav>
@@ -63,7 +60,7 @@ export default function App() {
       <main className="flex-1 overflow-x-hidden">
         <header className="flex items-center justify-between border-b border-slate-800 px-8 py-4">
           <h1 className="text-sm font-medium text-slate-300">Decryption Provenance Register</h1>
-          {/* C: MetaMask connect button goes here (C1 / §7.3). */}
+          {/* TODO: MetaMask connect (wagmi + viem) for wallet-signed receipts. */}
           <button
             type="button"
             className="rounded-md border border-slate-700 px-3 py-1.5 text-xs text-slate-400 hover:border-slate-600 hover:text-slate-200"
@@ -90,31 +87,34 @@ export default function App() {
 
 function useHealth() {
   const [health, setHealth] = useState(null);
+
   useEffect(() => {
     let alive = true;
     const tick = () =>
       getHealth()
         .then((h) => alive && setHealth(h))
         .catch(() => alive && setHealth({ ok: false }));
+
     tick();
-    const t = setInterval(tick, 15000);
+    const timer = setInterval(tick, 15000);
     return () => {
       alive = false;
-      clearInterval(t);
+      clearInterval(timer);
     };
   }, []);
+
   return health;
 }
 
-/**
- * Small, but keep it. `coreFallback` being non-empty means the backend is
- * running stand-ins instead of Person A's real watermark — you want to notice
- * that here, not on stage.
- */
+/** Surfaces anything degraded — a dead DB or an unreachable RPC — at a glance. */
 function HealthBadge({ health }) {
   if (!health) return null;
 
-  const dot = health.ok ? (health.warnings?.length ? 'bg-probable' : 'bg-attributed') : 'bg-inconclusive';
+  const dot = !health.ok
+    ? 'bg-inconclusive'
+    : health.warnings?.length
+      ? 'bg-probable'
+      : 'bg-attributed';
 
   return (
     <div className="mono mt-8 space-y-1.5 border-t border-slate-800 pt-4 text-[11px] text-slate-500">
@@ -126,9 +126,8 @@ function HealthBadge({ health }) {
         <>
           <div>db {health.db}</div>
           <div>chain {health.chainMode}</div>
-          {health.mockMode && <div className="text-probable">mocks on</div>}
-          {health.coreFallback?.length > 0 && (
-            <div className="text-probable">core fallback ×{health.coreFallback.length}</div>
+          {health.warnings?.length > 0 && (
+            <div className="text-probable">{health.warnings.length} warning(s)</div>
           )}
         </>
       )}

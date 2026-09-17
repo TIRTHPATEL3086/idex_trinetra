@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'feat/**']
+  pull_request:
+    branches: [main]
+
+# No lockfiles are committed yet, so these use `npm install` and skip the npm
+# cache. Once package-lock.json and client/package-lock.json are committed,
+# switch to `npm ci` and add `cache: npm` to the setup-node steps.
+
+jobs:
+  backend:
+    name: Lint, smoke test, contracts
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Install
+        run: npm install
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Smoke test
+        run: npm run test:smoke
+
+      - name: Compile contracts
+        run: npm run chain:compile
+
+      - name: Contract tests
+        run: npm run chain:test
+
+  client:
+    name: Build client
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Install
+        working-directory: client
+        run: npm install
+
+      - name: Build
+        working-directory: client
+        run: npm run build

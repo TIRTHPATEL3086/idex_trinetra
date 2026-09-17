@@ -1,6 +1,6 @@
 /**
  * Contract tests — `npm run chain:test`.
- * These must be green before Hour 11 (see §6.6).
+ * These must pass before the contract is deployed anywhere.
  */
 const { expect } = require('chai');
 const { ethers } = require('hardhat');

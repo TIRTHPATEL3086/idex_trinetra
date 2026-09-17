@@ -1,6 +1,6 @@
 /**
- * The 48-bit payload layout (docs/CONTRACTS.md §2). Owner: B.
- * A calls these so both sides agree byte-for-byte on what the watermark carries.
+ * The 48-bit payload layout. The watermark and the register both depend on
+ * this codec, so it lives in one place and both sides import it.
  *
  *   bit  0 ... 35   ->  first 36 bits of receiptId  (2^36 receipts = plenty)
  *   bit 36 ... 43   ->  8-bit CRC over bits 0-35    (catches bad extractions)

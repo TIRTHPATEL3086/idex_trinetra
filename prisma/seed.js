@@ -1,11 +1,18 @@
 /**
- * Seed: 5 users + 3 assets (§6.6, Hours 2-4).
+ * Seed the database with 5 officers and 3 protected documents.
  *   npm run db:seed
  *
- * The assets are generated PNGs, encrypted on the way in, so the whole
- * Upload -> Decrypt -> Trace loop has something to work on from minute one
- * without anyone needing to find sample files.
+ * The assets are PNGs generated here and encrypted on the way in, so the whole
+ * Upload -> Decrypt -> Trace loop has something to work with immediately and
+ * nobody has to go find sample files.
+ *
+ * This script encrypts with node:crypto directly rather than going through
+ * server/core/crypto.js, so the database can be seeded before that module is
+ * implemented. It is plain AES-256-GCM, so whatever core/crypto.js ends up
+ * doing must stay byte-compatible with it — decrypting these rows is a useful
+ * first check that it is.
  */
+import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import zlib from 'node:zlib';
@@ -13,9 +20,17 @@ import { PrismaClient } from '@prisma/client';
 
 import { env, masterKey } from '../server/lib/env.js';
 import { assetRef, userRef, hexToBuffer } from '../server/lib/refs.js';
-import { encrypt, sha256 } from '../server/core/index.js';
 
 const prisma = new PrismaClient();
+
+const sha256 = (buffer) => crypto.createHash('sha256').update(buffer).digest();
+
+function encrypt(buffer, key) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const ciphertext = Buffer.concat([cipher.update(buffer), cipher.final()]);
+  return { ciphertext, iv, authTag: cipher.getAuthTag() };
+}
 
 const USERS = [
   { name: 'Officer U-017', dept: 'Ops Wing', email: 'u017@example.gov' },

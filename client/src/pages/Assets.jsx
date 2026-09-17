@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { getAssets } from '../lib/api.js';
 
 /**
- * C2 — documents table + upload dialog.
- * TODO(C): upload dialog (multipart -> uploadAsset), classification badges,
- *          empty state, row click -> /timeline?assetId=.
+ * The document register.
+ *
+ * TODO: upload dialog (multipart -> uploadAsset), classification badges,
+ * empty state, row click -> /timeline?assetId=.
  */
 export default function Assets() {
   const [assets, setAssets] = useState(null);
@@ -21,7 +22,7 @@ export default function Assets() {
 
   return (
     <section>
-      <Header title="Protected documents" hint="C2" />
+      <Header title="Protected documents" />
       <table className="w-full text-sm">
         <thead className="text-left text-xs uppercase tracking-wide text-slate-500">
           <tr className="border-b border-slate-800">
@@ -52,11 +53,10 @@ export default function Assets() {
   );
 }
 
-export function Header({ title, hint }) {
+export function Header({ title }) {
   return (
-    <div className="mb-6 flex items-baseline justify-between">
+    <div className="mb-6">
       <h2 className="text-lg font-medium text-slate-100">{title}</h2>
-      <span className="mono text-[10px] text-slate-600">{hint}</span>
     </div>
   );
 }

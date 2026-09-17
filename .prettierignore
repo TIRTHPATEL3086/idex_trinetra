@@ -1,0 +1,9 @@
+node_modules
+client/node_modules
+artifacts
+cache
+deployments
+client/dist
+dist
+data
+test/metrics.json

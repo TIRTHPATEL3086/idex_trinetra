@@ -10,7 +10,7 @@ export function notFoundHandler(req, _res, next) {
 
 /**
  * The last middleware. Everything the API returns on failure passes through
- * here, so the shape in docs/CONTRACTS.md §3 is guaranteed:
+ * here, so this shape is guaranteed:
  *   { "error": { "code": "...", "message": "..." } }
  */
 // eslint-disable-next-line no-unused-vars -- Express needs the 4-arg signature

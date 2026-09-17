@@ -1,119 +1,130 @@
 /**
- * Smoke test for the parts of the pipeline that have no third-party deps.
- * Owner: B. Run it with `npm run test:smoke` — it needs no npm install, no
- * PostgreSQL and no chain, so it works on a fresh clone at the venue.
+ * Smoke test for the dependency-free parts of the pipeline: the 48-bit payload
+ * codec, the BK-tree and its Hamming metric, and the ref-hashing helpers.
  *
- * Covers: the 48-bit payload codec, the BK-tree + Hamming metric, AES-256-GCM
- * (including tamper detection), and the confidence bands.
- * Does NOT cover Person A's real watermark — that is test/attack-suite.js.
+ * Run it with `npm run test:smoke`. It needs no npm install, no PostgreSQL and
+ * no chain, so it works on a fresh clone — which makes it the first thing to
+ * run when something looks broken.
+ *
+ * The watermark itself is covered by `npm run attack:suite`, not here.
  */
-const B = '../';
 
-process.env.ALLOW_CORE_FALLBACK = 'true';
-process.env.MOCK_MODE = 'false';
-process.env.CHAIN_MODE = 'off';
+import * as payload from '../server/core/payload.js';
+import * as bktree from '../server/core/bktree.js';
 
-const payload = await import(B + 'server/core/payload.js');
-const bktree = await import(B + 'server/core/bktree.js');
-const fb = await import(B + 'server/core/fallback/index.js');
+let pass = 0;
+let fail = 0;
 
-let pass = 0, fail = 0;
-const t = (name, fn) => {
-  try { fn(); console.log('  ok   ' + name); pass++; }
-  catch (e) { console.log('  FAIL ' + name + ' :: ' + e.message); fail++; }
+const test = (name, fn) => {
+  try {
+    fn();
+    console.log(`  ok   ${name}`);
+    pass++;
+  } catch (err) {
+    console.log(`  FAIL ${name}\n       ${err.message}`);
+    fail++;
+  }
 };
-const eq = (a, b, m) => { if (String(a) !== String(b)) throw new Error(`${m}: ${a} !== ${b}`); };
 
-// ---- payload codec round-trip ----
-const receiptId = '0x7f2c8b41e93ad6570c1f2b8e4a97d3510fbc62e8a4d17395c0e8b2f61a4d9037';
-const bits = payload.buildPayload(receiptId, 1);
-t('buildPayload is 48 bits of 0/1', () => {
-  eq(bits.length, 48, 'length');
-  if (/[^01]/.test(bits)) throw new Error('non-binary char');
-});
-t('parsePayload round-trips shortId + crc + version', () => {
-  const p = payload.parsePayload(bits);
-  eq(p.shortId, payload.shortIdOf(receiptId), 'shortId');
-  eq(p.crcOk, true, 'crcOk');
-  eq(p.version, 1, 'version');
-});
-t('a flipped bit fails CRC', () => {
-  const bad = (bits[0] === '0' ? '1' : '0') + bits.slice(1);
-  eq(payload.parsePayload(bad).crcOk, false, 'crc should fail');
-});
-t('bitAgreement / bitsMatching', () => {
-  eq(payload.bitAgreement(bits, bits), 1, 'self agreement');
-  eq(payload.bitsMatching(bits, bits), 48, 'self matching');
+const eq = (actual, expected, what) => {
+  if (String(actual) !== String(expected)) {
+    throw new Error(`${what}: expected ${expected}, got ${actual}`);
+  }
+};
+
+console.log('\n  smoke test\n');
+
+// ------------------------------------------------------- payload codec -----
+
+const RECEIPT_ID = '0x7f2c8b41e93ad6570c1f2b8e4a97d3510fbc62e8a4d17395c0e8b2f61a4d9037';
+const bits = payload.buildPayload(RECEIPT_ID, 1);
+
+test('buildPayload returns exactly 48 binary characters', () => {
+  eq(bits.length, payload.PAYLOAD_BITS, 'length');
+  if (/[^01]/.test(bits)) throw new Error('payload contains a non-binary character');
 });
 
-// ---- hamming + BK-tree ----
-t('hamming is a real popcount', () => {
-  eq(bktree.hamming(0n, 0n), 0, 'zero');
-  eq(bktree.hamming(0n, 0xffffffffffffffffn), 64, 'all bits');
-  eq(bktree.hamming(0b1011n, 0b1000n), 2, 'two bits');
-});
-t('BK-tree finds near neighbours and prunes far ones', () => {
-  const tree = new bktree.BKTree('t');
-  tree.insert(0b0000n, 1);
-  tree.insert(0b0011n, 2);           // distance 2 from query 0
-  tree.insert(0xffffffffffffffffn, 3); // distance 64 — must be pruned
-  const hits = tree.search(0n, 4).map(h => h.id).sort();
-  eq(JSON.stringify(hits), JSON.stringify([1, 2]), 'expected ids 1,2');
+test('parsePayload round-trips shortId, CRC and version', () => {
+  const parsed = payload.parsePayload(bits);
+  eq(parsed.shortId, payload.shortIdOf(RECEIPT_ID), 'shortId');
+  eq(parsed.crcOk, true, 'crcOk');
+  eq(parsed.version, 1, 'version');
 });
 
-// ---- AES-256-GCM round trip ----
-t('AES-256-GCM encrypt/decrypt round-trips', () => {
-  const key = Buffer.alloc(32, 7);
-  const plain = Buffer.from('ops order 44 — classified');
-  const { ciphertext, iv, authTag } = fb.cryptoImpl.encrypt(plain, key);
-  const out = fb.cryptoImpl.decrypt(ciphertext, key, iv, authTag);
-  eq(out.toString(), plain.toString(), 'round trip');
+test('a single flipped bit fails the CRC', () => {
+  const corrupted = (bits[0] === '0' ? '1' : '0') + bits.slice(1);
+  eq(payload.parsePayload(corrupted).crcOk, false, 'crcOk');
 });
-t('GCM rejects a tampered ciphertext', () => {
-  const key = Buffer.alloc(32, 7);
-  const { ciphertext, iv, authTag } = fb.cryptoImpl.encrypt(Buffer.from('abc'), key);
-  ciphertext[0] ^= 0xff;
+
+test('parsePayload rejects a malformed payload', () => {
   let threw = false;
-  try { fb.cryptoImpl.decrypt(ciphertext, key, iv, authTag); } catch { threw = true; }
-  if (!threw) throw new Error('tampering was not detected');
+  try {
+    payload.parsePayload('not-48-bits');
+  } catch {
+    threw = true;
+  }
+  if (!threw) throw new Error('a malformed payload was accepted');
 });
 
-// ---- confidence formula + bands ----
-t('confidence: perfect signal -> ATTRIBUTED', () => {
-  const r = fb.confidenceImpl.score({ bitConfidence: 1, pHashDist: 0, dHashDist: 0, aHashDist: 0, chainVerified: true });
-  eq(r.verdict, 'ATTRIBUTED', 'verdict');
-  eq(r.score, 1, 'score');
-  if (!r.reasons.length) throw new Error('reasons[] must never be empty');
-});
-t('confidence: no signal -> INCONCLUSIVE, no name', () => {
-  const r = fb.confidenceImpl.score({ bitConfidence: 0, pHashDist: 64, dHashDist: 64, aHashDist: 64, chainVerified: false });
-  eq(r.verdict, 'INCONCLUSIVE', 'verdict');
-  eq(r.score, 0, 'score');
-});
-t('confidence: middle band -> PROBABLE', () => {
-  const r = fb.confidenceImpl.score({ bitConfidence: 0.7, pHashDist: 10, dHashDist: 8, aHashDist: 14, chainVerified: true });
-  eq(r.verdict, 'PROBABLE', `verdict (score=${r.score})`);
+test('shortId fits in 36 bits', () => {
+  const shortId = payload.shortIdOf(RECEIPT_ID);
+  if (shortId > payload.SHORT_ID_MAX) throw new Error(`${shortId} exceeds 2^36 - 1`);
 });
 
-// ---- watermark stand-in round trip ----
-t('watermark stand-in embeds and extracts the same 48 bits', async () => {});
-const png = Buffer.from('89504e470d0a1a0a-fake-image-bytes');
-const emb = await fb.watermarkImpl.embed(png, bits, 12);
-const ext = await fb.watermarkImpl.extract(emb.buffer);
-t('stand-in watermark round-trips', () => {
-  eq(ext.payloadBits, bits, 'payload');
-  eq(ext.bitConfidence, 1, 'confidence');
-});
-t('stand-in extract on an unmarked file returns zero confidence', async () => {});
-const clean = await fb.watermarkImpl.extract(png);
-t('unmarked file -> bitConfidence 0', () => eq(clean.bitConfidence, 0, 'confidence'));
-
-const h1 = await fb.phashImpl.hashes(png);
-const h2 = await fb.phashImpl.hashes(emb.buffer);
-t('stand-in phash ignores the trailer (original and marked hash alike)', () => {
-  eq(h1.pHash, h2.pHash, 'pHash');
-  eq(h1.dHash, h2.dHash, 'dHash');
+test('bitAgreement and bitsMatching agree with themselves', () => {
+  eq(payload.bitAgreement(bits, bits), 1, 'agreement');
+  eq(payload.bitsMatching(bits, bits), payload.PAYLOAD_BITS, 'matching');
 });
 
-console.log(`\n  ${pass} passed, ${fail} failed`);
+test('bitAgreement drops as bits diverge', () => {
+  const half = bits.slice(0, 24) + bits.slice(24).replace(/[01]/g, (c) => (c === '0' ? '1' : '0'));
+  const agreement = payload.bitAgreement(bits, half);
+  eq(agreement, 0.5, 'agreement');
+});
+
+// -------------------------------------------------- Hamming and BK-tree ----
+
+test('hamming is a correct popcount', () => {
+  eq(bktree.hamming(0n, 0n), 0, 'identical');
+  eq(bktree.hamming(0n, 0xffffffffffffffffn), 64, 'opposite');
+  eq(bktree.hamming(0b1011n, 0b1000n), 2, 'two differing bits');
+});
+
+test('BK-tree returns near neighbours and prunes far ones', () => {
+  const tree = new bktree.BKTree('test');
+  tree.insert(0b0000n, 1);
+  tree.insert(0b0011n, 2); // distance 2 from the query
+  tree.insert(0xffffffffffffffffn, 3); // distance 64 — must be pruned
+
+  const ids = tree
+    .search(0n, 4)
+    .map((hit) => hit.id)
+    .sort();
+  eq(JSON.stringify(ids), JSON.stringify([1, 2]), 'matched ids');
+});
+
+test('BK-tree returns results sorted nearest first', () => {
+  const tree = new bktree.BKTree('test');
+  tree.insert(0b0111n, 1); // distance 3
+  tree.insert(0b0001n, 2); // distance 1
+  tree.insert(0b0011n, 3); // distance 2
+
+  const order = tree.search(0n, 8).map((hit) => hit.id);
+  eq(JSON.stringify(order), JSON.stringify([2, 3, 1]), 'order');
+});
+
+test('BK-tree keeps several events that share one hash', () => {
+  const tree = new bktree.BKTree('test');
+  tree.insert(0b1010n, 1);
+  tree.insert(0b1010n, 2);
+  eq(tree.search(0b1010n, 0).length, 2, 'hits');
+});
+
+test('searching an empty tree returns nothing', () => {
+  eq(new bktree.BKTree('test').search(0n, 64).length, 0, 'hits');
+});
+
+// ---------------------------------------------------------------------------
+
+console.log(`\n  ${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

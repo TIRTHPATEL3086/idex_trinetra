@@ -1,185 +1,179 @@
-# SIH26237 — Crypto Decryption Provenance
+# Decryption Provenance
 
-> **One line:** *"Jab koi secret file kholta hai, hum us copy me Haar-DWT se uska
-> invisible nishan daal dete hain aur record blockchain pe likh dete hain. Baad
-> me file leak ho, to kharab hui file se bhi nishan nikaal ke bata dete hain ki
-> kisne, kab kholi thi — aur kitna pakka hai."*
+Tracing the source of a leaked classified document, without ever accusing
+anyone the evidence does not support.
 
-| | |
+When a protected file is decrypted, the system does two things before the
+plaintext is released: it writes an immutable receipt to a blockchain, and it
+embeds an invisible, per-recipient watermark into the copy that is handed over.
+If that copy later leaks — compressed, resized, cropped, or photographed off a
+screen — the mark can still be recovered and matched back to the receipt.
+
+Built for SIH problem statement **SIH26237**. Node.js + React + PostgreSQL,
+CPU only: no GPU, no model, no training data.
+
+---
+
+## How it works
+
+**Release.** Decrypt (AES-256-GCM) → hash the exact bytes → derive a receipt id
+→ anchor `{receiptId, assetRef, userRef, contentSha, payloadCommit}` on chain →
+embed the 48-bit payload with a 2-level Haar DWT and QIM in the HL/LH sub-bands
+→ index the perceptual hashes → record the event.
+
+The chain write happens *before* the watermark is embedded. If it fails, no
+marked file is ever released, so a marked copy cannot exist without a receipt.
+
+**Trace.** Hash the leaked file → search the BK-tree index → extract the
+watermark → look up the receipt → verify it on chain → score.
+
+Two independent paths converge: the watermark identifies *which receipt*
+(exact, but fragile under heavy attack) and the perceptual hashes identify
+*which file* (fuzzy, but survives a screenshot). Agreement earns confidence;
+disagreement lowers it.
+
+**The verdict is a band, never a name on its own:**
+
+| Band | Score | Meaning |
+|---|---|---|
+| `ATTRIBUTED` | ≥ 0.85 | Report the match |
+| `PROBABLE` | 0.60 – 0.85 | A lead, not a conclusion |
+| `INCONCLUSIVE` | < 0.60 | Report that it is not known |
+
+Below the threshold the API returns `match: null`, so the frontend never
+receives a name it is not allowed to show. Every verdict carries `reasons[]` in
+plain sentences — a score that cannot be reviewed is not evidence.
+
+## Privacy
+
+No personal data reaches the blockchain. The only identity on chain is
+`keccak256(userId || salt)`; names, departments and devices live in PostgreSQL
+and never leave it.
+
+| On chain | In PostgreSQL |
 |---|---|
-| Problem Statement | **SIH26237** — Blockchain & Cybersecurity |
-| Stack | Node.js 20 + React 18 + PostgreSQL 16 (CPU only, no GPU, no ML) |
-| Team | 3 developers, 36 hours, one monorepo, one language |
+| `receiptId`, `assetRef`, `userRef` | names, departments, device labels |
+| `contentSha`, `payloadCommit` | perceptual hash index, PSNR, delta |
+| block timestamp | encrypted blobs, investigation history, `txHash` |
+
+`payloadCommit` is written at decryption time, so the block timestamp proves
+the watermark predates any leak rather than being constructed after one.
 
 ---
 
-## Read this before you write a line of code
+## Setup
 
-All three of us must agree on these six facts. If one person is confused here,
-integration at Hour 20 fails.
-
-1. **Encryption is not the deliverable.** AES is 20 lines of built-in Node. The
-   deliverable is what happens *after* decryption — the invisible mark and the
-   immutable register.
-2. **Module A (watermark) is the whole project.** If the mark does not survive
-   JPEG compression, nothing else matters.
-3. **Never say "this person did it" directly.** Three bands, always:
-   `ATTRIBUTED (>=85%)` / `PROBABLE (60-85%)` / `INCONCLUSIVE (<60%)`.
-4. **Names never go on the blockchain.** Only `keccak256(userId || salt)`. Real
-   identity lives in PostgreSQL only.
-5. **Blockchain = proof, PostgreSQL = search.**
-6. **Nobody edits a file they do not own.** Found a bug in someone else's file?
-   Message them.
-
----
-
-## Who owns what
-
-| | **Person A** | **Person B** | **Person C** |
-|---|---|---|---|
-| **Title** | Core Engine | Chain + Backend + DB | Frontend + Demo |
-| **Owns** | `server/core/{watermark,phash,crypto,ecc,psnr,confidence}.js`, `test/` | `contracts/`, `scripts/`, `server/` (routes, lib, middleware), `server/core/{chain,bktree,payload}.js`, `prisma/` | `client/` entirely, `docs/DEMO-SCRIPT.md` |
-| **Branch** | `feat/core-a` | `feat/backend-b` | `feat/client-c` |
-
-**`docs/CONTRACTS.md` is frozen.** It holds every function signature, every API
-response shape and the 48-bit payload layout. Read it first. Changing anything
-in it means: message the group → all three agree → one commit that updates the
-file *and* every caller.
-
----
-
-## Getting started (15 minutes)
+Requires Node 20+, PostgreSQL 16, and npm.
 
 ```bash
 git clone https://github.com/TIRTHPATEL3086/idex_trinetra.git
 cd idex_trinetra
-
-cp .env.example .env            # then read the comments in it
-npm install
-npm --prefix client install
+cp .env.example .env          # read the comments, set MASTER_KEY_HEX
+npm run setup                 # installs root + client deps, generates Prisma client
 ```
 
-### 1. PostgreSQL
+**Database**
 
 ```bash
-# easiest — no local install needed
 docker run --name sih-pg -e POSTGRES_PASSWORD=dev -p 5432:5432 -d postgres:16
-createdb -h localhost -U postgres provenance   # or via any GUI
+npm run db:migrate
+npm run db:seed               # 5 officers, 3 encrypted documents
 ```
+
+**Contract**
 
 ```bash
-npm run db:migrate        # ONLY Person B runs this
-npm run db:seed           # 5 officers + 3 protected documents
-npm run db:studio         # optional — browse the rows
+npm run chain:node            # terminal 1, leave running
+npm run chain:deploy:local    # terminal 2, prints the address
+# put the printed address in .env as LOCAL_CONTRACT_ADDRESS
 ```
 
-> **A and C:** never run `db:migrate`. Run `npx prisma migrate deploy && npx prisma generate`.
-> Two people generating migrations is how the schema breaks.
+`CHAIN_MODE` selects `local`, `sepolia` or `off`. Sepolia gives a publicly
+verifiable Etherscan link; fund the wallet from a faucet well in advance.
 
-### 2. Blockchain (local — never depends on the venue Wi-Fi)
+**Run**
 
 ```bash
-npm run chain:node                  # terminal 1 — leave it running
-npm run chain:compile
-npm run chain:test                  # must be green
-npm run chain:deploy:local          # terminal 2 — prints the address
-# paste the printed address into .env as LOCAL_CONTRACT_ADDRESS
+npm run dev                   # API  → http://localhost:4000
+npm run client:dev            # UI   → http://localhost:5173
 ```
 
-For the real demo link, switch `CHAIN_MODE=sepolia` and deploy there instead.
-**Get Sepolia test ETH from a faucet a full week early.** Faucets rate-limit,
-and teams die here every single year.
-
-### 3. Run it
-
-```bash
-npm run dev            # API on http://localhost:4000
-npm run client:dev     # UI  on http://localhost:5173
-```
-
-Check `http://localhost:4000/api/health` — it tells you in one request whether
-Postgres is up, whether the chain is connected, and whether anything is still
-running on a stand-in instead of Person A's real code.
+`GET /api/health` reports database, chain and index status, and lists anything
+degraded in `warnings`.
 
 ---
 
-## The two flags that keep everyone unblocked
+## API
 
-| Flag | What it does | Turn it off by |
+Base path `/api`. Every failure returns `{ "error": { "code", "message" } }`.
+
+| Method | Route | Purpose |
 |---|---|---|
-| `MOCK_MODE=true` | Every route returns the fixtures from `docs/CONTRACTS.md`. Person C builds complete screens without a working backend. | **Hour 28** |
-| `ALLOW_CORE_FALLBACK=true` | When Person A's core is still a stub, the server substitutes a stand-in so the full Upload → Decrypt → Trace loop runs anyway. | As soon as A lands real code |
+| `GET` | `/health` | Database, chain and index status |
+| `GET` | `/assets` | List protected documents |
+| `POST` | `/assets` | Upload and encrypt (multipart: `file`, `title`, `classification`) |
+| `GET` | `/assets/:id` | One document, with its refs |
+| `GET` | `/users` | Officers, with their hashed `userRef` |
+| `POST` | `/decrypt` | Release a watermarked copy and anchor the receipt |
+| `POST` | `/trace` | Attribute a leaked file (multipart: `file`) |
+| `GET` | `/trace/investigations` | Recent investigations |
+| `GET` | `/audit/:assetId` | Per-document access timeline |
+| `GET` | `/metrics` | Watermark robustness measurements |
+| `GET` | `/files/marked/:receiptId` | Download a released copy |
 
-**The fallbacks are not the project.** The stand-in "watermark" appends bytes to
-the end of the file and survives nothing; the stand-in "pHash" is not perceptual
-at all. `/api/health` reports `coreFallback` as a loud array so this is never
-discovered on stage. Delete `server/core/fallback/` at Hour 28.
-
----
+Error codes: `BAD_INPUT` · `NOT_FOUND` · `PAYLOAD_TOO_LARGE` ·
+`UNSUPPORTED_MEDIA` · `CHAIN_ERROR` · `CORE_NOT_READY` · `INTERNAL`.
 
 ## Layout
 
 ```
-├── contracts/DecryptionProvenance.sol      <- B  receipts on chain, role-gated
-├── scripts/deploy.cjs                      <- B
-├── hardhat.config.cjs                      <- B  local + sepolia
-├── prisma/{schema.prisma,seed.js}          <- B  4 models, 5 users, 3 assets
-├── server/
-│   ├── index.js                            <- B  express, cors, boot
-│   ├── routes/                             <- B  assets decrypt trace audit metrics
-│   ├── middleware/                         <- B  zod, multer, one error shape
-│   ├── lib/                                <- B  env, prisma, refs, mocks, errors
-│   └── core/
-│       ├── watermark.js  phash.js          <- A  *** THE PROJECT ***
-│       ├── crypto.js  ecc.js  psnr.js      <- A
-│       ├── confidence.js                   <- A  score -> band -> reasons[]
-│       ├── chain.js  bktree.js  payload.js <- B
-│       ├── index.js                        <- B  resolves A's core or a stand-in
-│       └── fallback/                       <- B  DELETE AT HOUR 28
-├── client/                                 <- C  entire folder
-├── test/attack-suite.js                    <- A  8 attacks -> metrics.json
-├── test/smoke.mjs                          <- B  runs on a fresh clone, no deps
-└── docs/CONTRACTS.md                       <- FROZEN, read this first
+contracts/         DecryptionProvenance.sol — role-gated receipt register
+scripts/           deployment
+prisma/            schema + seed
+server/
+  index.js         Express app and boot sequence
+  routes/          assets · decrypt · trace · audit · metrics · users · health
+  middleware/      Zod validation, uploads, the shared error shape
+  lib/             config, Prisma client, ref hashing, error types
+  core/
+    watermark.js   Haar DWT + QIM embed/extract
+    phash.js       pHash · dHash · aHash
+    crypto.js      AES-256-GCM, SHA-256, MD5
+    ecc.js         Reed-Solomon
+    psnr.js        quality measurement
+    confidence.js  score → band → reasons
+    payload.js     48-bit payload codec
+    chain.js       ethers v6 contract wrapper
+    bktree.js      BK-tree over perceptual hashes
+client/            React + Vite + Tailwind dashboard
+test/              smoke test, attack suite, contract tests
 ```
 
 ## Commands
 
-| Command | Does |
+| Command | Purpose |
 |---|---|
 | `npm run dev` | API with reload |
-| `npm run client:dev` | Vite dev server (proxies `/api` to :4000) |
-| `npm run db:migrate` / `db:seed` / `db:studio` | Prisma — **B only** for migrate |
-| `npm run chain:node` / `chain:test` / `chain:deploy:local` | Hardhat |
-| `npm run attack:suite` | A's 8 attacks → `test/metrics.json` |
-| `npm run test:smoke` | Payload codec, BK-tree, AES, confidence bands. Needs nothing installed — run it first when something looks broken. |
+| `npm run client:dev` | Frontend dev server (proxies `/api`) |
+| `npm run test:smoke` | Payload codec and BK-tree. No install or database needed |
+| `npm run attack:suite` | Eight attacks against the watermark → `test/metrics.json` |
+| `npm run chain:test` | Contract tests |
+| `npm run db:migrate` · `db:seed` · `db:studio` | Prisma |
+| `npm run lint` · `npm run format` | ESLint, Prettier |
 
----
+## Status
 
-## Integration checkpoints — the whole team stops for 15 minutes
+`server/core/{watermark,phash,crypto,ecc,psnr,confidence}.js` are specified but
+not yet implemented; calling one returns `503 CORE_NOT_READY` naming the module.
+Everything else — contract, API, schema, indexing, chain integration — is built.
 
-| Hour | Checkpoint | Pass criteria |
-|---|---|---|
-| **H2** | Contracts frozen | `docs/CONTRACTS.md` merged, all three agree |
-| **H8** | **GO / NO-GO** | A: 46+/48 bits survive JPEG q75 · B: mocks live · C: two screens built |
-| **H14** | Chain alive | Real Sepolia txHash exists, C renders an Etherscan link |
-| **H20** | **FIRST FULL LOOP** | Upload → Decrypt → download → re-upload → verdict. Ugly is fine. |
-| **H28** | Feature freeze | No mocks, no fallbacks. New features banned. |
-| **H33** | Demo freeze | Video recorded, deck done, two rehearsals |
+## Contributing
 
-## The four mistakes that kill SIH teams
+Ownership is split three ways and file headers state the owner. Work on
+`feat/core-a`, `feat/backend-b` or `feat/client-c`; merge to `main` at
+integration points. Only one person runs `prisma migrate dev` — everyone else
+runs `npx prisma migrate deploy && npx prisma generate`.
 
-1. **Downloading packages at the venue.** Wi-Fi will not work. Zip `node_modules`
-   onto a pendrive.
-2. **No Sepolia test ETH.** Get it a week early.
-3. **`sharp` install failing.** Test on all three laptops at home. Jimp is the
-   pure-JS backup path.
-4. **Starting integration at Hour 30.** Start at Hour 8 with mocks.
+## License
 
----
-
-## Git rules
-
-- Branches `feat/core-a`, `feat/backend-b`, `feat/client-c`. Merge to `main`
-  **only at the integration checkpoints**.
-- Commit every 30–45 minutes. `git stash` is not a backup strategy.
-- `.env` is gitignored. `.env.example` lists every key.
+MIT — see [LICENSE](LICENSE).

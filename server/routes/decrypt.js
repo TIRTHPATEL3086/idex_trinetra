@@ -5,7 +5,6 @@ import { z } from 'zod';
 
 import { prisma } from '../lib/prisma.js';
 import { env, masterKey } from '../lib/env.js';
-import { mockDecrypt } from '../lib/mocks.js';
 import { notFound, badInput } from '../lib/errors.js';
 import {
   assetRef as makeAssetRef,
@@ -24,7 +23,7 @@ import { decrypt as aesDecrypt, sha256, md5, embed, hashes } from '../core/index
 import { buildPayload, shortIdOf } from '../core/payload.js';
 
 /**
- * B7 — THE ORCHESTRATOR. The 13 steps of docs/CONTRACTS.md §5, in that order.
+ * The orchestrator: decrypt, anchor, mark, index, record — in that order.
  *
  * The one rule that matters: the CHAIN WRITE (step 8) happens BEFORE the
  * watermark is embedded (step 9). If the chain write fails we throw, and no
@@ -43,8 +42,6 @@ const DecryptBody = z.object({
 router.post('/', validate(DecryptBody), async (req, res, next) => {
   const startedAt = Date.now();
   try {
-    if (env.mockMode) return res.json(mockDecrypt);
-
     const { assetId, userId, deviceLabel } = req.valid;
     const delta = req.valid.delta ?? env.watermarkDelta;
 
@@ -135,7 +132,7 @@ router.post('/', validate(DecryptBody), async (req, res, next) => {
     // --- 12. Keep the search index hot -------------------------------------
     bktree.insert({ id: event.id, pHash: h.pHash, dHash: h.dHash, aHash: h.aHash });
 
-    // --- 13. Respond (docs/CONTRACTS.md §3) --------------------------------
+    // --- 13. Respond -------------------------------------------------------
     res.json({
       receiptId: receiptIdHex,
       txHash: anchor.txHash,
@@ -145,7 +142,7 @@ router.post('/', validate(DecryptBody), async (req, res, next) => {
       psnrDb: Number.isFinite(marked.psnrDb) ? marked.psnrDb : null,
       deltaUsed: marked.deltaUsed ?? delta,
       downloadUrl: `/api/files/marked/${shortHexId}`,
-      // Extras beyond the frozen contract — additive, so C can ignore them.
+      // Diagnostics — additive, safe for a client to ignore.
       chainMode: anchor.chainMode,
       chainSkipped: anchor.skipped,
       elapsedMs: Date.now() - startedAt,
@@ -163,8 +160,6 @@ filesRouter.get('/marked/:receiptId', async (req, res, next) => {
   try {
     const key = String(req.params.receiptId).replace(/^0x/, '');
     if (!/^[0-9a-f]{4,64}$/i.test(key)) throw badInput('Malformed receiptId');
-
-    if (env.mockMode) throw notFound('No marked file in MOCK_MODE — turn MOCK_MODE off.');
 
     // The download URL carries the first 16 hex chars of the receiptId.
     const event = await prisma.decryptionEvent.findFirst({

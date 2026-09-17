@@ -5,7 +5,6 @@ import { z } from 'zod';
 
 import { prisma } from '../lib/prisma.js';
 import { env, masterKey } from '../lib/env.js';
-import { mockAssets } from '../lib/mocks.js';
 import { badInput, notFound } from '../lib/errors.js';
 import { assetRef, hexToBuffer, bufferToHex } from '../lib/refs.js';
 import { singleFile } from '../middleware/upload.js';
@@ -13,7 +12,7 @@ import { validate } from '../middleware/validate.js';
 import { encrypt, sha256 } from '../core/index.js';
 
 /**
- * B6 — Upload -> SHA-256 -> AES-256-GCM encrypt -> store -> list.
+ * Upload -> SHA-256 -> AES-256-GCM encrypt -> store -> list.
  *
  * The plaintext is never written to disk. Multer keeps it in memory, we encrypt
  * it in memory, and only the ciphertext reaches `data/cipher/`. That is what
@@ -32,15 +31,6 @@ const UploadBody = z.object({
 // ------------------------------------------------- POST /api/assets ---------
 router.post('/', singleFile, validate(UploadBody), async (req, res, next) => {
   try {
-    if (env.mockMode) {
-      return res.status(201).json({
-        assetId: 12,
-        title: req.valid.title,
-        sha256: 'ab34c1f7092de5b8461ac37de2095f8b1c6ad4739e02b85fc6193ad7402e8b51',
-        sizeBytes: req.file?.size ?? 402193,
-      });
-    }
-
     if (!req.file) throw badInput('No file uploaded. Send multipart field "file".');
 
     const plaintext = req.file.buffer;
@@ -91,8 +81,6 @@ router.post('/', singleFile, validate(UploadBody), async (req, res, next) => {
 // -------------------------------------------------- GET /api/assets ---------
 router.get('/', async (_req, res, next) => {
   try {
-    if (env.mockMode) return res.json({ assets: mockAssets });
-
     const rows = await prisma.asset.findMany({
       orderBy: { createdAt: 'desc' },
       include: { _count: { select: { events: true } } },
@@ -117,12 +105,6 @@ router.get('/:assetId', async (req, res, next) => {
   try {
     const assetId = Number(req.params.assetId);
     if (!Number.isInteger(assetId)) throw badInput('assetId must be an integer');
-
-    if (env.mockMode) {
-      const found = mockAssets.find((a) => a.assetId === assetId);
-      if (!found) throw notFound(`No asset ${assetId}`);
-      return res.json(found);
-    }
 
     const a = await prisma.asset.findUnique({
       where: { id: assetId },

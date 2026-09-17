@@ -19,11 +19,8 @@ dist/
 build/
 client/dist/
 
-# runtime data (encrypted blobs + marked files) — never commit
-data/cipher/*
-data/marked/*
-!data/cipher/.gitkeep
-!data/marked/.gitkeep
+# runtime data (encrypted blobs + watermarked releases) — never commit
+data/
 
 # misc
 *.log

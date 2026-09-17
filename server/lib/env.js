@@ -24,11 +24,6 @@ export const env = {
     .map((s) => s.trim())
     .filter(Boolean),
 
-  /** Every route returns the docs/CONTRACTS.md fixtures. C builds against this. */
-  mockMode: bool(process.env.MOCK_MODE, true),
-  /** Let the server substitute deterministic stand-ins for A's unfinished core. */
-  allowCoreFallback: bool(process.env.ALLOW_CORE_FALLBACK, true),
-
   // ---------- crypto ----------
   masterKeyHex: process.env.MASTER_KEY_HEX || '00'.repeat(32),
   refSalt: process.env.REF_SALT || 'sih26237-do-not-change-me',
@@ -58,11 +53,11 @@ export const env = {
 export const masterKey = () => Buffer.from(env.masterKeyHex, 'hex');
 
 /**
- * Loud startup warnings. Better to see these at Hour 4 than at Hour 34.
+ * Startup warnings for configuration that will fail later rather than now.
  */
 export function warnAboutConfig(log = console.warn) {
   if (env.masterKeyHex === '00'.repeat(32)) {
-    log('[config] MASTER_KEY_HEX is all zeroes — fine for the demo, never for real.');
+    log('[config] MASTER_KEY_HEX is all zeroes — acceptable locally, never in production.');
   }
   if (env.chainMode === 'local' && !env.localContractAddress) {
     log('[config] CHAIN_MODE=local but LOCAL_CONTRACT_ADDRESS is empty.');
@@ -74,8 +69,5 @@ export function warnAboutConfig(log = console.warn) {
   }
   if (env.chainMode === 'off') {
     log('[config] CHAIN_MODE=off — receipts will NOT be anchored on chain.');
-  }
-  if (env.mockMode) {
-    log('[config] MOCK_MODE=true — routes return fixtures, not real data.');
   }
 }

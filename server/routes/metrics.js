@@ -2,15 +2,16 @@ import { Router } from 'express';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { env, ROOT } from '../lib/env.js';
-import { mockMetrics } from '../lib/mocks.js';
+import { ROOT } from '../lib/env.js';
 
 /**
- * B9 — serves whatever Person A's `test/attack-suite.js` last wrote to
- * `test/metrics.json`. C's Recharts screens (C7) read this directly.
+ * Serves whatever `test/attack-suite.js` last wrote to `test/metrics.json`:
+ * the eight-attack survival table and the PSNR-vs-delta curve. The frontend
+ * charts it directly.
  *
- * Until A's suite has run, we serve the fixture and set `source: "fixture"` so
- * the UI can badge it honestly. Never present target numbers as measured ones.
+ * Before the suite has been run the file does not exist, and this returns empty
+ * arrays with `source: "not-run"`. It never invents numbers — a chart of made-up
+ * robustness figures is worse than no chart.
  */
 const router = Router();
 
@@ -18,23 +19,25 @@ const METRICS_PATH = path.join(ROOT, 'test', 'metrics.json');
 
 router.get('/', async (_req, res, next) => {
   try {
-    if (env.mockMode) {
-      return res.json({ ...mockMetrics, source: 'fixture', generatedAt: null });
+    const raw = await fs.readFile(METRICS_PATH, 'utf8').catch(() => null);
+
+    if (raw === null) {
+      return res.json({
+        attacks: [],
+        psnrCurve: [],
+        source: 'not-run',
+        generatedAt: null,
+        hint: 'Run `npm run attack:suite` to generate test/metrics.json.',
+      });
     }
 
-    try {
-      const raw = await fs.readFile(METRICS_PATH, 'utf8');
-      const parsed = JSON.parse(raw);
-      return res.json({
-        attacks: parsed.attacks ?? [],
-        psnrCurve: parsed.psnrCurve ?? [],
-        source: parsed.source ?? 'measured',
-        generatedAt: parsed.generatedAt ?? null,
-      });
-    } catch {
-      // test/metrics.json not written yet — A's suite has not run.
-      return res.json({ ...mockMetrics, source: 'fixture', generatedAt: null });
-    }
+    const parsed = JSON.parse(raw);
+    res.json({
+      attacks: parsed.attacks ?? [],
+      psnrCurve: parsed.psnrCurve ?? [],
+      source: parsed.source ?? 'measured',
+      generatedAt: parsed.generatedAt ?? null,
+    });
   } catch (err) {
     next(err);
   }

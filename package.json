@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "SIH26237 — Crypto Decryption Provenance. Invisible DWT watermark + blockchain-anchored decryption receipts.",
+  "license": "MIT",
+  "description": "Decryption provenance: invisible DWT watermarking plus blockchain-anchored release receipts.",
   "engines": {
     "node": ">=20"
   },
@@ -24,8 +25,13 @@
     "chain:deploy:local": "hardhat run scripts/deploy.cjs --network localhost",
     "chain:deploy:sepolia": "hardhat run scripts/deploy.cjs --network sepolia",
 
-    "attack:suite": "node test/attack-suite.js",
     "test:smoke": "node test/smoke.mjs",
+    "attack:suite": "node test/attack-suite.js",
+
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
 
     "client:dev": "npm --prefix client run dev",
     "client:build": "npm --prefix client run build",
@@ -48,9 +54,16 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@eslint/js": "^9.16.0",
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "eslint": "^9.16.0",
+    "eslint-plugin-react": "^7.37.2",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "globals": "^15.13.0",
     "hardhat": "^2.22.17",
     "nodemon": "^3.1.7",
+    "prettier": "^3.4.2",
+    "prettier-plugin-solidity": "^1.4.1",
     "prisma": "^5.22.0"
   }
 }

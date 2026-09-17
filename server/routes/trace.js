@@ -2,7 +2,6 @@ import { Router } from 'express';
 
 import { prisma } from '../lib/prisma.js';
 import { env } from '../lib/env.js';
-import { mockTraceFor } from '../lib/mocks.js';
 import { badInput } from '../lib/errors.js';
 import { bufferToHex } from '../lib/refs.js';
 import { singleFile } from '../middleware/upload.js';
@@ -12,7 +11,7 @@ import { hashes, extract, score, sha256, hamming } from '../core/index.js';
 import { parsePayload, bitAgreement, bitsMatching, PAYLOAD_BITS } from '../core/payload.js';
 
 /**
- * B8 — the 9 steps of docs/CONTRACTS.md §6.
+ * Attribution: hash, search, extract, cross-check, score.
  *
  * TWO INDEPENDENT PATHS converge here, and that is deliberate:
  *   - the watermark says WHICH receipt (exact, but fragile under heavy attack)
@@ -20,17 +19,15 @@ import { parsePayload, bitAgreement, bitsMatching, PAYLOAD_BITS } from '../core/
  * Agreement between them is what earns a high confidence. Disagreement is what
  * pushes the verdict down to PROBABLE or INCONCLUSIVE — which is the point.
  *
- * We return `match: null` for INCONCLUSIVE. The frontend never gets a name it
- * is not allowed to show. A wrong accusation ends a real person's career.
+ * We return `match: null` for INCONCLUSIVE, so the frontend never receives a
+ * name it is not allowed to show. A wrong accusation is the expensive failure
+ * here, not a missed one.
  */
 const router = Router();
 
 router.post('/', singleFile, async (req, res, next) => {
   const startedAt = Date.now();
   try {
-    if (env.mockMode) {
-      return res.json(mockTraceFor(req.query.mockVerdict));
-    }
     if (!req.file) throw badInput('No file uploaded. Send multipart field "file".');
 
     const buffer = req.file.buffer;
@@ -86,8 +83,8 @@ router.post('/', singleFile, async (req, res, next) => {
       : { verified: false };
 
     // --- 7. Confidence -> band -> reasons ----------------------------------
-    // Prefer the direct bit comparison against what we know we embedded; fall
-    // back to A's self-reported confidence when there is no candidate at all.
+    // Prefer a direct comparison against the bits we know we embedded; fall back
+    // to the extractor’s own confidence when there is no candidate at all.
     const agreement = event
       ? bitAgreement(marked.payloadBits, event.payloadBits)
       : marked.bitConfidence ?? 0;
@@ -159,9 +156,6 @@ router.post('/', singleFile, async (req, res, next) => {
 /** Investigation history — nice-to-have for the dashboard, cheap to serve. */
 router.get('/investigations', async (_req, res, next) => {
   try {
-    if (env.mockMode) {
-      return res.json({ investigations: [mockTraceFor('attributed')] });
-    }
     const rows = await prisma.investigation.findMany({
       orderBy: { createdAt: 'desc' },
       take: 50,
