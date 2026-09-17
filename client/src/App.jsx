@@ -2,6 +2,7 @@ import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react';
 
 import { getHealth } from './lib/api.js';
+import Logo from './components/Logo.jsx';
 import Assets from './pages/Assets.jsx';
 import Decrypt from './pages/Decrypt.jsx';
 import Trace from './pages/Trace.jsx';
@@ -9,26 +10,23 @@ import Timeline from './pages/Timeline.jsx';
 import Robustness from './pages/Robustness.jsx';
 
 /**
- * Application shell: navigation, header, and a live health indicator.
+ * Application shell — a white, rounded app card sitting on a dark olive canvas,
+ * with a lime accent and a chunky rounded logo, matching the reference design.
  *
- * Responsive contract (must hold at every width from 320px up):
- *   - below lg the sidebar is an off-canvas drawer opened by the header button;
- *     from lg up it is a persistent column
+ * Responsive contract (holds from 320px up):
+ *   - below lg the sidebar is an off-canvas drawer opened from the top bar;
+ *     from lg up it is a persistent column inside the card
  *   - no horizontal page scroll at any width
- *   - the header, nav and content reflow rather than shrinking to fit
  *
- * Two display conventions the screens inherit:
- *   - verdict colours are emerald / amber / slate, never red
- *   - on-chain (hashed) and registry (real name) values are shown as separate,
- *     labelled groups
+ * Verdict colours stay semantic (green / amber / slate, never red).
  */
 
 const NAV = [
-  { to: '/assets', label: 'Assets' },
-  { to: '/decrypt', label: 'Decrypt' },
-  { to: '/trace', label: 'Trace' },
-  { to: '/timeline', label: 'Timeline' },
-  { to: '/robustness', label: 'Robustness' },
+  { to: '/assets', label: 'Documents', icon: DocIcon },
+  { to: '/decrypt', label: 'Decrypt', icon: KeyIcon },
+  { to: '/trace', label: 'Trace', icon: SearchIcon },
+  { to: '/timeline', label: 'Timeline', icon: ClockIcon },
+  { to: '/robustness', label: 'Robustness', icon: ChartIcon },
 ];
 
 export default function App() {
@@ -36,12 +34,10 @@ export default function App() {
   const [navOpen, setNavOpen] = useState(false);
   const location = useLocation();
 
-  // Close the mobile drawer on navigation.
   useEffect(() => {
     setNavOpen(false);
   }, [location.pathname]);
 
-  // Lock body scroll while the drawer is open on mobile.
   useEffect(() => {
     document.body.style.overflow = navOpen ? 'hidden' : '';
     return () => {
@@ -50,58 +46,78 @@ export default function App() {
   }, [navOpen]);
 
   return (
-    <div className="min-h-screen lg:flex">
-      {/* Backdrop — only present while the drawer is open, below lg. */}
-      {navOpen && (
-        <button
-          type="button"
-          aria-label="Close navigation"
-          onClick={() => setNavOpen(false)}
-          className="fixed inset-0 z-30 bg-black/60 lg:hidden"
-        />
-      )}
-
-      <Sidebar health={health} open={navOpen} />
-
-      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-800 bg-slate-950/90 px-4 py-3 backdrop-blur sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-olive p-2 sm:p-4 lg:p-6">
+      <div className="mx-auto flex min-h-[calc(100vh-1rem)] w-full max-w-[1440px] flex-col overflow-hidden rounded-2xl bg-white shadow-app sm:min-h-[calc(100vh-2rem)] sm:rounded-3xl lg:min-h-[calc(100vh-3rem)]">
+        {/* ---- top bar ---- */}
+        <header className="flex items-center gap-3 border-b border-line px-4 py-3.5 sm:px-6">
           <button
             type="button"
             aria-label="Open navigation"
             aria-expanded={navOpen}
             onClick={() => setNavOpen(true)}
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-slate-700 text-slate-300 hover:border-slate-600 hover:text-slate-100 lg:hidden"
+            className="btn-icon lg:hidden"
           >
             <MenuIcon />
           </button>
 
-          <h1 className="min-w-0 flex-1 truncate text-sm font-medium text-slate-300">
-            Decryption Provenance Register
-          </h1>
+          <Logo size="sm" />
 
-          {/* TODO: MetaMask connect (wagmi + viem) for wallet-signed receipts. */}
-          <button
-            type="button"
-            className="shrink-0 rounded-md border border-slate-700 px-3 py-2 text-xs text-slate-400 hover:border-slate-600 hover:text-slate-200"
-          >
-            <span className="hidden sm:inline">Connect wallet</span>
-            <span className="sm:hidden">Connect</span>
-          </button>
+          <nav className="mx-auto hidden items-center gap-1 lg:flex">
+            {NAV.map(({ to, label }) => (
+              <NavLink
+                key={to}
+                to={to}
+                className={({ isActive }) =>
+                  `rounded-full px-4 py-2 text-sm font-semibold transition ${
+                    isActive ? 'bg-night text-white' : 'text-ink-muted hover:text-ink'
+                  }`
+                }
+              >
+                {label}
+              </NavLink>
+            ))}
+          </nav>
+
+          <div className="ml-auto flex items-center gap-2">
+            <HealthChip health={health} />
+            <button type="button" className="btn-icon" aria-label="Notifications">
+              <BellIcon />
+            </button>
+            {/* TODO: MetaMask connect (wagmi + viem). */}
+            <button type="button" className="btn-dark hidden !px-4 sm:inline-flex">
+              <WalletIcon />
+              Connect
+            </button>
+          </div>
         </header>
 
-        <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-          <div className="mx-auto w-full max-w-6xl">
-            <Routes>
-              <Route path="/" element={<Navigate to="/assets" replace />} />
-              <Route path="/assets" element={<Assets />} />
-              <Route path="/decrypt" element={<Decrypt />} />
-              <Route path="/trace" element={<Trace />} />
-              <Route path="/timeline" element={<Timeline />} />
-              <Route path="/robustness" element={<Robustness />} />
-              <Route path="*" element={<p className="text-slate-500">No such screen.</p>} />
-            </Routes>
-          </div>
-        </main>
+        {/* ---- body ---- */}
+        <div className="flex min-h-0 flex-1">
+          {navOpen && (
+            <button
+              type="button"
+              aria-label="Close navigation"
+              onClick={() => setNavOpen(false)}
+              className="fixed inset-0 z-30 bg-night/40 backdrop-blur-sm lg:hidden"
+            />
+          )}
+
+          <Sidebar health={health} open={navOpen} />
+
+          <main className="min-w-0 flex-1 overflow-x-hidden px-4 py-6 sm:px-6 sm:py-7 lg:px-8">
+            <div className="mx-auto w-full max-w-6xl">
+              <Routes>
+                <Route path="/" element={<Navigate to="/assets" replace />} />
+                <Route path="/assets" element={<Assets />} />
+                <Route path="/decrypt" element={<Decrypt />} />
+                <Route path="/trace" element={<Trace />} />
+                <Route path="/timeline" element={<Timeline />} />
+                <Route path="/robustness" element={<Robustness />} />
+                <Route path="*" element={<p className="text-ink-muted">No such screen.</p>} />
+              </Routes>
+            </div>
+          </main>
+        </div>
       </div>
     </div>
   );
@@ -110,48 +126,57 @@ export default function App() {
 function Sidebar({ health, open }) {
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-40 flex w-64 max-w-[85vw] flex-col border-r border-slate-800 bg-slate-900 p-5 transition-transform duration-200 lg:static lg:z-auto lg:w-60 lg:max-w-none lg:translate-x-0 lg:bg-slate-900/60 ${
-        open ? 'translate-x-0' : '-translate-x-full'
+      className={`fixed inset-y-0 left-0 z-40 flex w-64 max-w-[82vw] flex-col border-r border-line bg-white p-4 transition-transform duration-200 lg:static lg:z-auto lg:w-60 lg:max-w-none lg:translate-x-0 ${
+        open ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
       }`}
     >
-      <div className="mb-8">
-        <div className="text-sm font-semibold tracking-wide text-slate-100">PROVENANCE</div>
-        <div className="mono mt-0.5 text-[11px] text-slate-500">Decryption Register</div>
+      <div className="mb-4 flex items-center justify-between lg:hidden">
+        <Logo size="sm" />
       </div>
 
+      <div className="mb-2 px-2 text-[10px] font-bold uppercase tracking-widest text-ink-faint">
+        Menu
+      </div>
       <nav className="space-y-1">
-        {NAV.map((item) => (
+        {NAV.map(({ to, label, icon: Icon }) => (
           <NavLink
-            key={item.to}
-            to={item.to}
+            key={to}
+            to={to}
             className={({ isActive }) =>
-              `block rounded-md px-3 py-2.5 text-sm transition ${
-                isActive
-                  ? 'bg-slate-800 text-slate-100'
-                  : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+              `group flex items-center gap-3 rounded-full px-4 py-2.5 text-sm font-semibold transition ${
+                isActive ? 'bg-night text-white' : 'text-ink-muted hover:bg-line/60 hover:text-ink'
               }`
             }
           >
-            {item.label}
+            {({ isActive }) => (
+              <>
+                <Icon active={isActive} />
+                <span>{label}</span>
+              </>
+            )}
           </NavLink>
         ))}
       </nav>
 
-      <HealthBadge health={health} />
+      <div className="mt-auto space-y-3 pt-6">
+        <NavLink to="/trace" className="btn-dark w-full">
+          <SearchIcon light />
+          Trace a leak
+        </NavLink>
+        <HealthBadge health={health} />
+      </div>
     </aside>
   );
 }
 
 function useHealth() {
   const [health, setHealth] = useState(null);
-
   useEffect(() => {
     let alive = true;
     const tick = () =>
       getHealth()
         .then((h) => alive && setHealth(h))
         .catch(() => alive && setHealth({ ok: false }));
-
     tick();
     const timer = setInterval(tick, 15000);
     return () => {
@@ -159,46 +184,145 @@ function useHealth() {
       clearInterval(timer);
     };
   }, []);
-
   return health;
 }
 
-/** Surfaces anything degraded — a dead DB or an unreachable RPC — at a glance. */
+function healthTone(health) {
+  if (!health) return { dot: 'bg-ink-faint', label: '…', tone: 'text-ink-faint' };
+  if (!health.ok) return { dot: 'bg-inconclusive', label: 'API down', tone: 'text-inconclusive' };
+  if (health.warnings?.length)
+    return { dot: 'bg-probable', label: 'Degraded', tone: 'text-probable' };
+  return { dot: 'bg-attributed', label: 'All systems go', tone: 'text-attributed' };
+}
+
+function HealthChip({ health }) {
+  const { dot, label, tone } = healthTone(health);
+  return (
+    <span className="hidden items-center gap-2 rounded-full border border-line bg-white px-3 py-2 text-xs font-bold sm:inline-flex">
+      <span className={`h-2 w-2 rounded-full ${dot}`} />
+      <span className={tone}>{label}</span>
+    </span>
+  );
+}
+
 function HealthBadge({ health }) {
   if (!health) return null;
-
-  const dot = !health.ok
-    ? 'bg-inconclusive'
-    : health.warnings?.length
-      ? 'bg-probable'
-      : 'bg-attributed';
-
+  const { dot, label, tone } = healthTone(health);
   return (
-    <div className="mono mt-auto space-y-1.5 border-t border-slate-800 pt-4 text-[11px] text-slate-500">
-      <div className="flex items-center gap-2">
-        <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
-        <span>{health.ok ? 'api up' : 'api down'}</span>
+    <div className="rounded-2xl border border-line bg-white p-3">
+      <div className="flex items-center gap-2 text-xs font-bold">
+        <span className={`h-2 w-2 rounded-full ${dot}`} />
+        <span className={tone}>{label}</span>
       </div>
       {health.ok && (
-        <>
-          <div>db {health.db}</div>
-          <div>chain {health.chainMode}</div>
+        <dl className="mono mt-2.5 space-y-1 text-[11px] text-ink-muted">
+          <Row k="database" v={health.db} good={health.db === 'up'} />
+          <Row k="chain" v={health.chainMode} good={health.chain?.connected} />
           {health.warnings?.length > 0 && (
-            <div className="text-probable">{health.warnings.length} warning(s)</div>
+            <div className="pt-0.5 text-probable">{health.warnings.length} warning(s)</div>
           )}
-        </>
+        </dl>
       )}
     </div>
   );
 }
 
+function Row({ k, v, good }) {
+  return (
+    <div className="flex items-center justify-between">
+      <dt>{k}</dt>
+      <dd className={good ? 'text-attributed' : 'text-inconclusive'}>{v}</dd>
+    </div>
+  );
+}
+
+/* ----------------------------------------------------------------- icons -- */
+const S = {
+  stroke: 'currentColor',
+  strokeWidth: 1.8,
+  strokeLinecap: 'round',
+  strokeLinejoin: 'round',
+};
+
+function NavIcon({ children, active, light }) {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      className={light || active ? 'text-current' : 'text-ink-faint group-hover:text-ink-muted'}
+      aria-hidden="true"
+    >
+      {children}
+    </svg>
+  );
+}
+function DocIcon(p) {
+  return (
+    <NavIcon {...p}>
+      <path d="M6 3h8l4 4v14H6V3Z" {...S} />
+      <path d="M14 3v4h4M9 12h6M9 16h6" {...S} />
+    </NavIcon>
+  );
+}
+function KeyIcon(p) {
+  return (
+    <NavIcon {...p}>
+      <circle cx="8" cy="8" r="4" {...S} />
+      <path d="m11 11 8 8M16 16l2-2M18 18l2-2" {...S} />
+    </NavIcon>
+  );
+}
+function SearchIcon(p) {
+  return (
+    <NavIcon {...p}>
+      <circle cx="11" cy="11" r="6" {...S} />
+      <path d="m20 20-3.5-3.5" {...S} />
+    </NavIcon>
+  );
+}
+function ClockIcon(p) {
+  return (
+    <NavIcon {...p}>
+      <circle cx="12" cy="12" r="8.5" {...S} />
+      <path d="M12 7.5V12l3 2" {...S} />
+    </NavIcon>
+  );
+}
+function ChartIcon(p) {
+  return (
+    <NavIcon {...p}>
+      <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" {...S} />
+    </NavIcon>
+  );
+}
 function MenuIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M4 6h16M4 12h16M4 18h16" {...S} />
+    </svg>
+  );
+}
+function BellIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6ZM9.5 20a2.5 2.5 0 0 0 5 0" {...S} />
+    </svg>
+  );
+}
+function WalletIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
-        d="M4 6h16M4 12h16M4 18h16"
-        stroke="currentColor"
-        strokeWidth="2"
+        d="M3 7h15a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"
+        stroke="#fff"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M3 7V6a2 2 0 0 1 2-2h11M16 13h2"
+        stroke="#fff"
+        strokeWidth="1.8"
         strokeLinecap="round"
       />
     </svg>

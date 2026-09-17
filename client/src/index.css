@@ -3,34 +3,66 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 html {
-  /* Belt-and-suspenders: no element may cause the page to scroll sideways. */
   overflow-x: hidden;
 }
 
 body {
   font-family:
+    'Plus Jakarta Sans',
     ui-sans-serif,
     system-ui,
     -apple-system,
-    'Segoe UI',
     sans-serif;
+  color: #16160f;
+  /* The dark olive canvas the white app card sits on. */
+  background-color: #3a3d1a;
   -webkit-font-smoothing: antialiased;
-  /* Prevent iOS from auto-inflating text and breaking the narrow layout. */
   -webkit-text-size-adjust: 100%;
 }
 
-/* Any long unbroken token (a 66-char hash) wraps instead of widening the page. */
 .mono {
+  font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+  font-variant-ligatures: none;
   overflow-wrap: anywhere;
 }
 
-/* Hashes and bit strings must be monospace everywhere — it is what makes the
-   dashboard read as a security console rather than a college project. */
-.mono {
-  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-  font-variant-ligatures: none;
+.font-display {
+  font-family: 'Baloo 2', ui-rounded, sans-serif;
+}
+
+@layer components {
+  /* White content card — the primary frame. */
+  .card {
+    @apply rounded-2xl border border-line bg-white shadow-card;
+  }
+
+  /* Primary action — lime with black text, pill-shaped like the reference. */
+  .btn-lime {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-lime px-5 py-2.5
+      text-sm font-bold text-night transition hover:bg-lime-deep
+      focus:outline-none focus-visible:ring-4 focus-visible:ring-lime/40
+      disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  /* Dark pill action (like "Broadcast" / "New"). */
+  .btn-dark {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-night px-5 py-2.5
+      text-sm font-semibold text-white transition hover:bg-night-soft
+      focus:outline-none focus-visible:ring-4 focus-visible:ring-night/30;
+  }
+
+  /* Round icon button in a hairline circle. */
+  .btn-icon {
+    @apply grid h-10 w-10 shrink-0 place-items-center rounded-full border border-line
+      bg-white text-ink-muted transition hover:text-ink;
+  }
+
+  /* Small status / meta pill. */
+  .pill {
+    @apply inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-bold;
+  }
 }

@@ -1,4 +1,4 @@
-import { Header, Panel } from './Assets.jsx';
+import { Header, Notice } from './Assets.jsx';
 
 /**
  * Per-asset audit trail: who opened a document, when, and from which device.
@@ -6,14 +6,16 @@ import { Header, Panel } from './Assets.jsx';
  * TODO:
  *   - asset picker -> getAudit(assetId)
  *   - one row per decryption, each linking to Etherscan in a new tab
- *   - keep the hashed userRef in the chain column and the real name in the
- *     registry column, visually separated and labelled
+ *   - hashed userRef in the chain column, real name in the registry column
  */
 export default function Timeline() {
   return (
-    <section>
-      <Header title="Audit timeline" />
-      <Panel title="">Not built yet — see the TODO block in this file.</Panel>
+    <section className="space-y-6">
+      <Header
+        title="Audit timeline"
+        subtitle="Every decryption of a document, in order — who, when, from which device, and the transaction that proves it."
+      />
+      <Notice>This screen is under construction.</Notice>
     </section>
   );
 }
