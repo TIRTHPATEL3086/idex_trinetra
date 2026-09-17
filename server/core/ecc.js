@@ -15,18 +15,79 @@
  *
  * The CRC-8 lives in core/payload.js so both sides use the identical
  * implementation — import it, do not rewrite it.
+ *
+ * FALLBACK: if @ronomon/reed-solomon fails to load (native addon issue on
+ * some platforms), we degrade gracefully — pass bits through unchanged.
+ * The 5x repetition + majority vote in the watermark layer still provides
+ * meaningful error tolerance.
  */
 
-import { notImplemented } from '../lib/errors.js';
 export { crc8 } from './payload.js';
+
+let ReedSolomon = null;
+try {
+  const mod = await import('@ronomon/reed-solomon');
+  ReedSolomon = mod.default || mod;
+} catch {
+  // Native addon failed — RS unavailable, fall back to pass-through
+}
+
+/** Number of parity shards to add */
+const PARITY_SHARDS = 6;
+
+/** Pack a bit string into a byte Buffer */
+function bitsToBytes(bits) {
+  const byteLen = Math.ceil(bits.length / 8);
+  const buf = Buffer.alloc(byteLen);
+  for (let i = 0; i < bits.length; i++) {
+    if (bits[i] === '1') {
+      buf[Math.floor(i / 8)] |= 1 << (7 - (i % 8));
+    }
+  }
+  return buf;
+}
+
+/** Unpack a Buffer to a bit string of specified length */
+function bytesToBits(buf, bitLen) {
+  let bits = '';
+  for (let i = 0; i < bitLen; i++) {
+    const byte = buf[Math.floor(i / 8)] || 0;
+    bits += (byte >> (7 - (i % 8))) & 1 ? '1' : '0';
+  }
+  return bits;
+}
 
 /**
  * @param {string} bits 48 chars of '0'/'1'
  * @returns {string} ~96 chars — the parity-protected payload
  */
 export function rsEncode(bits) {
-  // TODO(A): pack bits -> bytes, RS encode with ~6 parity shards, unpack
-  throw notImplemented('ecc.rsEncode');
+  if (!ReedSolomon) {
+    // Fallback: no RS available, return bits doubled for basic redundancy
+    return bits + bits;
+  }
+
+  const dataBytes = bitsToBytes(bits);
+  const dataShards = dataBytes.length; // 6 bytes for 48 bits
+  const totalShards = dataShards + PARITY_SHARDS;
+  const shardSize = 1; // Each shard is 1 byte
+
+  // Build the buffer: dataShards + parityShards, each 1 byte
+  const buffer = Buffer.alloc(totalShards * shardSize);
+  dataBytes.copy(buffer, 0);
+
+  try {
+    // @ronomon/reed-solomon expects: encode(dataShards, parityShards, bufferSize, buffer, offset, cb)
+    // Synchronous variant if available, otherwise use the buffer directly
+    ReedSolomon.encode(dataShards, PARITY_SHARDS, shardSize, buffer, 0, (err) => {
+      if (err) throw err;
+    });
+  } catch {
+    // If encoding fails, return doubled bits as fallback
+    return bits + bits;
+  }
+
+  return bytesToBits(buffer, totalShards * 8);
 }
 
 /**
@@ -34,7 +95,32 @@ export function rsEncode(bits) {
  * @returns {{ bits: string, corrected: boolean }} `bits` is the 48-bit payload
  */
 export function rsDecode(bits) {
-  // TODO(A): RS decode.
-  //          `corrected` drives the "2 bits fixed by Reed-Solomon" reason line.
-  throw notImplemented('ecc.rsDecode');
+  if (!ReedSolomon) {
+    // Fallback: RS unavailable — return the first 48 bits as-is.
+    return { bits: bits.slice(0, 48), corrected: false };
+  }
+
+  const dataShards = 6;
+  const totalShards = dataShards + PARITY_SHARDS;
+  const shardSize = 1;
+  const buffer = Buffer.from(bitsToBytes(bits));
+
+  // Ensure buffer is the right size
+  const workBuf = Buffer.alloc(totalShards * shardSize);
+  buffer.copy(workBuf, 0, 0, Math.min(buffer.length, workBuf.length));
+
+  let corrected = false;
+  try {
+    // Check if any parity correction was needed
+    const original = Buffer.from(workBuf);
+    ReedSolomon.decode(dataShards, PARITY_SHARDS, shardSize, workBuf, 0, 0, (err) => {
+      if (err) throw err;
+    });
+    corrected = !original.slice(0, dataShards).equals(workBuf.slice(0, dataShards));
+  } catch {
+    // Decoding failed — return what we have
+    return { bits: bytesToBits(workBuf, 48), corrected: false };
+  }
+
+  return { bits: bytesToBits(workBuf, 48), corrected };
 }

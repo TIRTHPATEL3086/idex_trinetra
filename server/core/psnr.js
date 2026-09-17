@@ -13,7 +13,7 @@
  * Rules of thumb: >40 dB imperceptible · 35-40 dB acceptable · <30 dB visible.
  */
 
-import { notImplemented } from '../lib/errors.js';
+import sharp from 'sharp';
 
 /**
  * @param {Buffer} originalBuffer
@@ -21,6 +21,34 @@ import { notImplemented } from '../lib/errors.js';
  * @returns {Promise<number>} PSNR in dB (Infinity when the buffers are identical)
  */
 export async function psnr(originalBuffer, markedBuffer) {
-  // TODO(A): decode both to raw RGB at the same dimensions, then the formula above
-  throw notImplemented('psnr.psnr');
+  // Decode both images to raw RGB pixels at the same dimensions.
+  const origMeta = await sharp(originalBuffer).metadata();
+  const w = origMeta.width;
+  const h = origMeta.height;
+
+  const origRaw = await sharp(originalBuffer)
+    .resize(w, h, { fit: 'fill' })
+    .removeAlpha()
+    .raw()
+    .toBuffer();
+
+  const markRaw = await sharp(markedBuffer)
+    .resize(w, h, { fit: 'fill' })
+    .removeAlpha()
+    .raw()
+    .toBuffer();
+
+  const n = Math.min(origRaw.length, markRaw.length);
+  if (n === 0) return 0;
+
+  let sumSqDiff = 0;
+  for (let i = 0; i < n; i++) {
+    const d = origRaw[i] - markRaw[i];
+    sumSqDiff += d * d;
+  }
+
+  const mse = sumSqDiff / n;
+  if (mse === 0) return Infinity;
+
+  return 10 * Math.log10((255 * 255) / mse);
 }

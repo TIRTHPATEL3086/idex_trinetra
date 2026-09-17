@@ -97,7 +97,15 @@ router.post('/', validate(DecryptBody), async (req, res, next) => {
     const marked = await embed(plaintext, payloadBits, delta);
 
     // --- 10. Perceptual hashes of the RELEASED bytes ------------------------
-    const h = await hashes(marked.buffer);
+    const raw = await hashes(marked.buffer);
+    // The hashes are unsigned 64-bit; Postgres BIGINT is signed 64-bit, so wrap
+    // them into the signed range. The Hamming metric masks to the low 64 bits,
+    // so distances are unaffected.
+    const h = {
+      pHash: toSigned64(raw.pHash),
+      dHash: raw.dHash == null ? null : toSigned64(raw.dHash),
+      aHash: raw.aHash == null ? null : toSigned64(raw.aHash),
+    };
 
     // Persist the released copy so /api/files/marked/:receiptId can serve it.
     await fs.mkdir(env.markedDir, { recursive: true });
@@ -182,6 +190,11 @@ filesRouter.get('/marked/:receiptId', async (req, res, next) => {
     next(err);
   }
 });
+
+/** Wrap an unsigned 64-bit hash into the signed range Postgres BIGINT accepts. */
+function toSigned64(value) {
+  return BigInt.asIntN(64, BigInt(value));
+}
 
 function extFor(mimeType) {
   switch (mimeType) {

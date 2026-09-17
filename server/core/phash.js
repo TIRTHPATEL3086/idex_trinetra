@@ -15,17 +15,150 @@
  * Return BigInt, not Number — 64 bits does not fit in a JS double.
  */
 
-import { notImplemented } from '../lib/errors.js';
+import sharp from 'sharp';
+
+// ----------------------------- DCT helpers for pHash -----------------------
+
+/**
+ * Pre-compute the 32×32 DCT-II matrix coefficients.
+ * C[u][x] = α(u) * cos(π * (2x+1) * u / (2N))
+ * where α(0) = 1/√N, α(u>0) = √(2/N)
+ */
+const DCT_SIZE = 32;
+const DCT_COEFF = (() => {
+  const c = new Array(DCT_SIZE);
+  for (let u = 0; u < DCT_SIZE; u++) {
+    c[u] = new Float64Array(DCT_SIZE);
+    const alpha = u === 0 ? Math.sqrt(1 / DCT_SIZE) : Math.sqrt(2 / DCT_SIZE);
+    for (let x = 0; x < DCT_SIZE; x++) {
+      c[u][x] = alpha * Math.cos((Math.PI * (2 * x + 1) * u) / (2 * DCT_SIZE));
+    }
+  }
+  return c;
+})();
+
+/**
+ * 2-D DCT-II on a 32×32 greyscale image.
+ * Returns only the top-left 8×8 block (low frequencies).
+ */
+function dct32x32(pixels) {
+  // rows first
+  const temp = new Float64Array(DCT_SIZE * DCT_SIZE);
+  for (let y = 0; y < DCT_SIZE; y++) {
+    for (let u = 0; u < DCT_SIZE; u++) {
+      let sum = 0;
+      for (let x = 0; x < DCT_SIZE; x++) {
+        sum += pixels[y * DCT_SIZE + x] * DCT_COEFF[u][x];
+      }
+      temp[y * DCT_SIZE + u] = sum;
+    }
+  }
+  // columns
+  const result = new Float64Array(8 * 8);
+  for (let u = 0; u < 8; u++) {
+    for (let v = 0; v < 8; v++) {
+      let sum = 0;
+      for (let y = 0; y < DCT_SIZE; y++) {
+        sum += temp[y * DCT_SIZE + u] * DCT_COEFF[v][y];
+      }
+      result[v * 8 + u] = sum;
+    }
+  }
+  return result;
+}
+
+// --------------------------------- Hash implementations --------------------
+
+/**
+ * dHash — difference hash. Best at surviving resize + compression.
+ * Resize to 9×8 grey → bit = pixel[x] > pixel[x+1] → 64 bits.
+ */
+async function computeDHash(imageBuffer) {
+  const raw = await sharp(imageBuffer).greyscale().resize(9, 8, { fit: 'fill' }).raw().toBuffer();
+
+  let hash = 0n;
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      const idx = y * 9 + x;
+      if (raw[idx] > raw[idx + 1]) {
+        hash |= 1n << BigInt(y * 8 + x);
+      }
+    }
+  }
+  return hash;
+}
+
+/**
+ * aHash — average hash. Cheap baseline, catches brightness shifts.
+ * Resize to 8×8 grey → bit = pixel > mean → 64 bits.
+ */
+async function computeAHash(imageBuffer) {
+  const raw = await sharp(imageBuffer).greyscale().resize(8, 8, { fit: 'fill' }).raw().toBuffer();
+
+  let sum = 0;
+  for (let i = 0; i < 64; i++) sum += raw[i];
+  const mean = sum / 64;
+
+  let hash = 0n;
+  for (let i = 0; i < 64; i++) {
+    if (raw[i] > mean) {
+      hash |= 1n << BigInt(i);
+    }
+  }
+  return hash;
+}
+
+/**
+ * pHash — perceptual hash via DCT. Strongest overall.
+ * Resize to 32×32 grey → DCT → top-left 8×8 (skip DC) → bit = coeff > median → 64 bits.
+ */
+async function computePHash(imageBuffer) {
+  const raw = await sharp(imageBuffer)
+    .greyscale()
+    .resize(DCT_SIZE, DCT_SIZE, { fit: 'fill' })
+    .raw()
+    .toBuffer();
+
+  const pixels = new Float64Array(DCT_SIZE * DCT_SIZE);
+  for (let i = 0; i < raw.length; i++) pixels[i] = raw[i];
+
+  const dctBlock = dct32x32(pixels);
+
+  // Skip DC coefficient (index 0), use the remaining 63 + pad with 0 to make 64 bits.
+  // Actually we have exactly 64 coefficients in 8×8; skip DC and use 63, last bit = 0.
+  const coeffs = [];
+  for (let i = 0; i < 64; i++) {
+    if (i === 0) continue; // skip DC
+    coeffs.push(dctBlock[i]);
+  }
+
+  // Median of the 63 AC coefficients
+  const sorted = [...coeffs].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)];
+
+  let hash = 0n;
+  for (let i = 0; i < coeffs.length; i++) {
+    if (coeffs[i] > median) {
+      hash |= 1n << BigInt(i);
+    }
+  }
+  // Bit 63 stays 0 (we only have 63 AC coefficients).
+  return hash;
+}
+
+// --------------------------------- Exports ---------------------------------
 
 /**
  * @param {Buffer} imageBuffer
  * @returns {Promise<{ pHash: bigint, dHash: bigint, aHash: bigint }>}
  */
 export async function hashes(imageBuffer) {
-  // TODO(A): pHash  -> 32x32 grey -> DCT -> top-left 8x8 (skip DC) -> vs median
-  //          dHash  -> 9x8 grey -> bit = px[x] > px[x+1]
-  //          aHash  -> 8x8 grey -> bit = px > mean
-  throw notImplemented('phash.hashes');
+  const [pHash, dHash, aHash] = await Promise.all([
+    computePHash(imageBuffer),
+    computeDHash(imageBuffer),
+    computeAHash(imageBuffer),
+  ]);
+  return { pHash, dHash, aHash };
 }
 
 /**
@@ -35,6 +168,11 @@ export async function hashes(imageBuffer) {
  * @returns {number} 0..64
  */
 export function hamming(a, b) {
-  // TODO(A): popcount(a ^ b). Kernighan's trick: x &= x - 1n in a loop.
-  throw notImplemented('phash.hamming');
+  let x = (BigInt(a) ^ BigInt(b)) & 0xffffffffffffffffn;
+  let count = 0;
+  while (x) {
+    x &= x - 1n; // Kernighan's trick: clear the lowest set bit
+    count++;
+  }
+  return count;
 }

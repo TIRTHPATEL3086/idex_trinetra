@@ -65,4 +65,10 @@ body {
   .pill {
     @apply inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-bold;
   }
+
+  /* Form control — selects and text inputs. */
+  .input {
+    @apply w-full rounded-xl border border-line bg-white px-3.5 py-2.5 text-sm font-medium text-ink
+      outline-none transition focus:border-lime-deep focus:ring-4 focus:ring-lime/25;
+  }
 }
