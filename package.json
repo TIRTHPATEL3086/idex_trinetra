@@ -11,37 +11,30 @@
   "scripts": {
     "dev": "nodemon server/index.js",
     "start": "node server/index.js",
-
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "node prisma/seed.js",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset --force && npm run db:seed",
-
     "chain:node": "hardhat node",
     "chain:compile": "hardhat compile",
     "chain:test": "hardhat test",
     "chain:deploy:local": "hardhat run scripts/deploy.cjs --network localhost",
     "chain:deploy:sepolia": "hardhat run scripts/deploy.cjs --network sepolia",
-
     "test:smoke": "node test/smoke.mjs",
     "attack:suite": "node test/attack-suite.js",
-
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-
     "client:dev": "npm --prefix client run dev",
     "client:build": "npm --prefix client run build",
-
     "setup": "npm install && npm --prefix client install && npm run db:generate"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^5.0.2",
     "@prisma/client": "^5.22.0",
-    "@ronomon/reed-solomon": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "ethers": "^6.13.4",
