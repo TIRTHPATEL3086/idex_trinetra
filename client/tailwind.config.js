@@ -1,54 +1,52 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
-  darkMode: 'class',
   theme: {
     extend: {
       colors: {
-        // Core verdict colours (Strict SIH specification: Never red)
-        attributed: '#10b981', // emerald-500
-        'attributed-glow': '#059669',
-        probable: '#f59e0b', // amber-500
-        'probable-glow': '#d97706',
-        inconclusive: '#64748b', // slate-500
-        'inconclusive-glow': '#475569',
-
-        // Cyber command console background and surface layers
-        brand: {
-          50: '#ecfeff',
-          100: '#cffafe',
-          400: '#22d3ee',
-          500: '#06b6d4',
-          600: '#0891b2',
+        // Lime accent — the signature colour of the design.
+        lime: {
+          DEFAULT: '#c9f24d',
+          soft: '#eef9c7', // pale lime fill for pills / active tints
+          bright: '#d4f55f',
+          deep: '#b4e02c', // hover
         },
-        panel: '#0c121e',
-        'panel-border': '#1e293b',
-        'panel-accent': '#162238',
+        // Dark olive/army green — the outer canvas the white app sits on.
+        olive: {
+          DEFAULT: '#3a3d1a',
+          dark: '#2e3113',
+        },
+        // Near-black for pills, dark buttons and the stats panel.
+        night: {
+          DEFAULT: '#141410',
+          soft: '#1d1e15',
+        },
+        ink: {
+          DEFAULT: '#16160f', // headings
+          muted: '#6f7268', // secondary text
+          faint: '#a7a99e', // tertiary
+        },
+        line: '#ecebe4', // hairline borders on white
+        pending: '#5b93de', // blue status pill
+        // Verdict colours stay semantic (never red for a verdict).
+        attributed: '#4d9d2a', // green (aligns with the lime family)
+        probable: '#d99a1c', // amber
+        inconclusive: '#6b7280', // slate
       },
       fontFamily: {
-        mono: ['ui-monospace', 'SF Mono', 'Menlo', 'Consolas', 'monospace'],
-        sans: ['ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
-      },
-      animation: {
-        'pulse-fast': 'pulse 1.2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        scan: 'scan 2.5s ease-in-out infinite alternate',
-        radar: 'radar 3s linear infinite',
-      },
-      keyframes: {
-        scan: {
-          '0%': { transform: 'translateY(0%)' },
-          '100%': { transform: 'translateY(100%)' },
-        },
-        radar: {
-          '0%': { transform: 'rotate(0deg)' },
-          '100%': { transform: 'rotate(360deg)' },
-        },
+        sans: ['"Plus Jakarta Sans"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['"Baloo 2"', 'ui-rounded', '"Plus Jakarta Sans"', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'Menlo', 'Consolas', 'monospace'],
       },
       boxShadow: {
-        'glow-attributed': '0 0 25px -5px rgba(16, 185, 129, 0.3)',
-        'glow-probable': '0 0 25px -5px rgba(245, 158, 11, 0.3)',
-        'glow-inconclusive': '0 0 25px -5px rgba(100, 116, 139, 0.25)',
-        'glow-cyan': '0 0 20px -3px rgba(6, 182, 212, 0.25)',
+        card: '0 1px 2px rgba(20, 20, 16, 0.04), 0 10px 30px -18px rgba(20, 20, 16, 0.25)',
+        panel: '0 20px 60px -30px rgba(20, 20, 16, 0.5)',
+        app: '0 30px 80px -40px rgba(0, 0, 0, 0.6)',
+      },
+      borderRadius: {
+        xl: '0.875rem',
+        '2xl': '1.25rem',
+        '3xl': '1.75rem',
       },
     },
   },

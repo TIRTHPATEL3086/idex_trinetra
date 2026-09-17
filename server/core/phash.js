@@ -74,11 +74,7 @@ function dct32x32(pixels) {
  * Resize to 9×8 grey → bit = pixel[x] > pixel[x+1] → 64 bits.
  */
 async function computeDHash(imageBuffer) {
-  const raw = await sharp(imageBuffer)
-    .greyscale()
-    .resize(9, 8, { fit: 'fill' })
-    .raw()
-    .toBuffer();
+  const raw = await sharp(imageBuffer).greyscale().resize(9, 8, { fit: 'fill' }).raw().toBuffer();
 
   let hash = 0n;
   for (let y = 0; y < 8; y++) {
@@ -97,11 +93,7 @@ async function computeDHash(imageBuffer) {
  * Resize to 8×8 grey → bit = pixel > mean → 64 bits.
  */
 async function computeAHash(imageBuffer) {
-  const raw = await sharp(imageBuffer)
-    .greyscale()
-    .resize(8, 8, { fit: 'fill' })
-    .raw()
-    .toBuffer();
+  const raw = await sharp(imageBuffer).greyscale().resize(8, 8, { fit: 'fill' }).raw().toBuffer();
 
   let sum = 0;
   for (let i = 0; i < 64; i++) sum += raw[i];
@@ -184,4 +176,3 @@ export function hamming(a, b) {
   }
   return count;
 }
-

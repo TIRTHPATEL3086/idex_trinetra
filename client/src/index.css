@@ -3,93 +3,119 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 html {
-  /* Belt-and-suspenders: no element may cause the page to scroll sideways. */
   overflow-x: hidden;
 }
 
 body {
   font-family:
+    'Plus Jakarta Sans',
     ui-sans-serif,
     system-ui,
     -apple-system,
-    'Segoe UI',
     sans-serif;
+  color: #16160f;
+  /* The dark olive canvas the white app card sits on. */
+  background-color: #3a3d1a;
   -webkit-font-smoothing: antialiased;
-  /* Prevent iOS from auto-inflating text and breaking the narrow layout. */
   -webkit-text-size-adjust: 100%;
 }
 
-/* Any long unbroken token (a 66-char hash) wraps instead of widening the page. */
 .mono {
-  overflow-wrap: anywhere;
-  background-color: #070b12;
-  color: #e2e8f0;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
-}
-
-/* Monospace fonts for cryptographic hashes, payload bits, hex addresses */
-.mono {
-  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
   font-variant-ligatures: none;
+  overflow-wrap: anywhere;
 }
 
-/* Glassmorphism panel styling */
-.glass-panel {
-  background: rgba(12, 18, 30, 0.75);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(30, 41, 59, 0.8);
+.font-display {
+  font-family: 'Baloo 2', ui-rounded, sans-serif;
 }
 
-.glass-panel-hover {
-  transition: all 0.2s ease-in-out;
+/* Stylish scroll area — a slim rounded lime thumb that grows and brightens
+   while you scroll or hover, and slims back down when idle. */
+.scroll-slim {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: #dcefa6 transparent;
+  scroll-behavior: smooth;
 }
-.glass-panel-hover:hover {
-  border-color: rgba(56, 189, 248, 0.3);
-  background: rgba(15, 23, 42, 0.85);
+.scroll-slim:hover {
+  scrollbar-color: #c9f24d transparent; /* Firefox: brighten on hover */
+}
+.scroll-slim::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+.scroll-slim::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 6px 0;
+}
+.scroll-slim::-webkit-scrollbar-thumb {
+  background-color: #dcefa6; /* muted lime, slim */
+  border: 4px solid transparent; /* padding -> a thin pill */
+  border-radius: 999px;
+  background-clip: content-box;
+  min-height: 40px;
+  transition:
+    background-color 0.2s ease,
+    border-width 0.15s ease;
+}
+/* Grow + brighten while the area is scrolled/hovered/dragged. */
+.scroll-slim:hover::-webkit-scrollbar-thumb {
+  background-color: #c9f24d;
+  border-width: 3px;
+}
+.scroll-slim::-webkit-scrollbar-thumb:hover,
+.scroll-slim::-webkit-scrollbar-thumb:active {
+  background-color: #b4e02c;
+  border-width: 2px; /* widest while dragging */
 }
 
-/* Subtle grid line background */
-.bg-grid-pattern {
-  background-size: 32px 32px;
-  background-image: 
-    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-}
+@layer components {
+  /* White content card — the primary frame. */
+  .card {
+    @apply rounded-2xl border border-line bg-white shadow-card;
+  }
 
-/* Custom cyber scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: #070b12;
-}
-::-webkit-scrollbar-thumb {
-  background: #1e293b;
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #334155;
-}
+  /* Primary action — lime with black text, pill-shaped like the reference. */
+  .btn-lime {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-lime px-5 py-2.5
+      text-sm font-bold text-night transition hover:bg-lime-deep
+      focus:outline-none focus-visible:ring-4 focus-visible:ring-lime/40
+      disabled:cursor-not-allowed disabled:opacity-60;
+  }
 
-/* Interactive slider range styling */
-input[type=range] {
-  accent-color: #06b6d4;
-}
+  /* Dark pill action (like "Broadcast" / "New"). */
+  .btn-dark {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-night px-5 py-2.5
+      text-sm font-semibold text-white transition hover:bg-night-soft
+      focus:outline-none focus-visible:ring-4 focus-visible:ring-night/30;
+  }
 
-/* Scanline animation element */
-.scanline {
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.8), transparent);
-  box-shadow: 0 0 8px rgba(6, 182, 212, 0.8);
-  animation: scan 2.5s ease-in-out infinite alternate;
-  pointer-events: none;
+  /* Outline / secondary action. */
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-line
+      bg-white px-5 py-2.5 text-sm font-semibold text-ink transition
+      hover:border-ink-faint hover:bg-line/40 focus:outline-none
+      focus-visible:ring-4 focus-visible:ring-lime/25;
+  }
+
+  /* Round icon button in a hairline circle. */
+  .btn-icon {
+    @apply grid h-10 w-10 shrink-0 place-items-center rounded-full border border-line
+      bg-white text-ink-muted transition hover:text-ink;
+  }
+
+  /* Small status / meta pill. */
+  .pill {
+    @apply inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-bold;
+  }
+
+  /* Form control — selects and text inputs. */
+  .input {
+    @apply w-full rounded-xl border border-line bg-white px-3.5 py-2.5 text-sm font-medium text-ink
+      outline-none transition focus:border-lime-deep focus:ring-4 focus:ring-lime/25;
+  }
 }

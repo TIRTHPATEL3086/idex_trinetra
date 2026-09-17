@@ -73,8 +73,8 @@ function haar2D(pixels, w, h) {
     const row = buf.subarray(y * w, y * w + w);
     const { low, high } = haar1D(row);
     for (let x = 0; x < halfW; x++) {
-      rowResult[y * w + x] = low[x];           // left half
-      rowResult[y * w + halfW + x] = high[x];  // right half
+      rowResult[y * w + x] = low[x]; // left half
+      rowResult[y * w + halfW + x] = high[x]; // right half
     }
   }
 
@@ -84,8 +84,8 @@ function haar2D(pixels, w, h) {
     for (let y = 0; y < h; y++) col[y] = rowResult[y * w + x];
     const { low, high } = haar1D(col);
     for (let y = 0; y < halfH; y++) {
-      out[y * w + x] = low[y];                 // top half
-      out[(halfH + y) * w + x] = high[y];      // bottom half
+      out[y * w + x] = low[y]; // top half
+      out[(halfH + y) * w + x] = high[y]; // bottom half
     }
   }
 
@@ -422,4 +422,3 @@ export async function extract(imageBuffer, delta = 12) {
 
   return { payloadBits, bitConfidence, eccCorrected };
 }
-

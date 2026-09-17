@@ -1,349 +1,343 @@
-import { useEffect, useState } from 'react';
-import { getAssets } from '../lib/api.js';
+import { useCallback, useEffect, useState } from 'react';
+import { getAssets, uploadAsset } from '../lib/api.js';
 
 /**
  * The document register.
  *
- * TODO: upload dialog (multipart -> uploadAsset), classification badges,
- * empty state, row click -> /timeline?assetId=.
- *
- * Responsive: a table from sm up, a stacked card list below it. Neither
- * overflows horizontally at 320px.
+ * Responsive: dark overview panel of stat tiles, then a table (sm+) or a
+ * stacked card list (mobile). Nothing overflows horizontally at 320px.
  */
-import { useNavigate } from 'react-router-dom';
-import {
-  FileText,
-  Shield,
-  Plus,
-  Search,
-  Key,
-  History,
-  Lock,
-  ExternalLink,
-  CheckCircle2,
-  Database,
-  ArrowRight,
-} from 'lucide-react';
-import { getAssets, CLASSIFICATION_BADGES, shortHash } from '../lib/api.js';
-import UploadModal from '../components/UploadModal.jsx';
-
 export default function Assets() {
-  const navigate = useNavigate();
   const [assets, setAssets] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [search, setSearch] = useState('');
-  const [filterClass, setFilterClass] = useState('ALL');
   const [uploadOpen, setUploadOpen] = useState(false);
 
-  const fetchAssets = () => {
-    setLoading(true);
+  const reload = useCallback(() => {
     getAssets()
-      .then((d) => setAssets(d.assets || []))
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => {
-    fetchAssets();
+      .then((d) => setAssets(d.assets))
+      .catch((e) => setError(e.message));
   }, []);
 
-  if (error) return <Panel title="Assets">{error}</Panel>;
-  if (!assets) return <Panel title="Assets">Loading documents…</Panel>;
-  if (assets.length === 0) return <Panel title="Protected documents">No documents yet.</Panel>;
+  useEffect(() => {
+    reload();
+  }, [reload]);
 
   return (
-    <section>
-      <Header title="Protected documents" />
+    <section className="space-y-6">
+      <Header
+        title="Protected documents"
+        subtitle="Encrypted at rest. Every decryption is watermarked and anchored on-chain."
+        action={
+          <button type="button" className="btn-lime" onClick={() => setUploadOpen(true)}>
+            <PlusIcon />
+            Upload document
+          </button>
+        }
+      />
 
+      {error && <Notice tone="error">{error}</Notice>}
+      {!error && !assets && <Notice>Loading documents…</Notice>}
+
+      {!error && assets && <Overview assets={assets} />}
+
+      {!error && assets?.length === 0 && <Notice>No documents yet. Upload one to begin.</Notice>}
+
+      {!error && assets?.length > 0 && <DocumentList assets={assets} />}
+
+      {uploadOpen && (
+        <UploadModal
+          onClose={() => setUploadOpen(false)}
+          onDone={() => {
+            setUploadOpen(false);
+            reload();
+          }}
+        />
+      )}
+    </section>
+  );
+}
+
+/* -- upload modal ----------------------------------------------------------- */
+
+function UploadModal({ onClose, onDone }) {
+  const [title, setTitle] = useState('');
+  const [classification, setClassification] = useState('CONFIDENTIAL');
+  const [file, setFile] = useState(null);
+  const [status, setStatus] = useState('idle'); // idle | working | error
+  const [error, setError] = useState(null);
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!file || !title.trim()) return;
+    setStatus('working');
+    setError(null);
+    try {
+      await uploadAsset({ file, title: title.trim(), classification });
+      onDone();
+    } catch (err) {
+      setError(err.message);
+      setStatus('error');
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-night/40 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <form
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={submit}
+        className="w-full max-w-md space-y-4 rounded-3xl bg-white p-6 shadow-panel"
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="font-display text-xl font-extrabold text-ink">Upload a document</h3>
+          <button type="button" onClick={onClose} className="btn-icon !h-8 !w-8" aria-label="Close">
+            ✕
+          </button>
+        </div>
+        <p className="text-sm text-ink-muted">
+          The file is SHA-256 hashed and AES-256-GCM encrypted before it touches disk. The plaintext
+          is never stored.
+        </p>
+
+        <label className="block">
+          <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-faint">
+            Title
+          </span>
+          <input
+            className="input"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g. Ops Order 45"
+            autoFocus
+          />
+        </label>
+
+        <label className="block">
+          <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-faint">
+            Classification
+          </span>
+          <select
+            className="input"
+            value={classification}
+            onChange={(e) => setClassification(e.target.value)}
+          >
+            <option value="RESTRICTED">RESTRICTED</option>
+            <option value="CONFIDENTIAL">CONFIDENTIAL</option>
+            <option value="SECRET">SECRET</option>
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-faint">
+            Image file
+          </span>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            className="block w-full text-sm text-ink-muted file:mr-3 file:rounded-full file:border-0 file:bg-night file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-night-soft"
+          />
+        </label>
+
+        {error && <Notice tone="error">{error}</Notice>}
+
+        <div className="flex gap-3 pt-1">
+          <button type="button" className="btn-ghost flex-1" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="btn-lime flex-1"
+            disabled={status === 'working' || !file || !title.trim()}
+          >
+            {status === 'working' ? 'Encrypting…' : 'Upload'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+/* -- dark overview panel, styled after the reference "Payments" card -------- */
+
+function Overview({ assets }) {
+  const documents = assets.length;
+  const decryptions = assets.reduce((n, a) => n + (a.decryptCount || 0), 0);
+  const secret = assets.filter((a) => a.classification === 'SECRET').length;
+  const restricted = assets.filter((a) => a.classification === 'RESTRICTED').length;
+
+  return (
+    <div className="rounded-3xl bg-night bg-gradient-to-br from-[#20220f] to-night p-4 shadow-panel sm:p-5">
+      <div className="mb-4 flex items-center justify-between px-1">
+        <h3 className="text-base font-bold text-white">Register overview</h3>
+        <span className="mono rounded-full border border-white/15 px-3 py-1 text-[11px] text-white/70">
+          Live
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Tile label="Documents" value={documents} highlight />
+        <Tile label="Decryptions" value={decryptions} note="on-chain receipts" />
+        <Tile label="Classified SECRET" value={secret} />
+        <Tile label="Restricted" value={restricted} />
+      </div>
+    </div>
+  );
+}
+
+function Tile({ label, value, note, highlight }) {
+  return (
+    <div
+      className={`rounded-2xl p-4 ${
+        highlight ? 'bg-lime text-night' : 'bg-white/[0.06] text-white'
+      }`}
+    >
+      <div className="flex items-start justify-between">
+        <span className={`text-xs font-semibold ${highlight ? 'text-night/70' : 'text-white/60'}`}>
+          {label}
+        </span>
+        <span
+          className={`grid h-6 w-6 place-items-center rounded-full ${
+            highlight ? 'bg-night/10' : 'bg-white/10'
+          }`}
+        >
+          <ArrowUpRight highlight={highlight} />
+        </span>
+      </div>
+      <div className="mt-3 text-2xl font-extrabold tracking-tight">{value}</div>
+      <div className={`mt-0.5 text-[11px] ${highlight ? 'text-night/60' : 'text-white/45'}`}>
+        {note || 'in the register'}
+      </div>
+    </div>
+  );
+}
+
+/* -- document list ---------------------------------------------------------- */
+
+function DocumentList({ assets }) {
+  return (
+    <>
       {/* Card list — mobile. */}
       <ul className="space-y-3 sm:hidden">
         {assets.map((a) => (
-          <li key={a.assetId} className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
+          <li key={a.assetId} className="card p-4">
             <div className="flex items-start justify-between gap-3">
-              <span className="min-w-0 break-words font-medium text-slate-200">{a.title}</span>
+              <span className="min-w-0 break-words font-bold text-ink">{a.title}</span>
               <ClassificationBadge value={a.classification} />
             </div>
-            <dl className="mono mt-3 grid grid-cols-2 gap-y-1 text-xs text-slate-500">
+            <dl className="mono mt-3 grid grid-cols-2 gap-y-1.5 text-xs text-ink-muted">
               <dt>Created</dt>
-              <dd className="text-right text-slate-400">
-                {new Date(a.createdAt).toLocaleDateString()}
-              </dd>
+              <dd className="text-right text-ink">{new Date(a.createdAt).toLocaleDateString()}</dd>
               <dt>Decryptions</dt>
-              <dd className="text-right text-slate-300">{a.decryptCount}</dd>
+              <dd className="text-right font-bold text-ink">{a.decryptCount}</dd>
             </dl>
           </li>
         ))}
       </ul>
 
       {/* Table — sm and up. */}
-      <div className="hidden sm:block">
+      <div className="card hidden overflow-hidden sm:block">
         <table className="w-full text-sm">
-          <thead className="text-left text-xs uppercase tracking-wide text-slate-500">
-            <tr className="border-b border-slate-800">
-              <th className="pb-2 font-medium">Title</th>
-              <th className="pb-2 font-medium">Classification</th>
-              <th className="hidden pb-2 font-medium md:table-cell">Created</th>
-              <th className="pb-2 text-right font-medium">Decryptions</th>
+          <thead>
+            <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-ink-faint">
+              <th className="px-5 py-3.5 font-bold">Document</th>
+              <th className="px-5 py-3.5 font-bold">Classification</th>
+              <th className="hidden px-5 py-3.5 font-bold md:table-cell">Created</th>
+              <th className="px-5 py-3.5 text-right font-bold">Decryptions</th>
             </tr>
           </thead>
           <tbody>
             {assets.map((a) => (
-              <tr key={a.assetId} className="border-b border-slate-800/60">
-                <td className="py-3 pr-3 text-slate-200">{a.title}</td>
-                <td className="py-3 pr-3">
+              <tr
+                key={a.assetId}
+                className="border-b border-line/70 transition last:border-0 hover:bg-line/30"
+              >
+                <td className="px-5 py-4 font-bold text-ink">{a.title}</td>
+                <td className="px-5 py-4">
                   <ClassificationBadge value={a.classification} />
                 </td>
-                <td className="mono hidden py-3 pr-3 text-xs text-slate-500 md:table-cell">
+                <td className="mono hidden px-5 py-4 text-xs text-ink-muted md:table-cell">
                   {new Date(a.createdAt).toLocaleString()}
                 </td>
-                <td className="mono py-3 text-right text-slate-300">{a.decryptCount}</td>
+                <td className="mono px-5 py-4 text-right font-bold text-ink">{a.decryptCount}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-    </section>
+    </>
   );
 }
 
+const CLASS_STYLE = {
+  RESTRICTED: 'bg-line text-ink-muted',
+  CONFIDENTIAL: 'bg-lime text-night',
+  SECRET: 'bg-night text-white',
+};
+
 function ClassificationBadge({ value }) {
   return (
-    <span className="mono shrink-0 rounded border border-slate-700 px-1.5 py-0.5 text-[10px] text-slate-400">
+    <span className={`pill shrink-0 ${CLASS_STYLE[value] || 'bg-line text-ink-muted'}`}>
       {value}
     </span>
   );
 }
 
-export function Header({ title }) {
-  const filtered = (assets || []).filter((a) => {
-    const matchesSearch = a.title.toLowerCase().includes(search.toLowerCase());
-    const matchesFilter = filterClass === 'ALL' || a.classification === filterClass;
-    return matchesSearch && matchesFilter;
-  });
+/* -- shared building blocks reused across the other screens ----------------- */
 
-  const totalDecryptions = (assets || []).reduce((acc, curr) => acc + (curr.decryptCount || 0), 0);
-
+export function Header({ title, subtitle, action }) {
   return (
-    <div className="space-y-6">
-      {/* Top Header & Quick Actions */}
-      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-cyan-400">
-            <Database className="h-3.5 w-3.5" />
-            <span>Document Repository</span>
-          </div>
-          <h2 className="mt-1 text-xl font-semibold text-slate-100">Protected Assets Register</h2>
-          <p className="text-xs text-slate-400">
-            Plaintext files are AES-256-GCM encrypted. Access is released exclusively via watermarked copies.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setUploadOpen(true)}
-            className="flex items-center gap-2 rounded-lg bg-cyan-600 px-3.5 py-2 text-xs font-medium text-white shadow-lg shadow-cyan-900/30 transition hover:bg-cyan-500"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Register New Asset</span>
-          </button>
-        </div>
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <h2 className="font-display text-2xl font-extrabold tracking-tight text-ink sm:text-[28px]">
+          {title}
+        </h2>
+        {subtitle && <p className="mt-1 max-w-xl text-sm text-ink-muted">{subtitle}</p>}
       </div>
-
-      {/* Summary KPI Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="glass-panel rounded-xl p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-400">Total Classified Assets</span>
-            <FileText className="h-4 w-4 text-cyan-400" />
-          </div>
-          <div className="mt-2 text-2xl font-bold text-slate-100">{assets ? assets.length : '—'}</div>
-          <p className="mt-1 text-[11px] text-slate-500">AES-256-GCM encrypted vaults</p>
-        </div>
-
-        <div className="glass-panel rounded-xl p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-400">Decryption Releases</span>
-            <Key className="h-4 w-4 text-emerald-400" />
-          </div>
-          <div className="mt-2 text-2xl font-bold text-emerald-400">{totalDecryptions}</div>
-          <p className="mt-1 text-[11px] text-slate-500">Every copy individually watermarked</p>
-        </div>
-
-        <div className="glass-panel rounded-xl p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-400">Blockchain Anchors</span>
-            <CheckCircle2 className="h-4 w-4 text-cyan-400" />
-          </div>
-          <div className="mt-2 text-2xl font-bold text-slate-100">100% Verified</div>
-          <p className="mt-1 text-[11px] text-slate-500">Sepolia testnet consensus</p>
-        </div>
-
-        <div className="glass-panel rounded-xl p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-400">Integrity Anomalies</span>
-            <Shield className="h-4 w-4 text-slate-500" />
-          </div>
-          <div className="mt-2 text-2xl font-bold text-slate-300">0 Alerts</div>
-          <p className="mt-1 text-[11px] text-slate-500">Tamper-proof registry</p>
-        </div>
-      </div>
-
-      {/* Filter and Search Bar */}
-      <div className="glass-panel flex flex-col items-center justify-between gap-3 rounded-xl p-3 sm:flex-row">
-        <div className="relative w-full sm:w-80">
-          <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search documents by title or SHA..."
-            className="w-full rounded-lg border border-slate-800 bg-slate-950/80 py-1.5 pl-9 pr-3 text-xs text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
-          />
-        </div>
-
-        <div className="flex flex-wrap items-center gap-1.5">
-          {['ALL', 'TOP SECRET', 'SECRET', 'CONFIDENTIAL', 'RESTRICTED'].map((cls) => (
-            <button
-              type="button"
-              key={cls}
-              onClick={() => setFilterClass(cls)}
-              className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition ${
-                filterClass === cls
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-                  : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200 border border-transparent'
-              }`}
-            >
-              {cls}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Asset Table */}
-      <div className="glass-panel overflow-hidden rounded-xl">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-800 bg-slate-900/40 text-[11px] uppercase tracking-wider text-slate-400">
-              <tr>
-                <th className="px-5 py-3 font-semibold">Document Title</th>
-                <th className="px-5 py-3 font-semibold">Classification</th>
-                <th className="px-5 py-3 font-semibold">SHA-256 Fingerprint</th>
-                <th className="px-5 py-3 font-semibold">Created Date</th>
-                <th className="px-5 py-3 text-center font-semibold">Releases</th>
-                <th className="px-5 py-3 text-right font-semibold">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60">
-              {loading ? (
-                <tr>
-                  <td colSpan={6} className="py-12 text-center text-xs text-slate-500">
-                    Loading cryptographic document vault…
-                  </td>
-                </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="py-12 text-center text-xs text-slate-500">
-                    No protected documents match your search criteria.
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((a) => (
-                  <tr key={a.assetId} className="transition hover:bg-slate-900/50">
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800/80 text-cyan-400">
-                          <FileText className="h-4 w-4" />
-                        </div>
-                        <div>
-                          <div className="font-medium text-slate-200">{a.title}</div>
-                          <div className="mono text-[11px] text-slate-500">
-                            Asset ID #{a.assetId} · {(a.sizeBytes / 1024).toFixed(0)} KB · AES-256
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-
-                    <td className="px-5 py-3.5">
-                      <span
-                        className={`inline-block rounded-md border px-2 py-0.5 text-[10px] font-semibold tracking-wide ${
-                          CLASSIFICATION_BADGES[a.classification] || CLASSIFICATION_BADGES['RESTRICTED']
-                        }`}
-                      >
-                        {a.classification || 'CONFIDENTIAL'}
-                      </span>
-                    </td>
-
-                    <td className="mono px-5 py-3.5 text-xs text-slate-400">
-                      <span title={a.sha256}>{shortHash(a.sha256, 6, 6)}</span>
-                    </td>
-
-                    <td className="mono px-5 py-3.5 text-xs text-slate-500">
-                      {new Date(a.createdAt).toLocaleDateString()} {new Date(a.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </td>
-
-                    <td className="mono px-5 py-3.5 text-center">
-                      <span className="inline-flex items-center justify-center rounded-full bg-slate-800 px-2.5 py-0.5 text-xs font-semibold text-cyan-300">
-                        {a.decryptCount || 0}
-                      </span>
-                    </td>
-
-                    <td className="px-5 py-3.5 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/decrypt?assetId=${a.assetId}`)}
-                          className="flex items-center gap-1 rounded-md bg-cyan-600/20 border border-cyan-500/30 px-2.5 py-1 text-xs font-medium text-cyan-300 transition hover:bg-cyan-600 hover:text-white"
-                        >
-                          <Lock className="h-3 w-3" />
-                          <span>Decrypt</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/timeline?assetId=${a.assetId}`)}
-                          title="View Forensic Audit Trail"
-                          className="rounded-md border border-slate-700 bg-slate-800 p-1 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
-                        >
-                          <History className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <UploadModal
-        isOpen={uploadOpen}
-        onClose={() => setUploadOpen(false)}
-        onUploaded={fetchAssets}
-      />
+      {action && <div className="shrink-0">{action}</div>}
     </div>
   );
 }
 
-export function Header({ title, subtitle }) {
-  return (
-    <div className="mb-6">
-      <h2 className="text-xl font-semibold text-slate-100">{title}</h2>
-      {subtitle && <p className="mt-1 text-xs text-slate-400">{subtitle}</p>}
-    </div>
-  );
+export function Notice({ children, tone = 'default' }) {
+  const styles =
+    tone === 'error'
+      ? 'border-rose-200 bg-rose-50 text-rose-700'
+      : 'border-line bg-white text-ink-muted';
+  return <div className={`rounded-2xl border px-5 py-4 text-sm ${styles}`}>{children}</div>;
 }
 
-export function Panel({ title, children }) {
+/** Kept for screens that still import Panel. */
+export function Panel({ title, subtitle, children }) {
   return (
-    <section>
-      {title ? <Header title={title} /> : null}
-      <p className="text-sm text-slate-500">{children}</p>
-    <section className="glass-panel rounded-xl p-6">
-      {title && <Header title={title} />}
-      <div className="text-sm text-slate-400">{children}</div>
+    <section className="space-y-6">
+      {title && <Header title={title} subtitle={subtitle} />}
+      <Notice>{children}</Notice>
     </section>
+  );
+}
+
+/* -- icons ------------------------------------------------------------------ */
+
+function PlusIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function ArrowUpRight({ highlight }) {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M7 17 17 7M8 7h9v9"
+        stroke={highlight ? '#141410' : '#fff'}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }

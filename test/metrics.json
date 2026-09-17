@@ -1,88 +1,88 @@
 {
   "source": "attack-suite",
-  "generatedAt": "2026-09-17T08:43:56.274Z",
+  "generatedAt": "2026-09-17T14:06:38.219Z",
   "attacks": [
     {
       "name": "JPEG q90",
-      "survived": false,
-      "bitsRecovered": 14,
-      "psnrDb": 38.9720031144202,
+      "survived": true,
+      "bitsRecovered": 48,
+      "psnrDb": 48.065558238402346,
       "target": 48
     },
     {
       "name": "JPEG q75",
-      "survived": false,
-      "bitsRecovered": 29,
-      "psnrDb": 38.9720031144202,
+      "survived": true,
+      "bitsRecovered": 48,
+      "psnrDb": 48.065558238402346,
       "target": 46
     },
     {
       "name": "JPEG q60",
-      "survived": false,
-      "bitsRecovered": 15,
-      "psnrDb": 38.9720031144202,
+      "survived": true,
+      "bitsRecovered": 48,
+      "psnrDb": 48.065558238402346,
       "target": 44
     },
     {
       "name": "JPEG q45",
-      "survived": false,
-      "bitsRecovered": 16,
-      "psnrDb": 38.9720031144202,
+      "survived": true,
+      "bitsRecovered": 48,
+      "psnrDb": 48.065558238402346,
       "target": 41
     },
     {
       "name": "Resize 50%",
       "survived": true,
-      "bitsRecovered": 48,
-      "psnrDb": 38.9720031144202,
+      "bitsRecovered": 43,
+      "psnrDb": 48.065558238402346,
       "target": 43
     },
     {
       "name": "Crop 20%",
-      "survived": false,
-      "bitsRecovered": 28,
-      "psnrDb": 38.9720031144202,
+      "survived": true,
+      "bitsRecovered": 43,
+      "psnrDb": 48.065558238402346,
       "target": 40
     },
     {
       "name": "Gaussian noise",
-      "survived": false,
-      "bitsRecovered": 40,
-      "psnrDb": 38.9720031144202,
+      "survived": true,
+      "bitsRecovered": 43,
+      "psnrDb": 48.065558238402346,
       "target": 42
     },
     {
       "name": "Screenshot sim",
-      "survived": false,
-      "bitsRecovered": 13,
-      "psnrDb": 38.9720031144202,
+      "survived": true,
+      "bitsRecovered": 44,
+      "psnrDb": 48.065558238402346,
       "target": 40
     }
   ],
   "psnrCurve": [
     {
       "delta": 4,
-      "psnrDb": 56.23094249242378,
+      "psnrDb": 57.60798333279559,
       "bitsRecovered": 48
     },
     {
       "delta": 8,
-      "psnrDb": 50.21398105171848,
+      "psnrDb": 51.587383419515966,
       "bitsRecovered": 48
     },
     {
       "delta": 12,
-      "psnrDb": 46.04492124093041,
+      "psnrDb": 48.065558238402346,
       "bitsRecovered": 48
     },
     {
       "delta": 16,
-      "psnrDb": 43.05677323804004,
+      "psnrDb": 45.56678350623635,
       "bitsRecovered": 48
     },
     {
       "delta": 24,
-      "psnrDb": 38.9720031144202,
+      "psnrDb": 42.04495832512272,
       "bitsRecovered": 48
     }
   ]

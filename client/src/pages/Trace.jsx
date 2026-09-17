@@ -1,379 +1,200 @@
-import { useState } from 'react';
-import {
-  Search,
-  Upload,
-  ShieldCheck,
-  AlertTriangle,
-  HelpCircle,
-  ExternalLink,
-  Cpu,
-  Fingerprint,
-  Layers,
-  Sparkles,
-  ArrowRight,
-  CheckCircle,
-  FileSearch,
-  Clock,
-  Radio,
-} from 'lucide-react';
-import {
-  traceFile,
-  tracePreset,
-  VERDICT_STYLE,
-  shortHash,
-} from '../lib/api.js';
-import { TRACE_PRESETS } from '../lib/mockData.js';
+import { useRef, useState } from 'react';
+import { traceFile, shortHash } from '../lib/api.js';
+import { Header, Notice } from './Assets.jsx';
 
-const SCAN_STAGES = [
-  'Extracting 64-bit perceptual hashes (pHash, dHash, aHash)…',
-  'Querying in-memory BK-Tree index over candidate decryption records…',
-  'Applying 2-level inverse Haar DWT to HL and LH frequency sub-bands…',
-  'Executing Reed-Solomon RS(12,6) decoding & CRC-8 validation…',
-  'Cross-checking Sepolia smart contract for payloadCommit receipt…',
-  'Synthesizing Bayesian confidence score across all 5 verification signals…',
-];
-
+/**
+ * Upload a leaked file; the register returns a confidence band, never a bare
+ * accusation. Below the threshold the match is withheld and the screen says so.
+ */
 export default function Trace() {
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [filePreview, setFilePreview] = useState(null);
-  const [activePreset, setActivePreset] = useState(null);
-
-  const [isScanning, setIsScanning] = useState(false);
-  const [scanStageIndex, setScanStageIndex] = useState(0);
+  const [status, setStatus] = useState('idle'); // idle | working | done | error
   const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  const [fileName, setFileName] = useState('');
+  const inputRef = useRef(null);
 
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-      setFilePreview(URL.createObjectURL(file));
-      setActivePreset(null);
-      setResult(null);
-    }
-  };
-
-  const handleRunPreset = (preset) => {
-    setActivePreset(preset.id);
-    setSelectedFile(null);
-    setFilePreview(null);
-    runAnalysis(() => tracePreset(preset.id));
-  };
-
-  const handleRunFile = () => {
-    if (!selectedFile) return;
-    runAnalysis(() => traceFile(selectedFile));
-  };
-
-  const runAnalysis = (apiFn) => {
-    setIsScanning(true);
+  async function run(file) {
+    if (!file) return;
+    setFileName(file.name);
+    setStatus('working');
+    setError(null);
     setResult(null);
-    setScanStageIndex(0);
-
-    const interval = setInterval(() => {
-      setScanStageIndex((prev) => (prev < SCAN_STAGES.length - 1 ? prev + 1 : prev));
-    }, 380);
-
-    apiFn().then((res) => {
-      clearInterval(interval);
-      setScanStageIndex(SCAN_STAGES.length - 1);
-      setTimeout(() => {
-        setResult(res);
-        setIsScanning(false);
-      }, 300);
-    });
-  };
-
-  const verdictConfig = result ? VERDICT_STYLE[result.verdict] : null;
+    try {
+      const r = await traceFile(file);
+      setResult(r);
+      setStatus('done');
+    } catch (err) {
+      setError(err.message);
+      setStatus('error');
+    }
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Top Header */}
-      <div>
-        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-cyan-400">
-          <Fingerprint className="h-3.5 w-3.5" />
-          <span>Forensic Attribution Engine</span>
+    <section className="space-y-6">
+      <Header
+        title="Trace a leaked file"
+        subtitle="The watermark says which receipt; the perceptual hashes say which file; the chain confirms both. The result is a confidence band, never a bare accusation."
+      />
+
+      {/* dropzone */}
+      <div
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          run(e.dataTransfer.files?.[0]);
+        }}
+        onClick={() => inputRef.current?.click()}
+        className="card grid cursor-pointer place-items-center border-2 border-dashed border-line px-6 py-10 text-center transition hover:border-lime-deep"
+      >
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => run(e.target.files?.[0])}
+        />
+        <div className="grid h-12 w-12 place-items-center rounded-full bg-lime">
+          <UploadGlyph />
         </div>
-        <h2 className="mt-1 text-xl font-semibold text-slate-100">Trace Suspect Leaked Document</h2>
-        <p className="text-xs text-slate-400">
-          Extract invisible Haar DWT watermark bits from a compressed or cropped leak and attribute the responsible officer.
-        </p>
+        <div className="mt-3 font-bold text-ink">
+          {fileName ? fileName : 'Drop a suspected leaked image, or click to browse'}
+        </div>
+        <div className="mt-1 text-xs text-ink-muted">
+          It will be hashed, matched, and the watermark extracted — nothing is stored as plaintext.
+        </div>
       </div>
 
-      {/* Main Grid: Upload & Presets vs Verdict Card */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Left Column: Upload Dropzone + 5 Attack Presets (5 cols) */}
-        <div className="lg:col-span-5 space-y-5">
-          {/* 5 Instant Attack Presets for Judges & Live Demo */}
-          <div className="glass-panel rounded-xl p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-                1. Test with Attack Presets
-              </span>
-              <span className="text-[10px] text-cyan-400 font-mono">1-Click Scenarios</span>
-            </div>
-
-            <div className="space-y-2">
-              {TRACE_PRESETS.map((preset) => (
-                <button
-                  type="button"
-                  key={preset.id}
-                  onClick={() => handleRunPreset(preset)}
-                  disabled={isScanning}
-                  className={`w-full rounded-lg border p-2.5 text-left transition ${
-                    activePreset === preset.id
-                      ? 'border-cyan-400 bg-cyan-950/40 text-cyan-200'
-                      : 'border-slate-800 bg-slate-950/60 text-slate-300 hover:border-slate-700 hover:bg-slate-900'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium">{preset.name}</span>
-                    <span
-                      className={`rounded px-1.5 py-0.2 text-[9px] font-semibold border ${
-                        preset.result.verdict === 'ATTRIBUTED'
-                          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
-                          : preset.result.verdict === 'PROBABLE'
-                            ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
-                            : 'border-slate-600 bg-slate-800 text-slate-400'
-                      }`}
-                    >
-                      {preset.result.verdict}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-[11px] text-slate-500 leading-tight">{preset.description}</p>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Custom File Upload Dropzone */}
-          <div className="glass-panel rounded-xl p-4 space-y-3">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-300 block">
-              2. Or Upload Suspect Leak File
-            </span>
-
-            <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-800 bg-slate-950/60 p-5 hover:border-slate-700">
-              {filePreview ? (
-                <div className="space-y-2 text-center">
-                  <img
-                    src={filePreview}
-                    alt="Suspect Leak"
-                    className="mx-auto h-24 w-32 rounded object-cover border border-slate-700"
-                  />
-                  <div className="text-[11px] text-slate-300">{selectedFile?.name}</div>
-                </div>
-              ) : (
-                <div className="text-center">
-                  <Upload className="mx-auto h-7 w-7 text-slate-500 mb-1.5" />
-                  <label className="cursor-pointer text-xs font-medium text-cyan-400 hover:text-cyan-300">
-                    <span>Choose suspect image / document</span>
-                    <input
-                      type="file"
-                      className="hidden"
-                      accept="image/*"
-                      onChange={handleFileChange}
-                    />
-                  </label>
-                  <p className="text-[10px] text-slate-500 mt-0.5">JPEG, PNG, or screenshot</p>
-                </div>
-              )}
-            </div>
-
-            {selectedFile && (
-              <button
-                type="button"
-                onClick={handleRunFile}
-                disabled={isScanning}
-                className="w-full flex items-center justify-center gap-2 rounded-lg bg-cyan-600 py-2 text-xs font-semibold text-white shadow hover:bg-cyan-500 disabled:opacity-50"
-              >
-                <FileSearch className="h-3.5 w-3.5" />
-                <span>Run Forensic Trace on Uploaded File</span>
-              </button>
-            )}
+      {status === 'working' && (
+        <div className="card grid place-items-center p-8 text-center">
+          <div className="mono animate-pulse text-sm text-ink-muted">
+            Hashing → searching the register → extracting the watermark → cross-checking the chain…
           </div>
         </div>
+      )}
+      {error && <Notice tone="error">{error}</Notice>}
+      {status === 'done' && result && <Verdict result={result} />}
+    </section>
+  );
+}
 
-        {/* Right Column: Live Analysis or Verdict Card (7 cols) */}
-        <div className="lg:col-span-7 space-y-4">
-          {/* Scanning Animation State */}
-          {isScanning && (
-            <div className="glass-panel rounded-xl p-8 text-center space-y-6">
-              <div className="relative mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-cyan-500/40 bg-cyan-500/10 text-cyan-400">
-                <Radio className="h-8 w-8 animate-pulse text-cyan-400" />
-                <div className="absolute inset-0 rounded-2xl ring-2 ring-cyan-400/30 animate-ping" />
-              </div>
+const BAND = {
+  ATTRIBUTED: {
+    label: 'Attributed',
+    ring: 'ring-attributed',
+    text: 'text-attributed',
+    chip: 'bg-attributed/10 text-attributed',
+    blurb: 'A confident match. The evidence points to one officer.',
+  },
+  PROBABLE: {
+    label: 'Probable',
+    ring: 'ring-probable',
+    text: 'text-probable',
+    chip: 'bg-probable/10 text-probable',
+    blurb: 'A lead, not a conclusion. Treat as a candidate to investigate.',
+  },
+  INCONCLUSIVE: {
+    label: 'Inconclusive',
+    ring: 'ring-inconclusive',
+    text: 'text-inconclusive',
+    chip: 'bg-inconclusive/10 text-inconclusive',
+    blurb: 'Below the threshold. The system does not name anyone here.',
+  },
+};
 
-              <div>
-                <h4 className="text-sm font-semibold text-slate-200">
-                  Forensic Extraction Pipeline Running
-                </h4>
-                <p className="mt-2 text-xs font-mono text-cyan-300">
-                  {SCAN_STAGES[scanStageIndex]}
-                </p>
-              </div>
+function Verdict({ result }) {
+  const band = BAND[result.verdict] || BAND.INCONCLUSIVE;
+  const pct = Math.round((result.confidence || 0) * 100);
 
-              <div className="flex justify-center gap-1.5">
-                {SCAN_STAGES.map((_, i) => (
-                  <span
-                    key={i}
-                    className={`h-1.5 w-8 rounded-full transition-all duration-300 ${
-                      i <= scanStageIndex ? 'bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.8)]' : 'bg-slate-800'
-                    }`}
-                  />
-                ))}
-              </div>
+  return (
+    <div className="grid gap-5 lg:grid-cols-3">
+      {/* verdict + ring */}
+      <div className="card flex flex-col items-center justify-center p-6 text-center">
+        <div
+          className={`grid h-32 w-32 place-items-center rounded-full ring-8 ${band.ring} ring-offset-4`}
+        >
+          <div>
+            <div className={`text-3xl font-extrabold ${band.text}`}>{pct}%</div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-ink-faint">
+              confidence
             </div>
-          )}
+          </div>
+        </div>
+        <div className={`pill mt-4 ${band.chip}`}>{band.label}</div>
+        <p className="mt-3 max-w-[15rem] text-xs text-ink-muted">{band.blurb}</p>
+      </div>
 
-          {/* Initial Guidance State */}
-          {!isScanning && !result && (
-            <div className="glass-panel flex flex-col items-center justify-center rounded-xl p-12 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-slate-700 bg-slate-800/60 text-slate-500">
-                <Search className="h-7 w-7" />
-              </div>
-              <h4 className="mt-4 text-sm font-medium text-slate-200">Awaiting Suspect Document</h4>
-              <p className="mt-1 max-w-sm text-xs text-slate-500">
-                Select one of the <strong className="text-slate-300">Attack Presets</strong> on the left or upload a leaked file to trigger the watermark recovery pipeline.
-              </p>
-            </div>
-          )}
+      {/* match + reasons */}
+      <div className="space-y-5 lg:col-span-2">
+        {result.match ? (
+          <div className="rounded-3xl bg-night bg-gradient-to-br from-[#20220f] to-night p-5 text-white shadow-panel">
+            <h3 className="mb-3 text-sm font-bold">Matched release</h3>
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+              <Mt k="Officer" v={result.match.userName} />
+              <Mt k="Department" v={result.match.department} />
+              <Mt k="Document" v={result.match.assetTitle} />
+              <Mt k="Device" v={result.match.deviceLabel} />
+              <Mt k="Decrypted at" v={new Date(result.match.decryptedAt).toLocaleString()} />
+              <Mt k="Tx" v={shortHash(result.match.txHash, 8, 6)} />
+            </dl>
+            {result.match.etherscanUrl && (
+              <a
+                href={result.match.etherscanUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold hover:bg-white/20"
+              >
+                View on Etherscan ↗
+              </a>
+            )}
+          </div>
+        ) : (
+          <div className="card p-5">
+            <h3 className="text-sm font-bold text-ink">No name returned</h3>
+            <p className="mt-1 text-sm text-ink-muted">
+              Confidence is below the reporting threshold, so no officer is named. That is the
+              system working as intended — it does not guess.
+            </p>
+          </div>
+        )}
 
-          {/* Verdict Result Card */}
-          {!isScanning && result && (
-            <div
-              className={`glass-panel space-y-5 rounded-xl border p-6 transition-all duration-300 ${
-                verdictConfig.border
-              } ${verdictConfig.bg} ${verdictConfig.glow}`}
-            >
-              {/* Verdict Header Badge + Radial Gauge */}
-              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-slate-700 bg-slate-950">
-                    {result.verdict === 'ATTRIBUTED' ? (
-                      <ShieldCheck className="h-7 w-7 text-emerald-400" />
-                    ) : result.verdict === 'PROBABLE' ? (
-                      <AlertTriangle className="h-7 w-7 text-amber-400" />
-                    ) : (
-                      <HelpCircle className="h-7 w-7 text-slate-400" />
-                    )}
-                  </div>
-
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-lg font-bold tracking-wide ${verdictConfig.color}`}>
-                        {result.verdict}
-                      </span>
-                      <span className={`rounded px-2 py-0.5 text-[11px] font-semibold ${verdictConfig.badgeBg}`}>
-                        {(result.confidence * 100).toFixed(0)}% Confidence
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-400">{verdictConfig.subLabel}</p>
-                  </div>
-                </div>
-
-                {/* Processing metrics */}
-                <div className="text-right text-[11px] text-slate-500 mono">
-                  <div>Candidates Checked: {result.candidatesChecked}</div>
-                  <div>Elapsed: {result.elapsedMs} ms</div>
-                </div>
-              </div>
-
-              {/* Special Polish for INCONCLUSIVE state (Strict Rule 7.2) */}
-              {result.verdict === 'INCONCLUSIVE' && (
-                <div className="rounded-lg border border-slate-700 bg-slate-900/80 p-4 space-y-2">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
-                    <HelpCircle className="h-4 w-4 text-slate-400" />
-                    <span>FORENSIC INTEGRITY: System Guess Nahi Karta</span>
-                  </div>
-                  <p className="text-xs text-slate-400 leading-relaxed">
-                    The extracted bit agreement and perceptual hash distance fall below the 60% legal threshold. Rather than making a false accusation, the register returns an explicit <strong>INCONCLUSIVE</strong> verdict.
-                  </p>
-                </div>
-              )}
-
-              {/* Attributed / Probable Match Details */}
-              {result.match && (
-                <div className="space-y-4">
-                  {/* Strict Separation: Internal Registry Identity vs On-Chain Proof */}
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    {/* Personnel Registry Box */}
-                    <div className="rounded-lg border border-slate-700 bg-slate-950/80 p-3.5 space-y-2">
-                      <div className="text-[11px] font-semibold text-slate-300">
-                        PERSONNEL ATTRIBUTION (PostgreSQL Registry)
-                      </div>
-                      <div className="space-y-1 text-xs">
-                        <div>
-                          <span className="text-slate-500">Responsible Officer: </span>
-                          <span className="font-semibold text-slate-100">{result.match.userName}</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-500">Unit / Department: </span>
-                          <span className="text-slate-300">{result.match.department}</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-500">Terminal Label: </span>
-                          <span className="mono text-slate-300">{result.match.deviceLabel}</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-500">Decrypted At: </span>
-                          <span className="mono text-slate-400">
-                            {new Date(result.match.decryptedAt).toLocaleString()}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* On-Chain Cryptographic Proof Box */}
-                    <div className="rounded-lg border border-cyan-500/30 bg-slate-950/80 p-3.5 space-y-2">
-                      <div className="flex items-center justify-between text-[11px] font-semibold text-cyan-400">
-                        <span>IMMUTABLE RECEIPT (On-Chain)</span>
-                        <span className="text-[10px] font-mono text-cyan-300">Sepolia Block</span>
-                      </div>
-                      <div className="space-y-1 text-xs">
-                        <div>
-                          <span className="text-slate-500">Document: </span>
-                          <span className="text-slate-200">{result.match.assetTitle}</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-500">Receipt ID: </span>
-                          <span className="mono text-slate-300 truncate block" title={result.match.receiptId}>
-                            {shortHash(result.match.receiptId, 10, 8)}
-                          </span>
-                        </div>
-                        <div className="pt-1">
-                          <a
-                            href={result.match.etherscanUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-400 hover:text-cyan-300 underline"
-                          >
-                            <span>Inspect on Etherscan</span>
-                            <ExternalLink className="h-3 w-3" />
-                          </a>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Explainability: Plain English reasons[] Bulleted List */}
-              <div className="rounded-lg border border-slate-800 bg-slate-950/90 p-4 space-y-2">
-                <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
-                  Forensic Mathematical Evidence Breakdown
-                </span>
-                <ul className="space-y-1.5 text-xs text-slate-400">
-                  {result.reasons?.map((reason, idx) => (
-                    <li key={idx} className="flex items-start gap-2">
-                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-cyan-400 shrink-0" />
-                      <span>{reason}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          )}
+        <div className="card p-5">
+          <h3 className="mb-3 text-sm font-bold text-ink">Why</h3>
+          <ul className="space-y-2">
+            {(result.reasons || []).map((r, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-ink-muted">
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-lime-deep" />
+                <span>{r}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="mono mt-4 text-[11px] text-ink-faint">
+            {result.candidatesChecked} candidates checked · {result.elapsedMs} ms
+          </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function Mt({ k, v }) {
+  return (
+    <div>
+      <dt className="text-xs text-white/50">{k}</dt>
+      <dd className="mono mt-0.5 font-semibold text-white">{v ?? '—'}</dd>
+    </div>
+  );
+}
+
+function UploadGlyph() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 16V4m0 0 4 4m-4-4L8 8M5 18h14"
+        stroke="#141410"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }

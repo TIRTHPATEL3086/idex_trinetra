@@ -52,4 +52,3 @@ export async function psnr(originalBuffer, markedBuffer) {
 
   return 10 * Math.log10((255 * 255) / mse);
 }
-

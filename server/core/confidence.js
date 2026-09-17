@@ -42,7 +42,13 @@ export const BANDS = { ATTRIBUTED: 0.85, PROBABLE: 0.6 };
  *             reasons:string[] }}
  */
 export function score(sig) {
-  const { bitConfidence = 0, pHashDist = 64, dHashDist = 64, aHashDist = 64, chainVerified = false } = sig;
+  const {
+    bitConfidence = 0,
+    pHashDist = 64,
+    dHashDist = 64,
+    aHashDist = 64,
+    chainVerified = false,
+  } = sig;
 
   const scoreValue =
     WEIGHTS.bitAgreement * bitConfidence +
@@ -60,8 +66,10 @@ export function score(sig) {
   else reasons.push(`dHash distance ${dHashDist}/64 — poor visual match`);
 
   // pHash reasoning
-  if (pHashDist <= 8) reasons.push(`pHash distance ${pHashDist}/64 — near-identical frequency content`);
-  else if (pHashDist <= 16) reasons.push(`pHash distance ${pHashDist}/64 — similar frequency content`);
+  if (pHashDist <= 8)
+    reasons.push(`pHash distance ${pHashDist}/64 — near-identical frequency content`);
+  else if (pHashDist <= 16)
+    reasons.push(`pHash distance ${pHashDist}/64 — similar frequency content`);
   else reasons.push(`pHash distance ${pHashDist}/64 — different frequency content`);
 
   // Chain reasoning
@@ -77,4 +85,3 @@ export function verdictFor(value) {
   if (value >= BANDS.PROBABLE) return 'PROBABLE';
   return 'INCONCLUSIVE';
 }
-

@@ -96,8 +96,7 @@ export function rsEncode(bits) {
  */
 export function rsDecode(bits) {
   if (!ReedSolomon) {
-    // Fallback: if bits were doubled, take the first half
-    const half = Math.floor(bits.length / 2);
+    // Fallback: RS unavailable — return the first 48 bits as-is.
     return { bits: bits.slice(0, 48), corrected: false };
   }
 
@@ -125,4 +124,3 @@ export function rsDecode(bits) {
 
   return { bits: bytesToBits(workBuf, 48), corrected };
 }
-

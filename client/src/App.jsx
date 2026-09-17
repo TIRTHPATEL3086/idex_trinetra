@@ -1,23 +1,8 @@
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import {
-  Shield,
-  FileText,
-  Key,
-  Fingerprint,
-  History,
-  Activity,
-  Wallet,
-  Play,
-  CheckCircle2,
-  AlertCircle,
-  ToggleLeft,
-  ToggleRight,
-  Radio,
-  ExternalLink,
-} from 'lucide-react';
 
-import { getHealth, isDemoMode, setDemoMode, shortHash } from './lib/api.js';
+import { getHealth } from './lib/api.js';
+import Logo from './components/Logo.jsx';
 import Assets from './pages/Assets.jsx';
 import Decrypt from './pages/Decrypt.jsx';
 import Trace from './pages/Trace.jsx';
@@ -25,28 +10,23 @@ import Timeline from './pages/Timeline.jsx';
 import Robustness from './pages/Robustness.jsx';
 
 /**
- * Application shell: navigation, header, and a live health indicator.
+ * Application shell — a white, rounded app card sitting on a dark olive canvas,
+ * with a lime accent and a chunky rounded logo, matching the reference design.
  *
- * Responsive contract (must hold at every width from 320px up):
- *   - below lg the sidebar is an off-canvas drawer opened by the header button;
- *     from lg up it is a persistent column
+ * Responsive contract (holds from 320px up):
+ *   - below lg the sidebar is an off-canvas drawer opened from the top bar;
+ *     from lg up it is a persistent column inside the card
  *   - no horizontal page scroll at any width
- *   - the header, nav and content reflow rather than shrinking to fit
  *
- * Two display conventions the screens inherit:
- *   - verdict colours are emerald / amber / slate, never red
- *   - on-chain (hashed) and registry (real name) values are shown as separate,
- *     labelled groups
+ * Verdict colours stay semantic (green / amber / slate, never red).
  */
-import DemoScriptModal from './components/DemoScriptModal.jsx';
-import WalletModal from './components/WalletModal.jsx';
 
 const NAV = [
-  { to: '/assets', label: 'Assets Register', icon: FileText },
-  { to: '/decrypt', label: 'Decrypt & Anchor', icon: Key },
-  { to: '/trace', label: 'Forensic Trace', icon: Fingerprint },
-  { to: '/timeline', label: 'Audit Timeline', icon: History },
-  { to: '/robustness', label: 'Robustness Metrics', icon: Activity },
+  { to: '/assets', label: 'Documents', icon: DocIcon },
+  { to: '/decrypt', label: 'Decrypt', icon: KeyIcon },
+  { to: '/trace', label: 'Trace', icon: SearchIcon },
+  { to: '/timeline', label: 'Timeline', icon: ClockIcon },
+  { to: '/robustness', label: 'Robustness', icon: ChartIcon },
 ];
 
 export default function App() {
@@ -54,12 +34,10 @@ export default function App() {
   const [navOpen, setNavOpen] = useState(false);
   const location = useLocation();
 
-  // Close the mobile drawer on navigation.
   useEffect(() => {
     setNavOpen(false);
   }, [location.pathname]);
 
-  // Lock body scroll while the drawer is open on mobile.
   useEffect(() => {
     document.body.style.overflow = navOpen ? 'hidden' : '';
     return () => {
@@ -68,216 +46,57 @@ export default function App() {
   }, [navOpen]);
 
   return (
-    <div className="min-h-screen lg:flex">
-      {/* Backdrop — only present while the drawer is open, below lg. */}
-      {navOpen && (
-        <button
-          type="button"
-          aria-label="Close navigation"
-          onClick={() => setNavOpen(false)}
-          className="fixed inset-0 z-30 bg-black/60 lg:hidden"
-        />
-      )}
-
-      <Sidebar health={health} open={navOpen} />
-
-      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-800 bg-slate-950/90 px-4 py-3 backdrop-blur sm:px-6 lg:px-8">
+    <div className="h-screen overflow-hidden bg-olive p-2 [height:100dvh] sm:p-4 lg:p-6">
+      <div className="mx-auto flex h-full w-full max-w-[1440px] flex-col overflow-hidden rounded-2xl bg-white shadow-app sm:rounded-3xl">
+        {/* ---- top bar (fixed) ---- */}
+        <header className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-3.5 sm:px-6">
           <button
             type="button"
             aria-label="Open navigation"
             aria-expanded={navOpen}
             onClick={() => setNavOpen(true)}
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-slate-700 text-slate-300 hover:border-slate-600 hover:text-slate-100 lg:hidden"
+            className="btn-icon lg:hidden"
           >
             <MenuIcon />
           </button>
 
-          <h1 className="min-w-0 flex-1 truncate text-sm font-medium text-slate-300">
-            Decryption Provenance Register
-          </h1>
+          <Logo size="sm" />
 
-          {/* TODO: MetaMask connect (wagmi + viem) for wallet-signed receipts. */}
-          <button
-            type="button"
-            className="shrink-0 rounded-md border border-slate-700 px-3 py-2 text-xs text-slate-400 hover:border-slate-600 hover:text-slate-200"
-          >
-            <span className="hidden sm:inline">Connect wallet</span>
-            <span className="sm:hidden">Connect</span>
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <HealthChip health={health} />
+            <NotificationsBell health={health} />
+            <WalletButton />
+          </div>
         </header>
 
-        <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-          <div className="mx-auto w-full max-w-6xl">
-            <Routes>
-              <Route path="/" element={<Navigate to="/assets" replace />} />
-              <Route path="/assets" element={<Assets />} />
-              <Route path="/decrypt" element={<Decrypt />} />
-              <Route path="/trace" element={<Trace />} />
-              <Route path="/timeline" element={<Timeline />} />
-              <Route path="/robustness" element={<Robustness />} />
-              <Route path="*" element={<p className="text-slate-500">No such screen.</p>} />
-            </Routes>
-          </div>
-        </main>
+        {/* ---- body ---- */}
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          {navOpen && (
+            <button
+              type="button"
+              aria-label="Close navigation"
+              onClick={() => setNavOpen(false)}
+              className="fixed inset-0 z-30 bg-night/40 backdrop-blur-sm lg:hidden"
+            />
+          )}
+
+          <Sidebar health={health} open={navOpen} />
+
+          <main className="scroll-slim min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-6 sm:px-6 sm:py-7 lg:px-8">
+            <div className="mx-auto w-full max-w-6xl">
+              <Routes>
+                <Route path="/" element={<Navigate to="/assets" replace />} />
+                <Route path="/assets" element={<Assets />} />
+                <Route path="/decrypt" element={<Decrypt />} />
+                <Route path="/trace" element={<Trace />} />
+                <Route path="/timeline" element={<Timeline />} />
+                <Route path="/robustness" element={<Robustness />} />
+                <Route path="*" element={<p className="text-ink-muted">No such screen.</p>} />
+              </Routes>
+            </div>
+          </main>
+        </div>
       </div>
-  const [demoMode, setDemoModeState] = useState(isDemoMode());
-  const [demoScriptOpen, setDemoScriptOpen] = useState(false);
-  const [walletModalOpen, setWalletModalOpen] = useState(false);
-
-  const [signingMode, setSigningMode] = useState('server');
-  const [walletState, setWalletState] = useState({
-    connected: true,
-    address: '0x71C6634C25317bB832dbb8382c753fA7B20',
-    network: 'Sepolia (ChainID: 11155111)',
-    balance: '1.450 SepoliaETH',
-  });
-
-  const toggleDemoMode = () => {
-    const next = !demoMode;
-    setDemoMode(next);
-    setDemoModeState(next);
-  };
-
-  return (
-    <div className="flex min-h-screen bg-[#070b12] text-slate-200">
-      {/* Sidebar Navigation */}
-      <aside className="w-64 shrink-0 border-r border-slate-800/80 bg-slate-950/70 p-5 flex flex-col justify-between">
-        <div>
-          {/* Brand Header */}
-          <div className="mb-7">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-cyan-500/40 bg-cyan-500/10 text-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.3)]">
-                <Shield className="h-4 w-4" />
-              </div>
-              <div>
-                <div className="text-sm font-bold tracking-wider text-slate-100">PROVENANCE</div>
-                <div className="mono text-[10px] text-cyan-400/80">SIH26237 // Crypto Register</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Navigation Links */}
-          <nav className="space-y-1.5">
-            {NAV.map((item) => {
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium transition ${
-                      isActive
-                        ? 'border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 shadow-sm'
-                        : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
-                    }`
-                  }
-                >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  <span>{item.label}</span>
-                </NavLink>
-              );
-            })}
-          </nav>
-
-          {/* 60-Second Demo Kit Quick-Trigger */}
-          <div className="mt-8 rounded-xl border border-cyan-500/20 bg-cyan-950/20 p-3">
-            <div className="flex items-center gap-2 text-[11px] font-semibold text-cyan-300">
-              <Play className="h-3.5 w-3.5" />
-              <span>Demo Walkthrough Kit</span>
-            </div>
-            <p className="mt-1 text-[10px] text-slate-400">
-              60-second timed pitch script with Hinglish dialogue & jury viva defense.
-            </p>
-            <button
-              type="button"
-              onClick={() => setDemoScriptOpen(true)}
-              className="mt-2.5 w-full rounded-md bg-cyan-600/80 hover:bg-cyan-600 py-1.5 text-[11px] font-medium text-white shadow transition"
-            >
-              Open 60s Demo Script
-            </button>
-          </div>
-        </div>
-
-        {/* System Health Status in Sidebar Footer */}
-        <HealthBadge health={health} demoMode={demoMode} />
-      </aside>
-
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col overflow-x-hidden">
-        {/* Top Command Bar */}
-        <header className="flex flex-wrap items-center justify-between border-b border-slate-800/80 bg-slate-950/40 px-8 py-3.5 backdrop-blur-md">
-          <div className="flex items-center gap-3">
-            <h1 className="text-xs font-semibold tracking-wide text-slate-300 uppercase">
-              Decryption Provenance Security Console
-            </h1>
-            <span className="hidden md:inline-block h-3 w-px bg-slate-800" />
-            <div className="hidden md:flex items-center gap-2 text-[11px] mono text-slate-500">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
-              <span>Chain: Sepolia (#5829301)</span>
-              <span>·</span>
-              <span>DWT Δ=12</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {/* Dual-Engine Mode Toggle (Live API vs Standalone Mock) */}
-            <button
-              type="button"
-              onClick={toggleDemoMode}
-              title="Toggle between standalone in-memory demo engine and live Express backend"
-              className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition ${
-                demoMode
-                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
-                  : 'border-slate-700 bg-slate-900 text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Radio className={`h-3 w-3 ${demoMode ? 'text-amber-400' : 'text-slate-500'}`} />
-              <span>{demoMode ? 'Demo Engine (Offline-Safe)' : 'Live Backend API'}</span>
-            </button>
-
-            {/* Wallet Connect Button */}
-            <button
-              type="button"
-              onClick={() => setWalletModalOpen(true)}
-              className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition ${
-                walletState.connected
-                  ? 'border-emerald-500/40 bg-emerald-950/30 text-emerald-300'
-                  : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'
-              }`}
-            >
-              <Wallet className="h-3.5 w-3.5 text-emerald-400" />
-              <span className="mono">
-                {walletState.connected ? shortHash(walletState.address, 4, 4) : 'Connect Wallet'}
-              </span>
-            </button>
-          </div>
-        </header>
-
-        {/* Page Body */}
-        <div className="p-8 flex-1">
-          <Routes>
-            <Route path="/" element={<Navigate to="/assets" replace />} />
-            <Route path="/assets" element={<Assets />} />
-            <Route path="/decrypt" element={<Decrypt />} />
-            <Route path="/trace" element={<Trace />} />
-            <Route path="/timeline" element={<Timeline />} />
-            <Route path="/robustness" element={<Robustness />} />
-            <Route path="*" element={<p className="text-slate-500">Screen not found.</p>} />
-          </Routes>
-        </div>
-      </main>
-
-      {/* Modals */}
-      <DemoScriptModal isOpen={demoScriptOpen} onClose={() => setDemoScriptOpen(false)} />
-      <WalletModal
-        isOpen={walletModalOpen}
-        onClose={() => setWalletModalOpen(false)}
-        walletState={walletState}
-        setWalletState={setWalletState}
-        signingMode={signingMode}
-        setSigningMode={setSigningMode}
-      />
     </div>
   );
 }
@@ -285,48 +104,57 @@ export default function App() {
 function Sidebar({ health, open }) {
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-40 flex w-64 max-w-[85vw] flex-col border-r border-slate-800 bg-slate-900 p-5 transition-transform duration-200 lg:static lg:z-auto lg:w-60 lg:max-w-none lg:translate-x-0 lg:bg-slate-900/60 ${
-        open ? 'translate-x-0' : '-translate-x-full'
+      className={`scroll-slim fixed inset-y-0 left-0 z-40 flex w-64 max-w-[82vw] flex-col overflow-y-auto border-r border-line bg-white p-4 transition-transform duration-200 lg:static lg:z-auto lg:w-60 lg:max-w-none lg:translate-x-0 ${
+        open ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
       }`}
     >
-      <div className="mb-8">
-        <div className="text-sm font-semibold tracking-wide text-slate-100">PROVENANCE</div>
-        <div className="mono mt-0.5 text-[11px] text-slate-500">Decryption Register</div>
+      <div className="mb-4 flex items-center justify-between lg:hidden">
+        <Logo size="sm" />
       </div>
 
+      <div className="mb-2 px-2 text-[10px] font-bold uppercase tracking-widest text-ink-faint">
+        Menu
+      </div>
       <nav className="space-y-1">
-        {NAV.map((item) => (
+        {NAV.map(({ to, label, icon: Icon }) => (
           <NavLink
-            key={item.to}
-            to={item.to}
+            key={to}
+            to={to}
             className={({ isActive }) =>
-              `block rounded-md px-3 py-2.5 text-sm transition ${
-                isActive
-                  ? 'bg-slate-800 text-slate-100'
-                  : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+              `group flex items-center gap-3 rounded-full px-4 py-2.5 text-sm font-semibold transition ${
+                isActive ? 'bg-night text-white' : 'text-ink-muted hover:bg-line/60 hover:text-ink'
               }`
             }
           >
-            {item.label}
+            {({ isActive }) => (
+              <>
+                <Icon active={isActive} />
+                <span>{label}</span>
+              </>
+            )}
           </NavLink>
         ))}
       </nav>
 
-      <HealthBadge health={health} />
+      <div className="mt-auto space-y-3 pt-6">
+        <NavLink to="/trace" className="btn-dark w-full">
+          <SearchIcon light />
+          Trace a leak
+        </NavLink>
+        <HealthBadge health={health} />
+      </div>
     </aside>
   );
 }
 
 function useHealth() {
   const [health, setHealth] = useState(null);
-
   useEffect(() => {
     let alive = true;
     const tick = () =>
       getHealth()
         .then((h) => alive && setHealth(h))
         .catch(() => alive && setHealth({ ok: false }));
-
     tick();
     const timer = setInterval(tick, 15000);
     return () => {
@@ -334,44 +162,267 @@ function useHealth() {
       clearInterval(timer);
     };
   }, []);
-
   return health;
 }
 
-function HealthBadge({ health, demoMode }) {
-  const isUp = health?.ok || demoMode;
+function healthTone(health) {
+  if (!health) return { dot: 'bg-ink-faint', label: '…', tone: 'text-ink-faint' };
+  if (!health.ok) return { dot: 'bg-inconclusive', label: 'API down', tone: 'text-inconclusive' };
+  if (health.warnings?.length)
+    return { dot: 'bg-probable', label: 'Degraded', tone: 'text-probable' };
+  return { dot: 'bg-attributed', label: 'All systems go', tone: 'text-attributed' };
+}
 
+function HealthChip({ health }) {
+  const { dot, label, tone } = healthTone(health);
   return (
-    <div className="mono mt-auto space-y-1.5 border-t border-slate-800 pt-4 text-[11px] text-slate-500">
-      <div className="flex items-center gap-2">
-        <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
-        <span>{health.ok ? 'api up' : 'api down'}</span>
-    <div className="mono border-t border-slate-800/80 pt-4 text-[11px] text-slate-400 space-y-1.5">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <span className={`h-2 w-2 rounded-full ${isUp ? 'bg-emerald-400' : 'bg-rose-400'}`} />
-          <span className="font-semibold text-slate-300">
-            {demoMode ? 'engine active' : isUp ? 'api online' : 'api offline'}
-          </span>
-        </div>
-        <span className="text-[10px] text-cyan-400">Sepolia</span>
-      </div>
+    <span className="hidden items-center gap-2 rounded-full border border-line bg-white px-3 py-2 text-xs font-bold sm:inline-flex">
+      <span className={`h-2 w-2 rounded-full ${dot}`} />
+      <span className={tone}>{label}</span>
+    </span>
+  );
+}
 
-      <div className="text-[10px] text-slate-500">
-        <div>db: {demoMode ? 'in-memory (synced)' : health?.db || 'connected'}</div>
-        <div>chain: {health?.chainMode || 'sepolia testnet'}</div>
+function HealthBadge({ health }) {
+  if (!health) return null;
+  const { dot, label, tone } = healthTone(health);
+  return (
+    <div className="rounded-2xl border border-line bg-white p-3">
+      <div className="flex items-center gap-2 text-xs font-bold">
+        <span className={`h-2 w-2 rounded-full ${dot}`} />
+        <span className={tone}>{label}</span>
       </div>
+      {health.ok && (
+        <dl className="mono mt-2.5 space-y-1 text-[11px] text-ink-muted">
+          <Row k="database" v={health.db} good={health.db === 'up'} />
+          <Row k="chain" v={health.chainMode} good={health.chain?.connected} />
+          {health.warnings?.length > 0 && (
+            <div className="pt-0.5 text-probable">{health.warnings.length} warning(s)</div>
+          )}
+        </dl>
+      )}
     </div>
   );
 }
 
+function Row({ k, v, good }) {
+  return (
+    <div className="flex items-center justify-between">
+      <dt>{k}</dt>
+      <dd className={good ? 'text-attributed' : 'text-inconclusive'}>{v}</dd>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------- wallet ----- */
+
+const short = (a) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '');
+
+/** Real MetaMask connect via window.ethereum. Degrades cleanly with no wallet. */
+function WalletButton() {
+  const [account, setAccount] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const eth = window.ethereum;
+    if (!eth) return;
+    // Reflect an already-authorised account without prompting.
+    eth
+      .request({ method: 'eth_accounts' })
+      .then((a) => a?.[0] && setAccount(a[0]))
+      .catch(() => {});
+    const onChange = (a) => setAccount(a?.[0] ?? null);
+    eth.on?.('accountsChanged', onChange);
+    return () => eth.removeListener?.('accountsChanged', onChange);
+  }, []);
+
+  async function connect() {
+    const eth = window.ethereum;
+    if (!eth) {
+      window.open('https://metamask.io/download/', '_blank', 'noopener');
+      return;
+    }
+    setBusy(true);
+    try {
+      const a = await eth.request({ method: 'eth_requestAccounts' });
+      setAccount(a?.[0] ?? null);
+    } catch {
+      /* user rejected — leave disconnected */
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (account) {
+    return (
+      <button
+        type="button"
+        onClick={() => setAccount(null)}
+        title="Click to disconnect"
+        className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-3 py-2 text-xs font-bold text-ink"
+      >
+        <span className="h-2 w-2 rounded-full bg-attributed" />
+        <span className="mono">{short(account)}</span>
+      </button>
+    );
+  }
+
+  return (
+    <button type="button" onClick={connect} className="btn-dark !px-4" disabled={busy}>
+      <WalletIcon />
+      <span className="hidden sm:inline">{busy ? 'Connecting…' : 'Connect'}</span>
+    </button>
+  );
+}
+
+/* ----------------------------------------------------- notifications ------ */
+
+/** Bell with a popover of live system status / warnings. */
+function NotificationsBell({ health }) {
+  const [open, setOpen] = useState(false);
+  const warnings = health?.warnings ?? [];
+  const count = warnings.length;
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        className="btn-icon relative"
+        aria-label="Notifications"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <BellIcon />
+        {count > 0 && (
+          <span className="absolute -right-0.5 -top-0.5 grid h-4 w-4 place-items-center rounded-full bg-probable text-[9px] font-bold text-white">
+            {count}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <>
+          <button
+            type="button"
+            aria-label="Close"
+            className="fixed inset-0 z-40 cursor-default"
+            onClick={() => setOpen(false)}
+          />
+          <div className="absolute right-0 z-50 mt-2 w-72 rounded-2xl border border-line bg-white p-3 shadow-panel">
+            <div className="mb-2 px-1 text-xs font-bold uppercase tracking-wide text-ink-faint">
+              System status
+            </div>
+            {count === 0 ? (
+              <div className="flex items-center gap-2 rounded-xl bg-attributed/10 px-3 py-2.5 text-sm text-attributed">
+                <span className="h-2 w-2 rounded-full bg-attributed" />
+                All systems operational
+              </div>
+            ) : (
+              <ul className="space-y-1.5">
+                {warnings.map((w, i) => (
+                  <li
+                    key={i}
+                    className="flex items-start gap-2 rounded-xl bg-probable/10 px-3 py-2 text-xs text-ink"
+                  >
+                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-probable" />
+                    <span>{w}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ----------------------------------------------------------------- icons -- */
+const S = {
+  stroke: 'currentColor',
+  strokeWidth: 1.8,
+  strokeLinecap: 'round',
+  strokeLinejoin: 'round',
+};
+
+function NavIcon({ children, active, light }) {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      className={light || active ? 'text-current' : 'text-ink-faint group-hover:text-ink-muted'}
+      aria-hidden="true"
+    >
+      {children}
+    </svg>
+  );
+}
+function DocIcon(p) {
+  return (
+    <NavIcon {...p}>
+      <path d="M6 3h8l4 4v14H6V3Z" {...S} />
+      <path d="M14 3v4h4M9 12h6M9 16h6" {...S} />
+    </NavIcon>
+  );
+}
+function KeyIcon(p) {
+  return (
+    <NavIcon {...p}>
+      <circle cx="8" cy="8" r="4" {...S} />
+      <path d="m11 11 8 8M16 16l2-2M18 18l2-2" {...S} />
+    </NavIcon>
+  );
+}
+function SearchIcon(p) {
+  return (
+    <NavIcon {...p}>
+      <circle cx="11" cy="11" r="6" {...S} />
+      <path d="m20 20-3.5-3.5" {...S} />
+    </NavIcon>
+  );
+}
+function ClockIcon(p) {
+  return (
+    <NavIcon {...p}>
+      <circle cx="12" cy="12" r="8.5" {...S} />
+      <path d="M12 7.5V12l3 2" {...S} />
+    </NavIcon>
+  );
+}
+function ChartIcon(p) {
+  return (
+    <NavIcon {...p}>
+      <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" {...S} />
+    </NavIcon>
+  );
+}
 function MenuIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M4 6h16M4 12h16M4 18h16" {...S} />
+    </svg>
+  );
+}
+function BellIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6ZM9.5 20a2.5 2.5 0 0 0 5 0" {...S} />
+    </svg>
+  );
+}
+function WalletIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
-        d="M4 6h16M4 12h16M4 18h16"
-        stroke="currentColor"
-        strokeWidth="2"
+        d="M3 7h15a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"
+        stroke="#fff"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M3 7V6a2 2 0 0 1 2-2h11M16 13h2"
+        stroke="#fff"
+        strokeWidth="1.8"
         strokeLinecap="round"
       />
     </svg>

@@ -68,25 +68,40 @@ async function applyAttack(buffer, attackId) {
   const image = sharp(buffer);
   const meta = await image.metadata();
   switch (attackId) {
-    case 'jpeg_q90': return image.jpeg({ quality: 90 }).toBuffer();
-    case 'jpeg_q75': return image.jpeg({ quality: 75 }).toBuffer();
-    case 'jpeg_q60': return image.jpeg({ quality: 60 }).toBuffer();
-    case 'jpeg_q45': return image.jpeg({ quality: 45 }).toBuffer();
+    case 'jpeg_q90':
+      return image.jpeg({ quality: 90 }).toBuffer();
+    case 'jpeg_q75':
+      return image.jpeg({ quality: 75 }).toBuffer();
+    case 'jpeg_q60':
+      return image.jpeg({ quality: 60 }).toBuffer();
+    case 'jpeg_q45':
+      return image.jpeg({ quality: 45 }).toBuffer();
     case 'resize_50':
-      return image.resize(Math.round(meta.width * 0.5)).toBuffer()
+      return image
+        .resize(Math.round(meta.width * 0.5))
+        .toBuffer()
         .then((buf) => sharp(buf).resize(meta.width, meta.height).toBuffer());
     case 'crop_20':
-      return image.extract({
-        left: Math.round(meta.width * 0.1), top: Math.round(meta.height * 0.1),
-        width: Math.round(meta.width * 0.8), height: Math.round(meta.height * 0.8)
-      }).toBuffer()
+      return image
+        .extract({
+          left: Math.round(meta.width * 0.1),
+          top: Math.round(meta.height * 0.1),
+          width: Math.round(meta.width * 0.8),
+          height: Math.round(meta.height * 0.8),
+        })
+        .toBuffer()
         .then((buf) => sharp(buf).resize(meta.width, meta.height).toBuffer());
     case 'noise':
       return image.blur(1.5).toBuffer();
     case 'screenshot':
-      return image.resize(Math.round(meta.width * 0.8)).jpeg({ quality: 70 }).modulate({ brightness: 1.2 }).toBuffer()
+      return image
+        .resize(Math.round(meta.width * 0.8))
+        .jpeg({ quality: 70 })
+        .modulate({ brightness: 1.2 })
+        .toBuffer()
         .then((buf) => sharp(buf).resize(meta.width, meta.height).toBuffer());
-    default: return buffer;
+    default:
+      return buffer;
   }
 }
 
@@ -99,15 +114,23 @@ async function main() {
   console.log('  Running attacks (DELTA=12)...');
   const d = 12;
   const { buffer: markedBuffer, psnrDb: basePsnr } = await embed(origBuffer, payloadBits, d);
-  
+
   const results = [];
   for (const a of ATTACKS) {
     const attacked = await applyAttack(markedBuffer, a.id);
     const { payloadBits: recovered } = await extract(attacked);
     const matched = bitsMatching(payloadBits, recovered);
     const survived = matched >= a.target;
-    console.log(`    ${a.name.padEnd(16)}: ${matched}/48 ${survived ? '✅' : '❌'} (target: ${a.target})`);
-    results.push({ name: a.name, survived, bitsRecovered: matched, psnrDb: basePsnr, target: a.target });
+    console.log(
+      `    ${a.name.padEnd(16)}: ${matched}/48 ${survived ? '✅' : '❌'} (target: ${a.target})`
+    );
+    results.push({
+      name: a.name,
+      survived,
+      bitsRecovered: matched,
+      psnrDb: basePsnr,
+      target: a.target,
+    });
   }
 
   console.log('\n  Delta sweep (JPEG q75)...');
@@ -117,7 +140,9 @@ async function main() {
     const attacked = await applyAttack(dMarked, 'jpeg_q75');
     const { payloadBits: dRecovered } = await extract(attacked, d);
     const matched = bitsMatching(payloadBits, dRecovered);
-    console.log(`    DELTA ${String(d).padEnd(2)} -> PSNR: ${psnrDb.toFixed(2)} dB, Bits: ${matched}/48`);
+    console.log(
+      `    DELTA ${String(d).padEnd(2)} -> PSNR: ${psnrDb.toFixed(2)} dB, Bits: ${matched}/48`
+    );
     curve.push({ delta: d, psnrDb, bitsRecovered: matched });
   }
 
