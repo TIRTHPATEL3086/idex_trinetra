@@ -14,54 +14,276 @@
  *   LL  -> don't touch, the mark becomes visible
  *   HH  -> don't touch, JPEG quantisation destroys it
  *   HL + LH -> the sweet spot   <-- YES
- *
- * ---------------------------------------------------------------------------
- * THE TRANSFORM — the entire 1-D Haar wavelet
- *
- *   function haar1D(a) {
- *     const n = a.length, half = n >> 1;
- *     const low = new Float64Array(half), high = new Float64Array(half);
- *     for (let i = 0; i < half; i++) {
- *       low[i]  = (a[2*i] + a[2*i+1]) / 2;   // average    -> low frequency
- *       high[i] = (a[2*i] - a[2*i+1]) / 2;   // difference -> high frequency
- *     }
- *     return { low, high };
- *   }
- *   // 2-D = apply to every row, then to every column.
- *   // Result quadrants:  LL | HL
- *   //                    LH | HH
- *
- * ---------------------------------------------------------------------------
- * BIT EMBEDDING — QIM (Quantisation Index Modulation)
- *
- *   function embedBit(c, bit) {
- *     const q = Math.floor(c / DELTA);
- *     return DELTA * (q + (bit === 0 ? 0.25 : 0.75));
- *   }
- *   function extractBit(c) {
- *     const r = ((c % DELTA) + DELTA) % DELTA / DELTA;
- *     return r < 0.5 ? 0 : 1;
- *   }
- *
- *   DELTA  4  -> invisible but fragile
- *   DELTA 24  -> survives everything but faintly visible
- *   DELTA 8-16 -> sweet spot. MEASURE, DON'T GUESS.
- *
- * ---------------------------------------------------------------------------
- * COEFFICIENT SELECTION — the part that survives a crop
- *
- * Do NOT embed into the first N coefficients in raster order; one crop kills
- * them all. Use a KEYED PSEUDO-RANDOM PERMUTATION of the HL/LH coefficient
- * indices (seed = WATERMARK_SEED from .env, identical on every machine) and
- * spread each bit across 5 scattered positions. Majority-vote on extraction.
- * This is what makes 20% crop survivable — 41/48 bits in the target table.
  * ---------------------------------------------------------------------------
  */
 
-import { notImplemented } from '../lib/errors.js';
+import sharp from 'sharp';
+import crypto from 'node:crypto';
+import { env } from '../lib/env.js';
+import { psnr as computePsnr } from './psnr.js';
 
 /** How many scattered coefficients carry each bit (majority-voted on extract). */
-export const REPEAT_FACTOR = 5;
+export const REPEAT_FACTOR = 21;
+
+// ========================== 1-D Haar Wavelet ===============================
+
+function haar1D(a) {
+  const n = a.length;
+  const half = n >> 1;
+  const low = new Float64Array(half);
+  const high = new Float64Array(half);
+  for (let i = 0; i < half; i++) {
+    low[i] = (a[2 * i] + a[2 * i + 1]) / 2;
+    high[i] = (a[2 * i] - a[2 * i + 1]) / 2;
+  }
+  return { low, high };
+}
+
+function ihaar1D(low, high) {
+  const half = low.length;
+  const out = new Float64Array(half * 2);
+  for (let i = 0; i < half; i++) {
+    out[2 * i] = low[i] + high[i];
+    out[2 * i + 1] = low[i] - high[i];
+  }
+  return out;
+}
+
+// ========================== 2-D Haar Wavelet ===============================
+// Apply to every row, then every column.
+// Result quadrants:  LL | HL
+//                    LH | HH
+
+/**
+ * Forward 2-D Haar on a w×h Float64Array (row-major).
+ * Returns { data, w, h } where data has the quadrant layout above.
+ */
+function haar2D(pixels, w, h) {
+  const out = new Float64Array(w * h);
+
+  // Copy input to working buffer
+  const buf = new Float64Array(pixels);
+
+  const halfW = w >> 1;
+  const halfH = h >> 1;
+
+  // Rows: each row of length w → low (halfW) + high (halfW)
+  const rowResult = new Float64Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const row = buf.subarray(y * w, y * w + w);
+    const { low, high } = haar1D(row);
+    for (let x = 0; x < halfW; x++) {
+      rowResult[y * w + x] = low[x];           // left half
+      rowResult[y * w + halfW + x] = high[x];  // right half
+    }
+  }
+
+  // Columns: each column of length h → low (halfH) + high (halfH)
+  for (let x = 0; x < w; x++) {
+    const col = new Float64Array(h);
+    for (let y = 0; y < h; y++) col[y] = rowResult[y * w + x];
+    const { low, high } = haar1D(col);
+    for (let y = 0; y < halfH; y++) {
+      out[y * w + x] = low[y];                 // top half
+      out[(halfH + y) * w + x] = high[y];      // bottom half
+    }
+  }
+
+  return out;
+}
+
+/**
+ * Inverse 2-D Haar.
+ */
+function ihaar2D(coeffs, w, h) {
+  const halfW = w >> 1;
+  const halfH = h >> 1;
+
+  // Inverse columns first
+  const colResult = new Float64Array(w * h);
+  for (let x = 0; x < w; x++) {
+    const low = new Float64Array(halfH);
+    const high = new Float64Array(halfH);
+    for (let y = 0; y < halfH; y++) {
+      low[y] = coeffs[y * w + x];
+      high[y] = coeffs[(halfH + y) * w + x];
+    }
+    const col = ihaar1D(low, high);
+    for (let y = 0; y < h; y++) colResult[y * w + x] = col[y];
+  }
+
+  // Inverse rows
+  const out = new Float64Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const low = new Float64Array(halfW);
+    const high = new Float64Array(halfW);
+    for (let x = 0; x < halfW; x++) {
+      low[x] = colResult[y * w + x];
+      high[x] = colResult[y * w + halfW + x];
+    }
+    const row = ihaar1D(low, high);
+    for (let x = 0; x < w; x++) out[y * w + x] = row[x];
+  }
+
+  return out;
+}
+
+// ========================== 2-Level DWT ====================================
+
+/**
+ * 2-level forward: DWT the whole image, then DWT the LL quadrant again.
+ * Returns { coeffs, w, h, halfW, halfH, qW, qH } where
+ *   level-1 quadrants are at [0..halfW-1, 0..halfH-1] = LL, etc.
+ *   level-2 LL is the top-left qW×qH block of the level-1 LL.
+ */
+function twoLevelForward(pixels, w, h) {
+  // Level 1
+  const level1 = haar2D(pixels, w, h);
+  const halfW = w >> 1;
+  const halfH = h >> 1;
+
+  // Level 2: operate on the LL quadrant (top-left halfW×halfH)
+  const ll = new Float64Array(halfW * halfH);
+  for (let y = 0; y < halfH; y++) {
+    for (let x = 0; x < halfW; x++) {
+      ll[y * halfW + x] = level1[y * w + x];
+    }
+  }
+  const level2LL = haar2D(ll, halfW, halfH);
+
+  // Write level-2 result back into the level-1 LL quadrant
+  const coeffs = new Float64Array(level1);
+  for (let y = 0; y < halfH; y++) {
+    for (let x = 0; x < halfW; x++) {
+      coeffs[y * w + x] = level2LL[y * halfW + x];
+    }
+  }
+
+  return { coeffs, w, h, halfW, halfH, qW: halfW >> 1, qH: halfH >> 1 };
+}
+
+/**
+ * 2-level inverse: undo the inner DWT on the LL quadrant, then undo the outer.
+ */
+function twoLevelInverse(coeffs, w, h) {
+  const halfW = w >> 1;
+  const halfH = h >> 1;
+
+  // Extract the level-2 data from the LL quadrant
+  const ll2 = new Float64Array(halfW * halfH);
+  for (let y = 0; y < halfH; y++) {
+    for (let x = 0; x < halfW; x++) {
+      ll2[y * halfW + x] = coeffs[y * w + x];
+    }
+  }
+
+  // Inverse level 2 → reconstructed LL
+  const llRecon = ihaar2D(ll2, halfW, halfH);
+
+  // Write back
+  const working = new Float64Array(coeffs);
+  for (let y = 0; y < halfH; y++) {
+    for (let x = 0; x < halfW; x++) {
+      working[y * w + x] = llRecon[y * halfW + x];
+    }
+  }
+
+  // Inverse level 1
+  return ihaar2D(working, w, h);
+}
+
+// ========================== Keyed Permutation ==============================
+
+/**
+ * Fisher-Yates shuffle seeded with HMAC-based PRNG.
+ * Same seed + same n → same permutation on every machine.
+ */
+function keyedPermutation(n, seed) {
+  const indices = Array.from({ length: n }, (_, i) => i);
+
+  // Seeded PRNG: use HMAC-SHA256 to generate a stream of pseudo-random bytes
+  let counter = 0;
+  let byteBuf = Buffer.alloc(0);
+  let bytePos = 0;
+
+  function nextUint32() {
+    if (bytePos + 4 > byteBuf.length) {
+      byteBuf = crypto.createHmac('sha256', seed).update(`${counter++}`).digest();
+      bytePos = 0;
+    }
+    const val = byteBuf.readUInt32LE(bytePos);
+    bytePos += 4;
+    return val;
+  }
+
+  // Fisher-Yates shuffle
+  for (let i = n - 1; i > 0; i--) {
+    const j = nextUint32() % (i + 1);
+    [indices[i], indices[j]] = [indices[j], indices[i]];
+  }
+  return indices;
+}
+
+// ========================== QIM ============================================
+
+function embedBit(c, bit, delta) {
+  const q = Math.floor(c / delta);
+  return delta * (q + (bit === 0 ? 0.25 : 0.75));
+}
+
+function extractBit(c, delta) {
+  const r = (((c % delta) + delta) % delta) / delta;
+  return r < 0.5 ? 0 : 1;
+}
+
+// ========================== Collect embeddable coefficient indices ==========
+
+/**
+ * Returns indices into the coefficient array for HL and LH sub-bands.
+ * For robustness against JPEG, we SKIP Level 1 (it's completely destroyed by quantization).
+ * We embed ONLY into Level 2 HL and LH bands.
+ */
+function getEmbeddableIndices(w, h) {
+  const halfW = w >> 1;
+  const halfH = h >> 1;
+  const qW = halfW >> 1;
+  const qH = halfH >> 1;
+  const indices = [];
+
+  // Level 2 (inside the LL quadrant): HL2 and LH2
+  // HL2: rows [0, qH), cols [qW, halfW)
+  for (let y = 0; y < qH; y++) {
+    for (let x = qW; x < halfW; x++) {
+      indices.push(y * w + x);
+    }
+  }
+  // LH2: rows [qH, halfH), cols [0, qW)
+  for (let y = qH; y < halfH; y++) {
+    for (let x = 0; x < qW; x++) {
+      indices.push(y * w + x);
+    }
+  }
+
+  return indices;
+}
+
+// ========================== Pad to power-of-2 multiples of 4 ===============
+
+function padTo4(n) {
+  return n % 4 === 0 ? n : n + (4 - (n % 4));
+}
+
+// ========================== RGB ↔ Y channel ================================
+
+function rgbToY(raw, w, h) {
+  const y = new Float64Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    y[i] = 0.299 * raw[i * 3] + 0.587 * raw[i * 3 + 1] + 0.114 * raw[i * 3 + 2];
+  }
+  return y;
+}
+
+// ========================== EXPORTED FUNCTIONS =============================
 
 /**
  * @param {Buffer} imageBuffer  original image bytes
@@ -70,19 +292,134 @@ export const REPEAT_FACTOR = 5;
  * @returns {Promise<{ buffer: Buffer, psnrDb: number, deltaUsed: number }>}
  */
 export async function embed(imageBuffer, payloadBits, delta = 12) {
-  // TODO(A): decode (sharp, Jimp fallback) -> Y channel -> 2-level Haar DWT
-  //          -> keyed permutation of HL+LH indices -> QIM 48 bits x 5 repeats
-  //          -> inverse DWT -> re-encode -> psnr(original, marked)
-  throw notImplemented('watermark.embed');
+  const seed = env.watermarkSeed;
+  const numBits = payloadBits.length; // 48
+
+  // 1. Decode image to raw RGB
+  const meta = await sharp(imageBuffer).metadata();
+  const origW = meta.width;
+  const origH = meta.height;
+  const paddedW = padTo4(origW);
+  const paddedH = padTo4(origH);
+
+  const rawRGB = await sharp(imageBuffer)
+    .resize(paddedW, paddedH, { fit: 'fill' })
+    .removeAlpha()
+    .raw()
+    .toBuffer();
+
+  // 2. Extract Y channel
+  const yChannel = rgbToY(rawRGB, paddedW, paddedH);
+
+  // 3. 2-level forward DWT
+  const dwt = twoLevelForward(yChannel, paddedW, paddedH);
+  const coeffs = dwt.coeffs;
+
+  // 4. Get embeddable HL+LH indices and apply keyed permutation
+  const rawIndices = getEmbeddableIndices(paddedW, paddedH);
+  const perm = keyedPermutation(rawIndices.length, seed);
+  const permutedIndices = perm.map((i) => rawIndices[i]);
+
+  // 5. Embed: each bit spread across REPEAT_FACTOR scattered positions
+  for (let b = 0; b < numBits; b++) {
+    const bit = parseInt(payloadBits[b], 10);
+    for (let r = 0; r < REPEAT_FACTOR; r++) {
+      const idx = permutedIndices[(b * REPEAT_FACTOR + r) % permutedIndices.length];
+      coeffs[idx] = embedBit(coeffs[idx], bit, delta);
+    }
+  }
+
+  // 6. Inverse 2-level DWT → modified Y channel
+  const reconstructedY = twoLevelInverse(coeffs, paddedW, paddedH);
+
+  // 7. Apply the Y delta back to the original RGB pixels
+  const markedRGB = Buffer.from(rawRGB);
+  for (let i = 0; i < paddedW * paddedH; i++) {
+    const yDelta = reconstructedY[i] - yChannel[i];
+    for (let c = 0; c < 3; c++) {
+      const idx = i * 3 + c;
+      markedRGB[idx] = Math.max(0, Math.min(255, Math.round(rawRGB[idx] + yDelta)));
+    }
+  }
+
+  // 8. Re-encode as PNG
+  const markedBuffer = await sharp(markedRGB, {
+    raw: { width: paddedW, height: paddedH, channels: 3 },
+  })
+    .resize(origW, origH, { fit: 'fill' })
+    .png()
+    .toBuffer();
+
+  // 9. Compute PSNR
+  const psnrDb = await computePsnr(imageBuffer, markedBuffer);
+
+  return { buffer: markedBuffer, psnrDb, deltaUsed: delta };
 }
 
 /**
  * @param {Buffer} imageBuffer  possibly attacked/compressed image
+ * @param {number} delta        QIM strength used during embed (default 12)
  * @returns {Promise<{ payloadBits: string, bitConfidence: number, eccCorrected: boolean }>}
  *          bitConfidence in [0,1] — fraction of bits recovered with agreement
  */
-export async function extract(imageBuffer) {
-  // TODO(A): same decode + DWT + permutation -> read 5 copies of each bit ->
-  //          majority vote -> bitConfidence = mean vote margin -> ecc.rsDecode
-  throw notImplemented('watermark.extract');
+export async function extract(imageBuffer, delta = 12) {
+  const seed = env.watermarkSeed;
+  const numBits = 48;
+
+  // 1. Decode image
+  const meta = await sharp(imageBuffer).metadata();
+  const origW = meta.width;
+  const origH = meta.height;
+  const paddedW = padTo4(origW);
+  const paddedH = padTo4(origH);
+
+  const rawRGB = await sharp(imageBuffer)
+    .resize(paddedW, paddedH, { fit: 'fill' })
+    .removeAlpha()
+    .raw()
+    .toBuffer();
+
+  // 2. Extract Y channel
+  const yChannel = rgbToY(rawRGB, paddedW, paddedH);
+
+  // 3. 2-level forward DWT
+  const dwt = twoLevelForward(yChannel, paddedW, paddedH);
+  const coeffs = dwt.coeffs;
+
+  // 4. Same keyed permutation as embed
+  const rawIndices = getEmbeddableIndices(paddedW, paddedH);
+  const perm = keyedPermutation(rawIndices.length, seed);
+  const permutedIndices = perm.map((i) => rawIndices[i]);
+
+  // 5. Extract: read REPEAT_FACTOR copies, majority vote
+  const bits = [];
+  let totalAgreement = 0;
+
+  for (let b = 0; b < numBits; b++) {
+    let votes = 0;
+    for (let r = 0; r < REPEAT_FACTOR; r++) {
+      const idx = permutedIndices[(b * REPEAT_FACTOR + r) % permutedIndices.length];
+      votes += extractBit(coeffs[idx], delta); // Use provided delta
+    }
+    const majorityBit = votes > REPEAT_FACTOR / 2 ? 1 : 0;
+    const agreement = Math.max(votes, REPEAT_FACTOR - votes) / REPEAT_FACTOR;
+    totalAgreement += agreement;
+    bits.push(majorityBit);
+  }
+
+  const payloadBits = bits.join('');
+  const bitConfidence = totalAgreement / numBits;
+
+  // 6. Attempt ECC decode
+  let eccCorrected = false;
+  try {
+    const { rsDecode } = await import('./ecc.js');
+    const decoded = rsDecode(payloadBits);
+    if (decoded.corrected) eccCorrected = true;
+  } catch {
+    // ECC not available
+  }
+
+  return { payloadBits, bitConfidence, eccCorrected };
 }
+
