@@ -64,14 +64,8 @@ export default function App() {
 
           <div className="ml-auto flex items-center gap-2">
             <HealthChip health={health} />
-            <button type="button" className="btn-icon" aria-label="Notifications">
-              <BellIcon />
-            </button>
-            {/* TODO: MetaMask connect (wagmi + viem). */}
-            <button type="button" className="btn-dark hidden !px-4 sm:inline-flex">
-              <WalletIcon />
-              Connect
-            </button>
+            <NotificationsBell health={health} />
+            <WalletButton />
           </div>
         </header>
 
@@ -216,6 +210,128 @@ function Row({ k, v, good }) {
     <div className="flex items-center justify-between">
       <dt>{k}</dt>
       <dd className={good ? 'text-attributed' : 'text-inconclusive'}>{v}</dd>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------- wallet ----- */
+
+const short = (a) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '');
+
+/** Real MetaMask connect via window.ethereum. Degrades cleanly with no wallet. */
+function WalletButton() {
+  const [account, setAccount] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const eth = window.ethereum;
+    if (!eth) return;
+    // Reflect an already-authorised account without prompting.
+    eth
+      .request({ method: 'eth_accounts' })
+      .then((a) => a?.[0] && setAccount(a[0]))
+      .catch(() => {});
+    const onChange = (a) => setAccount(a?.[0] ?? null);
+    eth.on?.('accountsChanged', onChange);
+    return () => eth.removeListener?.('accountsChanged', onChange);
+  }, []);
+
+  async function connect() {
+    const eth = window.ethereum;
+    if (!eth) {
+      window.open('https://metamask.io/download/', '_blank', 'noopener');
+      return;
+    }
+    setBusy(true);
+    try {
+      const a = await eth.request({ method: 'eth_requestAccounts' });
+      setAccount(a?.[0] ?? null);
+    } catch {
+      /* user rejected — leave disconnected */
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (account) {
+    return (
+      <button
+        type="button"
+        onClick={() => setAccount(null)}
+        title="Click to disconnect"
+        className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-3 py-2 text-xs font-bold text-ink"
+      >
+        <span className="h-2 w-2 rounded-full bg-attributed" />
+        <span className="mono">{short(account)}</span>
+      </button>
+    );
+  }
+
+  return (
+    <button type="button" onClick={connect} className="btn-dark !px-4" disabled={busy}>
+      <WalletIcon />
+      <span className="hidden sm:inline">{busy ? 'Connecting…' : 'Connect'}</span>
+    </button>
+  );
+}
+
+/* ----------------------------------------------------- notifications ------ */
+
+/** Bell with a popover of live system status / warnings. */
+function NotificationsBell({ health }) {
+  const [open, setOpen] = useState(false);
+  const warnings = health?.warnings ?? [];
+  const count = warnings.length;
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        className="btn-icon relative"
+        aria-label="Notifications"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <BellIcon />
+        {count > 0 && (
+          <span className="absolute -right-0.5 -top-0.5 grid h-4 w-4 place-items-center rounded-full bg-probable text-[9px] font-bold text-white">
+            {count}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <>
+          <button
+            type="button"
+            aria-label="Close"
+            className="fixed inset-0 z-40 cursor-default"
+            onClick={() => setOpen(false)}
+          />
+          <div className="absolute right-0 z-50 mt-2 w-72 rounded-2xl border border-line bg-white p-3 shadow-panel">
+            <div className="mb-2 px-1 text-xs font-bold uppercase tracking-wide text-ink-faint">
+              System status
+            </div>
+            {count === 0 ? (
+              <div className="flex items-center gap-2 rounded-xl bg-attributed/10 px-3 py-2.5 text-sm text-attributed">
+                <span className="h-2 w-2 rounded-full bg-attributed" />
+                All systems operational
+              </div>
+            ) : (
+              <ul className="space-y-1.5">
+                {warnings.map((w, i) => (
+                  <li
+                    key={i}
+                    className="flex items-start gap-2 rounded-xl bg-probable/10 px-3 py-2 text-xs text-ink"
+                  >
+                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-probable" />
+                    <span>{w}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

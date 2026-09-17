@@ -1,10 +1,8 @@
-import { useEffect, useState } from 'react';
-import { getAssets } from '../lib/api.js';
+import { useCallback, useEffect, useState } from 'react';
+import { getAssets, uploadAsset } from '../lib/api.js';
 
 /**
  * The document register.
- *
- * TODO: upload dialog (multipart -> uploadAsset), row click -> /timeline.
  *
  * Responsive: dark overview panel of stat tiles, then a table (sm+) or a
  * stacked card list (mobile). Nothing overflows horizontally at 320px.
@@ -12,12 +10,17 @@ import { getAssets } from '../lib/api.js';
 export default function Assets() {
   const [assets, setAssets] = useState(null);
   const [error, setError] = useState(null);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     getAssets()
       .then((d) => setAssets(d.assets))
       .catch((e) => setError(e.message));
   }, []);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
 
   return (
     <section className="space-y-6">
@@ -25,7 +28,7 @@ export default function Assets() {
         title="Protected documents"
         subtitle="Encrypted at rest. Every decryption is watermarked and anchored on-chain."
         action={
-          <button type="button" className="btn-lime">
+          <button type="button" className="btn-lime" onClick={() => setUploadOpen(true)}>
             <PlusIcon />
             Upload document
           </button>
@@ -40,7 +43,120 @@ export default function Assets() {
       {!error && assets?.length === 0 && <Notice>No documents yet. Upload one to begin.</Notice>}
 
       {!error && assets?.length > 0 && <DocumentList assets={assets} />}
+
+      {uploadOpen && (
+        <UploadModal
+          onClose={() => setUploadOpen(false)}
+          onDone={() => {
+            setUploadOpen(false);
+            reload();
+          }}
+        />
+      )}
     </section>
+  );
+}
+
+/* -- upload modal ----------------------------------------------------------- */
+
+function UploadModal({ onClose, onDone }) {
+  const [title, setTitle] = useState('');
+  const [classification, setClassification] = useState('CONFIDENTIAL');
+  const [file, setFile] = useState(null);
+  const [status, setStatus] = useState('idle'); // idle | working | error
+  const [error, setError] = useState(null);
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!file || !title.trim()) return;
+    setStatus('working');
+    setError(null);
+    try {
+      await uploadAsset({ file, title: title.trim(), classification });
+      onDone();
+    } catch (err) {
+      setError(err.message);
+      setStatus('error');
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-night/40 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <form
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={submit}
+        className="w-full max-w-md space-y-4 rounded-3xl bg-white p-6 shadow-panel"
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="font-display text-xl font-extrabold text-ink">Upload a document</h3>
+          <button type="button" onClick={onClose} className="btn-icon !h-8 !w-8" aria-label="Close">
+            ✕
+          </button>
+        </div>
+        <p className="text-sm text-ink-muted">
+          The file is SHA-256 hashed and AES-256-GCM encrypted before it touches disk. The plaintext
+          is never stored.
+        </p>
+
+        <label className="block">
+          <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-faint">
+            Title
+          </span>
+          <input
+            className="input"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g. Ops Order 45"
+            autoFocus
+          />
+        </label>
+
+        <label className="block">
+          <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-faint">
+            Classification
+          </span>
+          <select
+            className="input"
+            value={classification}
+            onChange={(e) => setClassification(e.target.value)}
+          >
+            <option value="RESTRICTED">RESTRICTED</option>
+            <option value="CONFIDENTIAL">CONFIDENTIAL</option>
+            <option value="SECRET">SECRET</option>
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-faint">
+            Image file
+          </span>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            className="block w-full text-sm text-ink-muted file:mr-3 file:rounded-full file:border-0 file:bg-night file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-night-soft"
+          />
+        </label>
+
+        {error && <Notice tone="error">{error}</Notice>}
+
+        <div className="flex gap-3 pt-1">
+          <button type="button" className="btn-ghost flex-1" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="btn-lime flex-1"
+            disabled={status === 'working' || !file || !title.trim()}
+          >
+            {status === 'working' ? 'Encrypting…' : 'Upload'}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 
