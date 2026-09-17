@@ -26,11 +26,70 @@ body {
 /* Any long unbroken token (a 66-char hash) wraps instead of widening the page. */
 .mono {
   overflow-wrap: anywhere;
+  background-color: #070b12;
+  color: #e2e8f0;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
-/* Hashes and bit strings must be monospace everywhere — it is what makes the
-   dashboard read as a security console rather than a college project. */
+/* Monospace fonts for cryptographic hashes, payload bits, hex addresses */
 .mono {
   font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   font-variant-ligatures: none;
+}
+
+/* Glassmorphism panel styling */
+.glass-panel {
+  background: rgba(12, 18, 30, 0.75);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(30, 41, 59, 0.8);
+}
+
+.glass-panel-hover {
+  transition: all 0.2s ease-in-out;
+}
+.glass-panel-hover:hover {
+  border-color: rgba(56, 189, 248, 0.3);
+  background: rgba(15, 23, 42, 0.85);
+}
+
+/* Subtle grid line background */
+.bg-grid-pattern {
+  background-size: 32px 32px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+}
+
+/* Custom cyber scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #070b12;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* Interactive slider range styling */
+input[type=range] {
+  accent-color: #06b6d4;
+}
+
+/* Scanline animation element */
+.scanline {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.8), transparent);
+  box-shadow: 0 0 8px rgba(6, 182, 212, 0.8);
+  animation: scan 2.5s ease-in-out infinite alternate;
+  pointer-events: none;
 }
