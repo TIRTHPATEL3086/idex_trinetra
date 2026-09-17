@@ -82,7 +82,7 @@ export default function App() {
 
           <Sidebar health={health} open={navOpen} />
 
-          <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-6 sm:px-6 sm:py-7 lg:px-8">
+          <main className="scroll-slim min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-6 sm:px-6 sm:py-7 lg:px-8">
             <div className="mx-auto w-full max-w-6xl">
               <Routes>
                 <Route path="/" element={<Navigate to="/assets" replace />} />
@@ -104,7 +104,7 @@ export default function App() {
 function Sidebar({ health, open }) {
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-40 flex w-64 max-w-[82vw] flex-col overflow-y-auto border-r border-line bg-white p-4 transition-transform duration-200 lg:static lg:z-auto lg:w-60 lg:max-w-none lg:translate-x-0 ${
+      className={`scroll-slim fixed inset-y-0 left-0 z-40 flex w-64 max-w-[82vw] flex-col overflow-y-auto border-r border-line bg-white p-4 transition-transform duration-200 lg:static lg:z-auto lg:w-60 lg:max-w-none lg:translate-x-0 ${
         open ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
       }`}
     >

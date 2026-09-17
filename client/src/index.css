@@ -34,6 +34,45 @@ body {
   font-family: 'Baloo 2', ui-rounded, sans-serif;
 }
 
+/* Stylish scroll area — a slim rounded lime thumb that grows and brightens
+   while you scroll or hover, and slims back down when idle. */
+.scroll-slim {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: #dcefa6 transparent;
+  scroll-behavior: smooth;
+}
+.scroll-slim:hover {
+  scrollbar-color: #c9f24d transparent; /* Firefox: brighten on hover */
+}
+.scroll-slim::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+.scroll-slim::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 6px 0;
+}
+.scroll-slim::-webkit-scrollbar-thumb {
+  background-color: #dcefa6; /* muted lime, slim */
+  border: 4px solid transparent; /* padding -> a thin pill */
+  border-radius: 999px;
+  background-clip: content-box;
+  min-height: 40px;
+  transition:
+    background-color 0.2s ease,
+    border-width 0.15s ease;
+}
+/* Grow + brighten while the area is scrolled/hovered/dragged. */
+.scroll-slim:hover::-webkit-scrollbar-thumb {
+  background-color: #c9f24d;
+  border-width: 3px;
+}
+.scroll-slim::-webkit-scrollbar-thumb:hover,
+.scroll-slim::-webkit-scrollbar-thumb:active {
+  background-color: #b4e02c;
+  border-width: 2px; /* widest while dragging */
+}
+
 @layer components {
   /* White content card — the primary frame. */
   .card {
