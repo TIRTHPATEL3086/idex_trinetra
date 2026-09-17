@@ -7,3 +7,8 @@ client/dist
 dist
 data
 test/metrics.json
+
+# Team-authored markdown docs — not subject to code formatting
+docs/
+TEAM-WORK-SPLIT.md
+CHANGELOG.md
