@@ -12,7 +12,7 @@
  * check on every asset.
  */
 
-import { notImplemented } from '../lib/errors.js';
+import crypto from 'node:crypto';
 
 const IV_BYTES = 12; // 96-bit nonce — the GCM standard
 const KEY_BYTES = 32; // AES-256
@@ -24,9 +24,11 @@ const TAG_BYTES = 16;
  * @returns {{ ciphertext: Buffer, iv: Buffer, authTag: Buffer }}
  */
 export function encrypt(buffer, key) {
-  // TODO(A): crypto.randomBytes(IV_BYTES) -> createCipheriv('aes-256-gcm', key, iv)
-  //          -> Buffer.concat([c.update(buffer), c.final()]) + c.getAuthTag()
-  throw notImplemented('crypto.encrypt');
+  const iv = crypto.randomBytes(IV_BYTES);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const ciphertext = Buffer.concat([cipher.update(buffer), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  return { ciphertext, iv, authTag };
 }
 
 /**
@@ -37,14 +39,14 @@ export function encrypt(buffer, key) {
  * @returns {Buffer} plaintext — throws if the ciphertext was tampered with
  */
 export function decrypt(ciphertext, key, iv, authTag) {
-  // TODO(A): createDecipheriv('aes-256-gcm', key, iv) -> setAuthTag(authTag)
-  throw notImplemented('crypto.decrypt');
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAuthTag(authTag);
+  return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
 }
 
 /** @returns {Buffer} 32 bytes. The digest that goes on chain as contentSha. */
 export function sha256(buffer) {
-  // TODO(A): createHash('sha256').update(buffer).digest()
-  throw notImplemented('crypto.sha256');
+  return crypto.createHash('sha256').update(buffer).digest();
 }
 
 /**
@@ -53,8 +55,7 @@ export function sha256(buffer) {
  * It is never relied on for security.
  */
 export function md5(buffer) {
-  // TODO(A): createHash('md5').update(buffer).digest()
-  throw notImplemented('crypto.md5');
+  return crypto.createHash('md5').update(buffer).digest();
 }
 
 /**
@@ -62,8 +63,7 @@ export function md5(buffer) {
  * @returns {Buffer} 32 bytes
  */
 export function deriveKey(passphrase, salt) {
-  // TODO(A): scryptSync(passphrase, salt, KEY_BYTES, { N: 16384, r: 8, p: 1 })
-  throw notImplemented('crypto.deriveKey');
+  return crypto.scryptSync(passphrase, salt, KEY_BYTES, { N: 16384, r: 8, p: 1 });
 }
 
 export const constants = { IV_BYTES, KEY_BYTES, TAG_BYTES };
