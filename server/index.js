@@ -86,12 +86,24 @@ async function start() {
       (chainInfo.address ? ` at ${chainInfo.address}` : '')
   );
 
-  app.listen(env.port, () => {
+  const server = app.listen(env.port, () => {
     console.log('  ' + '─'.repeat(58));
     console.log(`  API      http://localhost:${env.port}/api/health`);
     console.log(`  CORS     ${env.corsOrigin.join(', ')}`);
     console.log(`  DELTA    ${env.watermarkDelta}`);
     console.log('');
+  });
+
+  // A clear message beats an unhandled 'error' stack trace when the port is
+  // already taken — the single most common thing to go wrong on boot.
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`\n  Port ${env.port} is already in use.`);
+      console.error(`  Stop whatever is on it, or set PORT to a free port in .env.\n`);
+    } else {
+      console.error('\n  Server error:', err.message, '\n');
+    }
+    process.exit(1);
   });
 }
 

@@ -262,5 +262,12 @@ export const CLASSIFICATION_BADGES = {
   RESTRICTED: 'border-slate-500/40 bg-slate-500/10 text-slate-300',
 };
 
+/** 0x7f2c8b41…d037 — use everywhere a hash is displayed. */
+export const shortHash = (hex, lead = 6, tail = 4) =>
+  !hex
+    ? '—'
+    : hex.length <= lead + tail + 2
+      ? hex
+      : `${hex.slice(0, lead + 2)}…${hex.slice(-tail)}`;
 export const shortHash = (hex, lead = 8, tail = 6) =>
   !hex ? '—' : hex.length <= lead + tail + 2 ? hex : `${hex.slice(0, lead + 2)}…${hex.slice(-tail)}`;

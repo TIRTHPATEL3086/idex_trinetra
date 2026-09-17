@@ -92,13 +92,7 @@ export function isChainEnabled() {
  *                     etherscanUrl:string|null, chainMode:string,
  *                     skipped:boolean, reason?:string }>}
  */
-export async function logDecryption({
-  receiptId,
-  assetRef,
-  userRef,
-  contentSha,
-  payloadCommit,
-}) {
+export async function logDecryption({ receiptId, assetRef, userRef, contentSha, payloadCommit }) {
   const c = getContract();
 
   if (!c) {

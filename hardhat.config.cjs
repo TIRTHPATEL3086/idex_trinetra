@@ -1,4 +1,9 @@
-require('@nomicfoundation/hardhat-toolbox');
+// This project is JavaScript end to end, so it pulls in the three Hardhat
+// plugins it actually uses rather than hardhat-toolbox, which drags in the
+// TypeScript/typechain toolchain we have no use for.
+require('@nomicfoundation/hardhat-ethers');
+require('@nomicfoundation/hardhat-chai-matchers');
+require('@nomicfoundation/hardhat-verify');
 require('dotenv').config();
 
 const {

@@ -6,10 +6,6 @@ on:
   pull_request:
     branches: [main]
 
-# No lockfiles are committed yet, so these use `npm install` and skip the npm
-# cache. Once package-lock.json and client/package-lock.json are committed,
-# switch to `npm ci` and add `cache: npm` to the setup-node steps.
-
 jobs:
   backend:
     name: Lint, smoke test, contracts
@@ -21,9 +17,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
+          cache: npm
 
       - name: Install
-        run: npm install
+        run: npm ci
 
       - name: Format check
         run: npm run format:check
@@ -50,10 +47,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: client/package-lock.json
 
       - name: Install
         working-directory: client
-        run: npm install
+        run: npm ci
 
       - name: Build
         working-directory: client

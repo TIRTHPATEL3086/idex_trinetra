@@ -41,6 +41,25 @@ export default [
     },
   },
 
+  // ---- Person A's core stubs ----------------------------------------------
+  // These export documented, not-yet-implemented signatures (see each file's
+  // header). The parameter names ARE the contract, so an unimplemented body
+  // legitimately does not reference them. Local vars and imports are still
+  // linted; only unused *arguments* are allowed here.
+  {
+    files: [
+      'server/core/watermark.js',
+      'server/core/phash.js',
+      'server/core/crypto.js',
+      'server/core/ecc.js',
+      'server/core/psnr.js',
+      'server/core/confidence.js',
+    ],
+    rules: {
+      'no-unused-vars': ['error', { args: 'none', varsIgnorePattern: '^_' }],
+    },
+  },
+
   // ---- Node, CommonJS: hardhat config, deploy script, contract tests -------
   {
     files: ['*.cjs', 'scripts/**/*.cjs', 'test/contracts/**/*.cjs'],

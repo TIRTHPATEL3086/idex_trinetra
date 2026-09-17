@@ -29,9 +29,7 @@ describe('DecryptionProvenance', function () {
     const contentSha = id('content');
     const payloadCommit = id('payload');
 
-    await expect(
-      contract.logDecryption(receiptId, assetRef, userRef, contentSha, payloadCommit)
-    )
+    await expect(contract.logDecryption(receiptId, assetRef, userRef, contentSha, payloadCommit))
       .to.emit(contract, 'DecryptionLogged')
       .withArgs(receiptId, assetRef, userRef, contentSha, payloadCommit, anyUint64);
 

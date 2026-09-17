@@ -21,24 +21,24 @@ CPU only: no GPU, no model, no training data.
 embed the 48-bit payload with a 2-level Haar DWT and QIM in the HL/LH sub-bands
 → index the perceptual hashes → record the event.
 
-The chain write happens *before* the watermark is embedded. If it fails, no
+The chain write happens _before_ the watermark is embedded. If it fails, no
 marked file is ever released, so a marked copy cannot exist without a receipt.
 
 **Trace.** Hash the leaked file → search the BK-tree index → extract the
 watermark → look up the receipt → verify it on chain → score.
 
-Two independent paths converge: the watermark identifies *which receipt*
+Two independent paths converge: the watermark identifies _which receipt_
 (exact, but fragile under heavy attack) and the perceptual hashes identify
-*which file* (fuzzy, but survives a screenshot). Agreement earns confidence;
+_which file_ (fuzzy, but survives a screenshot). Agreement earns confidence;
 disagreement lowers it.
 
 **The verdict is a band, never a name on its own:**
 
-| Band | Score | Meaning |
-|---|---|---|
-| `ATTRIBUTED` | ≥ 0.85 | Report the match |
-| `PROBABLE` | 0.60 – 0.85 | A lead, not a conclusion |
-| `INCONCLUSIVE` | < 0.60 | Report that it is not known |
+| Band           | Score       | Meaning                     |
+| -------------- | ----------- | --------------------------- |
+| `ATTRIBUTED`   | ≥ 0.85      | Report the match            |
+| `PROBABLE`     | 0.60 – 0.85 | A lead, not a conclusion    |
+| `INCONCLUSIVE` | < 0.60      | Report that it is not known |
 
 Below the threshold the API returns `match: null`, so the frontend never
 receives a name it is not allowed to show. Every verdict carries `reasons[]` in
@@ -50,11 +50,11 @@ No personal data reaches the blockchain. The only identity on chain is
 `keccak256(userId || salt)`; names, departments and devices live in PostgreSQL
 and never leave it.
 
-| On chain | In PostgreSQL |
-|---|---|
-| `receiptId`, `assetRef`, `userRef` | names, departments, device labels |
-| `contentSha`, `payloadCommit` | perceptual hash index, PSNR, delta |
-| block timestamp | encrypted blobs, investigation history, `txHash` |
+| On chain                           | In PostgreSQL                                    |
+| ---------------------------------- | ------------------------------------------------ |
+| `receiptId`, `assetRef`, `userRef` | names, departments, device labels                |
+| `contentSha`, `payloadCommit`      | perceptual hash index, PSNR, delta               |
+| block timestamp                    | encrypted blobs, investigation history, `txHash` |
 
 `payloadCommit` is written at decryption time, so the block timestamp proves
 the watermark predates any leak rather than being constructed after one.
@@ -107,19 +107,19 @@ degraded in `warnings`.
 
 Base path `/api`. Every failure returns `{ "error": { "code", "message" } }`.
 
-| Method | Route | Purpose |
-|---|---|---|
-| `GET` | `/health` | Database, chain and index status |
-| `GET` | `/assets` | List protected documents |
-| `POST` | `/assets` | Upload and encrypt (multipart: `file`, `title`, `classification`) |
-| `GET` | `/assets/:id` | One document, with its refs |
-| `GET` | `/users` | Officers, with their hashed `userRef` |
-| `POST` | `/decrypt` | Release a watermarked copy and anchor the receipt |
-| `POST` | `/trace` | Attribute a leaked file (multipart: `file`) |
-| `GET` | `/trace/investigations` | Recent investigations |
-| `GET` | `/audit/:assetId` | Per-document access timeline |
-| `GET` | `/metrics` | Watermark robustness measurements |
-| `GET` | `/files/marked/:receiptId` | Download a released copy |
+| Method | Route                      | Purpose                                                           |
+| ------ | -------------------------- | ----------------------------------------------------------------- |
+| `GET`  | `/health`                  | Database, chain and index status                                  |
+| `GET`  | `/assets`                  | List protected documents                                          |
+| `POST` | `/assets`                  | Upload and encrypt (multipart: `file`, `title`, `classification`) |
+| `GET`  | `/assets/:id`              | One document, with its refs                                       |
+| `GET`  | `/users`                   | Officers, with their hashed `userRef`                             |
+| `POST` | `/decrypt`                 | Release a watermarked copy and anchor the receipt                 |
+| `POST` | `/trace`                   | Attribute a leaked file (multipart: `file`)                       |
+| `GET`  | `/trace/investigations`    | Recent investigations                                             |
+| `GET`  | `/audit/:assetId`          | Per-document access timeline                                      |
+| `GET`  | `/metrics`                 | Watermark robustness measurements                                 |
+| `GET`  | `/files/marked/:receiptId` | Download a released copy                                          |
 
 Error codes: `BAD_INPUT` · `NOT_FOUND` · `PAYLOAD_TOO_LARGE` ·
 `UNSUPPORTED_MEDIA` · `CHAIN_ERROR` · `CORE_NOT_READY` · `INTERNAL`.
@@ -151,15 +151,15 @@ test/              smoke test, attack suite, contract tests
 
 ## Commands
 
-| Command | Purpose |
-|---|---|
-| `npm run dev` | API with reload |
-| `npm run client:dev` | Frontend dev server (proxies `/api`) |
-| `npm run test:smoke` | Payload codec and BK-tree. No install or database needed |
-| `npm run attack:suite` | Eight attacks against the watermark → `test/metrics.json` |
-| `npm run chain:test` | Contract tests |
-| `npm run db:migrate` · `db:seed` · `db:studio` | Prisma |
-| `npm run lint` · `npm run format` | ESLint, Prettier |
+| Command                                        | Purpose                                                   |
+| ---------------------------------------------- | --------------------------------------------------------- |
+| `npm run dev`                                  | API with reload                                           |
+| `npm run client:dev`                           | Frontend dev server (proxies `/api`)                      |
+| `npm run test:smoke`                           | Payload codec and BK-tree. No install or database needed  |
+| `npm run attack:suite`                         | Eight attacks against the watermark → `test/metrics.json` |
+| `npm run chain:test`                           | Contract tests                                            |
+| `npm run db:migrate` · `db:seed` · `db:studio` | Prisma                                                    |
+| `npm run lint` · `npm run format`              | ESLint, Prettier                                          |
 
 ## Status
 
