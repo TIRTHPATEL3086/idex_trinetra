@@ -25,8 +25,6 @@
  * Bad: "bitConfidence=0.958".
  */
 
-import { notImplemented } from '../lib/errors.js';
-
 export const WEIGHTS = {
   bitAgreement: 0.45,
   pHash: 0.25,
@@ -44,9 +42,33 @@ export const BANDS = { ATTRIBUTED: 0.85, PROBABLE: 0.6 };
  *             reasons:string[] }}
  */
 export function score(sig) {
-  // TODO(A): implement the formula above verbatim, then tune the weights
-  //          against test/attack-suite.js output. Build reasons[] as you go.
-  throw notImplemented('confidence.score');
+  const { bitConfidence = 0, pHashDist = 64, dHashDist = 64, aHashDist = 64, chainVerified = false } = sig;
+
+  const scoreValue =
+    WEIGHTS.bitAgreement * bitConfidence +
+    WEIGHTS.pHash * (1 - pHashDist / 64) +
+    WEIGHTS.dHash * (1 - dHashDist / 64) +
+    WEIGHTS.aHash * (1 - aHashDist / 64) +
+    WEIGHTS.chain * (chainVerified ? 1 : 0);
+
+  const verdict = verdictFor(scoreValue);
+  const reasons = [];
+
+  // dHash reasoning
+  if (dHashDist <= 8) reasons.push(`dHash distance ${dHashDist}/64 — strong visual match`);
+  else if (dHashDist <= 16) reasons.push(`dHash distance ${dHashDist}/64 — moderate visual match`);
+  else reasons.push(`dHash distance ${dHashDist}/64 — poor visual match`);
+
+  // pHash reasoning
+  if (pHashDist <= 8) reasons.push(`pHash distance ${pHashDist}/64 — near-identical frequency content`);
+  else if (pHashDist <= 16) reasons.push(`pHash distance ${pHashDist}/64 — similar frequency content`);
+  else reasons.push(`pHash distance ${pHashDist}/64 — different frequency content`);
+
+  // Chain reasoning
+  if (chainVerified) reasons.push(`On-chain receipt verified`);
+  else reasons.push(`Chain verification unavailable or failed`);
+
+  return { score: scoreValue, verdict, reasons };
 }
 
 /** Map a raw score to its band. Kept separate so tests can reuse it. */
@@ -55,3 +77,4 @@ export function verdictFor(value) {
   if (value >= BANDS.PROBABLE) return 'PROBABLE';
   return 'INCONCLUSIVE';
 }
+
