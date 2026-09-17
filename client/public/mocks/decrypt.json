@@ -1,0 +1,10 @@
+{
+  "receiptId": "0x7f2c8b41e93ad6570c1f2b8e4a97d3510fbc62e8a4d17395c0e8b2f61a4d9037",
+  "txHash": "0x9ab1c47e2d05f83b6a19cd4270ef58b3a6c91d02e74f5b8c3d19a06e2f47b8c5",
+  "blockNumber": 5829301,
+  "etherscanUrl": "https://sepolia.etherscan.io/tx/0x9ab1c47e2d05f83b6a19cd4270ef58b3a6c91d02e74f5b8c3d19a06e2f47b8c5",
+  "payloadBits": "101100101110010011010110100111000101101110100101",
+  "psnrDb": 42.7,
+  "deltaUsed": 12,
+  "downloadUrl": "/api/files/marked/7f2c8b41"
+}

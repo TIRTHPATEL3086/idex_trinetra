@@ -1,0 +1,95 @@
+// SIH26237 — Crypto Decryption Provenance
+// Owner: Person B. RULE (§6.7): only B runs `prisma migrate dev`.
+// A and C run `npx prisma migrate deploy && npx prisma generate`.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// A protected document. The plaintext never sits on disk — only the AES blob.
+model Asset {
+  id             Int      @id @default(autoincrement())
+  title          String
+  classification String? // RESTRICTED / CONFIDENTIAL / SECRET
+  mimeType       String   @default("image/png")
+  cipherPath     String? // where the AES-256-GCM blob lives
+  iv             Bytes? // 12 bytes
+  authTag        Bytes? // 16 bytes
+  originalSha    Bytes // SHA-256 of the plaintext
+  assetRef       Bytes   @unique // keccak256(assetId || salt) — the on-chain handle
+  sizeBytes      Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  events DecryptionEvent[]
+}
+
+/// A person who may decrypt. The NAME NEVER GOES ON CHAIN — only `userRef`.
+model User {
+  id      Int     @id @default(autoincrement())
+  name    String // real name -- lives in Postgres only
+  userRef Bytes   @unique // keccak256(userId || salt)
+  dept    String?
+  email   String? @unique
+
+  events DecryptionEvent[]
+}
+
+/// One decryption = one receipt = one watermarked copy. This is the register.
+model DecryptionEvent {
+  id        Int    @id @default(autoincrement())
+  receiptId Bytes  @unique // 32 bytes — matches the on-chain key
+  shortId   BigInt @unique // the 36 bits actually carried by the watermark
+
+  asset   Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  assetId Int
+  user    User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId  Int
+
+  deviceRef   Bytes?
+  deviceLabel String?
+
+  contentSha Bytes // SHA-256 of the marked file that was released
+  md5Digest  Bytes // registry fingerprint (explicit PS requirement)
+
+  // Perceptual hashes — the BK-tree search index. Stored as BigInt (64 bits).
+  pHash BigInt
+  dHash BigInt?
+  aHash BigInt?
+
+  payloadBits String // the 48 bits we embedded
+  markedPath  String? // where the released copy is kept for the demo
+
+  txHash      Bytes? // blockchain receipt — the pointer back to the chain
+  blockNumber BigInt?
+  chainMode   String  @default("local") // local | sepolia | off
+
+  deltaUsed Int
+  psnrDb    Float
+  createdAt DateTime @default(now())
+
+  @@index([pHash])
+  @@index([dHash])
+  @@index([assetId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+/// One /api/trace run. Kept so the demo can show investigation history.
+model Investigation {
+  id           Int      @id @default(autoincrement())
+  uploadedSha  Bytes
+  candidates   Int      @default(0)
+  topReceiptId Bytes?
+  confidence   Float    @default(0)
+  verdict      String // ATTRIBUTED / PROBABLE / INCONCLUSIVE
+  reasons      String[]
+  elapsedMs    Int?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+}

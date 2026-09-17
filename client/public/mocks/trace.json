@@ -1,0 +1,21 @@
+{
+  "investigationId": 31,
+  "verdict": "ATTRIBUTED",
+  "confidence": 0.93,
+  "match": {
+    "userName": "Officer U-017",
+    "department": "Ops Wing",
+    "assetTitle": "Ops Order 44",
+    "decryptedAt": "2026-03-12T14:22:00Z",
+    "deviceLabel": "DESK-114",
+    "txHash": "0x9ab1c47e2d05f83b6a19cd4270ef58b3a6c91d02e74f5b8c3d19a06e2f47b8c5",
+    "etherscanUrl": "https://sepolia.etherscan.io/tx/0x9ab1c47e2d05f83b6a19cd4270ef58b3a6c91d02e74f5b8c3d19a06e2f47b8c5"
+  },
+  "reasons": [
+    "46/48 watermark bits recovered (2 fixed by Reed-Solomon)",
+    "dHash distance 3/64",
+    "on-chain receipt verified"
+  ],
+  "candidatesChecked": 1284,
+  "elapsedMs": 812
+}

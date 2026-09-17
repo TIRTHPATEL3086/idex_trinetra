@@ -1,0 +1,9 @@
+# Normalise line endings so three laptops do not produce phantom diffs.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.bin binary
+*.pdf binary

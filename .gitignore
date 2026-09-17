@@ -1,0 +1,35 @@
+node_modules/
+client/node_modules/
+
+.env
+.env.local
+*.local
+
+# hardhat
+artifacts/
+cache/
+typechain-types/
+deployments/local.json
+
+# prisma
+prisma/migrations/dev.db*
+
+# build output
+dist/
+build/
+client/dist/
+
+# runtime data (encrypted blobs + marked files) — never commit
+data/cipher/*
+data/marked/*
+!data/cipher/.gitkeep
+!data/marked/.gitkeep
+
+# misc
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+coverage/
+.vscode/
+.idea/
