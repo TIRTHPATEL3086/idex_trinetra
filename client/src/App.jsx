@@ -46,10 +46,10 @@ export default function App() {
   }, [navOpen]);
 
   return (
-    <div className="min-h-screen bg-olive p-2 sm:p-4 lg:p-6">
-      <div className="mx-auto flex min-h-[calc(100vh-1rem)] w-full max-w-[1440px] flex-col overflow-hidden rounded-2xl bg-white shadow-app sm:min-h-[calc(100vh-2rem)] sm:rounded-3xl lg:min-h-[calc(100vh-3rem)]">
-        {/* ---- top bar ---- */}
-        <header className="flex items-center gap-3 border-b border-line px-4 py-3.5 sm:px-6">
+    <div className="h-screen overflow-hidden bg-olive p-2 [height:100dvh] sm:p-4 lg:p-6">
+      <div className="mx-auto flex h-full w-full max-w-[1440px] flex-col overflow-hidden rounded-2xl bg-white shadow-app sm:rounded-3xl">
+        {/* ---- top bar (fixed) ---- */}
+        <header className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-3.5 sm:px-6">
           <button
             type="button"
             aria-label="Open navigation"
@@ -70,7 +70,7 @@ export default function App() {
         </header>
 
         {/* ---- body ---- */}
-        <div className="flex min-h-0 flex-1">
+        <div className="flex min-h-0 flex-1 overflow-hidden">
           {navOpen && (
             <button
               type="button"
@@ -82,7 +82,7 @@ export default function App() {
 
           <Sidebar health={health} open={navOpen} />
 
-          <main className="min-w-0 flex-1 overflow-x-hidden px-4 py-6 sm:px-6 sm:py-7 lg:px-8">
+          <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-6 sm:px-6 sm:py-7 lg:px-8">
             <div className="mx-auto w-full max-w-6xl">
               <Routes>
                 <Route path="/" element={<Navigate to="/assets" replace />} />
@@ -104,7 +104,7 @@ export default function App() {
 function Sidebar({ health, open }) {
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-40 flex w-64 max-w-[82vw] flex-col border-r border-line bg-white p-4 transition-transform duration-200 lg:static lg:z-auto lg:w-60 lg:max-w-none lg:translate-x-0 ${
+      className={`fixed inset-y-0 left-0 z-40 flex w-64 max-w-[82vw] flex-col overflow-y-auto border-r border-line bg-white p-4 transition-transform duration-200 lg:static lg:z-auto lg:w-60 lg:max-w-none lg:translate-x-0 ${
         open ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
       }`}
     >
