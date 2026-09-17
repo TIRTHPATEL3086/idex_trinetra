@@ -169,10 +169,10 @@ Everything else — contract, API, schema, indexing, chain integration — is bu
 
 ## Contributing
 
-Ownership is split three ways and file headers state the owner. Work on
-`feat/core-a`, `feat/backend-b` or `feat/client-c`; merge to `main` at
-integration points. Only one person runs `prisma migrate dev` — everyone else
-runs `npx prisma migrate deploy && npx prisma generate`.
+Ownership is split three ways and each file header states its owner; do not
+edit a file you do not own. Only one person runs `prisma migrate dev` —
+everyone else runs `npx prisma migrate deploy && npx prisma generate`, so the
+migration history stays linear.
 
 ## License
 
