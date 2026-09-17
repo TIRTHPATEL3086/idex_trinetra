@@ -9,7 +9,10 @@ client/node_modules/
 artifacts/
 cache/
 typechain-types/
-deployments/local.json
+# Deployment records are environment-specific: the local address is generated
+# per machine, and the Sepolia address belongs in .env. chain.js reads these
+# as a convenience fallback but never depends on them being committed.
+deployments/
 
 # prisma
 prisma/migrations/dev.db*
@@ -25,6 +28,7 @@ data/
 # misc
 *.log
 npm-debug.log*
+npm-cache/
 .DS_Store
 Thumbs.db
 coverage/

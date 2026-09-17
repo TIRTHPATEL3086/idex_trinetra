@@ -5,7 +5,10 @@
  * ============================================================================
  *
  * Reed-Solomon wrap/unwrap around the 48-bit payload.
- * Uses @ronomon/reed-solomon — BCH has poor JS support, RS is ready-made.
+ *
+ * Use a PURE-JAVASCRIPT implementation. Native RS packages (@ronomon and
+ * friends) need node-gyp and Visual Studio build tools, which are not present
+ * on the target machines — that dependency was removed for exactly this reason.
  *
  * Pipeline:
  *   48 bits --RS encode--> ~96 bits --5x repeat--> ~480 DWT coefficients

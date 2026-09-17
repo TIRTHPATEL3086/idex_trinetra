@@ -10,8 +10,7 @@ import { env } from './env.js';
  * question, and it has to be true in code, not just in the slide deck.
  */
 
-const salted = (prefix, value) =>
-  keccak256(toUtf8Bytes(`${prefix}:${value}:${env.refSalt}`));
+const salted = (prefix, value) => keccak256(toUtf8Bytes(`${prefix}:${value}:${env.refSalt}`));
 
 /** keccak256(assetId || salt) -> 0x-prefixed bytes32 */
 export const assetRef = (assetId) => salted('asset', assetId);

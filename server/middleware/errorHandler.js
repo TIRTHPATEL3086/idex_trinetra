@@ -12,8 +12,10 @@ export function notFoundHandler(req, _res, next) {
  * The last middleware. Everything the API returns on failure passes through
  * here, so this shape is guaranteed:
  *   { "error": { "code": "...", "message": "..." } }
+ *
+ * The unused `_next` is required: Express only treats a handler as an error
+ * handler when it declares all four arguments.
  */
-// eslint-disable-next-line no-unused-vars -- Express needs the 4-arg signature
 export function errorHandler(err, req, res, _next) {
   let apiError;
 
@@ -30,8 +32,10 @@ export function errorHandler(err, req, res, _next) {
     apiError = notFound('That record does not exist.');
   } else if (err?.code === 'P2002') {
     apiError = badInput('That record already exists (unique constraint).');
-  } else if (err?.code?.startsWith?.('P1')) {
-    // Prisma connection-level errors — almost always "Postgres isn't running".
+  } else if (isDbUnavailable(err)) {
+    // Connection / auth failures — Postgres not running, or wrong credentials.
+    // These carry no P1xxx code, so match by class name too, and never leak the
+    // raw driver message (it can include the connection string).
     apiError = new ApiError(
       'INTERNAL',
       'Database unavailable. Is PostgreSQL running and DATABASE_URL correct?',
@@ -52,4 +56,15 @@ export function errorHandler(err, req, res, _next) {
   }
 
   res.status(apiError.status).json(body);
+}
+
+/** Prisma connection/auth failures — by P1xxx code or by error class name. */
+function isDbUnavailable(err) {
+  if (typeof err?.code === 'string' && err.code.startsWith('P1')) return true;
+  const name = err?.name || '';
+  return (
+    name === 'PrismaClientInitializationError' ||
+    name === 'PrismaClientRustPanicError' ||
+    /database server/i.test(err?.message || '')
+  );
 }

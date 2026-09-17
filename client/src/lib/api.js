@@ -84,4 +84,8 @@ export const VERDICT_STYLE = {
 
 /** 0x7f2c8b41…d037 — use everywhere a hash is displayed. */
 export const shortHash = (hex, lead = 6, tail = 4) =>
-  !hex ? '—' : hex.length <= lead + tail + 2 ? hex : `${hex.slice(0, lead + 2)}…${hex.slice(-tail)}`;
+  !hex
+    ? '—'
+    : hex.length <= lead + tail + 2
+      ? hex
+      : `${hex.slice(0, lead + 2)}…${hex.slice(-tail)}`;

@@ -5,10 +5,6 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(__dirname, '..', '..');
 
-const bool = (v, fallback = false) => {
-  if (v === undefined || v === '') return fallback;
-  return /^(1|true|yes|on)$/i.test(String(v));
-};
 const num = (v, fallback) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;

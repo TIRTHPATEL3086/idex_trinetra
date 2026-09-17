@@ -6,14 +6,31 @@
   color-scheme: dark;
 }
 
+html {
+  /* Belt-and-suspenders: no element may cause the page to scroll sideways. */
+  overflow-x: hidden;
+}
+
 body {
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* Prevent iOS from auto-inflating text and breaking the narrow layout. */
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Any long unbroken token (a 66-char hash) wraps instead of widening the page. */
+.mono {
+  overflow-wrap: anywhere;
 }
 
 /* Hashes and bit strings must be monospace everywhere — it is what makes the
    dashboard read as a security console rather than a college project. */
 .mono {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   font-variant-ligatures: none;
 }

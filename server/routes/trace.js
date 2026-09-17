@@ -87,7 +87,7 @@ router.post('/', singleFile, async (req, res, next) => {
     // to the extractor’s own confidence when there is no candidate at all.
     const agreement = event
       ? bitAgreement(marked.payloadBits, event.payloadBits)
-      : marked.bitConfidence ?? 0;
+      : (marked.bitConfidence ?? 0);
 
     const verdictResult = score({
       bitConfidence: agreement,
