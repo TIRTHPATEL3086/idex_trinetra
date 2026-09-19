@@ -14,6 +14,7 @@ const ALLOWED_MIME = new Set([
   'image/webp',
   'image/bmp',
   'image/tiff',
+  'application/pdf',
 ]);
 
 export const ALLOWED_MIME_LIST = [...ALLOWED_MIME];

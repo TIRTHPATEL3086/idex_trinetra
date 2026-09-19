@@ -14,6 +14,7 @@ export { encrypt, decrypt, sha256, md5, deriveKey, constants } from './crypto.js
 export { rsEncode, rsDecode } from './ecc.js';
 export { psnr } from './psnr.js';
 export { score, verdictFor, WEIGHTS, BANDS } from './confidence.js';
+export { isPdf, embedPdf, extractPdf } from './pdf.js';
 
 // Person B — the payload codec both sides depend on.
 export {

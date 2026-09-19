@@ -407,7 +407,7 @@ export async function extract(imageBuffer, delta = 12) {
     bits.push(majorityBit);
   }
 
-  const payloadBits = bits.join('');
+  let payloadBits = bits.join('');
   const bitConfidence = totalAgreement / numBits;
 
   // 6. Attempt ECC decode
@@ -415,7 +415,10 @@ export async function extract(imageBuffer, delta = 12) {
   try {
     const { rsDecode } = await import('./ecc.js');
     const decoded = rsDecode(payloadBits);
-    if (decoded.corrected) eccCorrected = true;
+    if (decoded.corrected && decoded.bits) {
+      eccCorrected = true;
+      payloadBits = decoded.bits;
+    }
   } catch {
     // ECC not available
   }

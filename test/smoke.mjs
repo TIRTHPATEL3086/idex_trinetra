@@ -124,6 +124,39 @@ test('searching an empty tree returns nothing', () => {
   eq(new bktree.BKTree('test').search(0n, 64).length, 0, 'hits');
 });
 
+// ---------------------------------------------------- Reed-Solomon ECC -----
+
+const ecc = await import('../server/core/ecc.js');
+
+test('rsEncode produces 96 bits from 48 bits', () => {
+  const enc = ecc.rsEncode(bits);
+  eq(enc.length, 96, 'rs encoded length');
+});
+
+test('rsDecode recovers from byte corruption in 96-bit RS codeword', () => {
+  const enc = ecc.rsEncode(bits);
+  // Corrupt 2 bytes in the encoded bits (e.g. flip bits in byte 1 and byte 7)
+  const corrupted =
+    enc.slice(0, 10) +
+    (enc[10] === '0' ? '1' : '0') +
+    enc.slice(11, 58) +
+    (enc[58] === '0' ? '1' : '0') +
+    enc.slice(59);
+
+  const res = ecc.rsDecode(corrupted);
+  eq(res.corrected, true, 'corrected flag');
+  eq(res.bits, bits, 'recovered bits match original 48 bits');
+});
+
+test('rsDecode corrects single flipped bit in 48-bit extracted payload', () => {
+  const corrupted48 = (bits[5] === '0' ? '1' : '0') + bits.slice(1, 5) + (bits[0] === '0' ? '1' : '0') + bits.slice(6);
+  // corrupted 1 bit at index 0
+  const singleFlip = (bits[0] === '0' ? '1' : '0') + bits.slice(1);
+  const res = ecc.rsDecode(singleFlip);
+  eq(res.corrected, true, 'corrected flag');
+  eq(res.bits, bits, 'recovered bits');
+});
+
 // ---------------------------------------------------------------------------
 
 console.log(`\n  ${pass} passed, ${fail} failed\n`);

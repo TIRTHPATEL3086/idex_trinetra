@@ -163,9 +163,15 @@ test/              smoke test, attack suite, contract tests
 
 ## Status
 
-`server/core/{watermark,phash,crypto,ecc,psnr,confidence}.js` are specified but
-not yet implemented; calling one returns `503 CORE_NOT_READY` naming the module.
-Everything else — contract, API, schema, indexing, chain integration — is built.
+All core modules are fully implemented and verified:
+- `server/core/watermark.js`: 2-level Haar DWT + QIM in HL/LH sub-bands with 21× redundancy.
+- `server/core/ecc.js`: Pure-JS Reed-Solomon (12, 6) error correction & CRC bit repair.
+- `server/core/phash.js`: pHash (2D-DCT), dHash, aHash perceptual hashing and 64-bit Hamming metric.
+- `server/core/crypto.js`: AES-256-GCM encryption/decryption, SHA-256 digests.
+- `server/core/pdf.js`: Document-level and microscopic per-page invisible provenance for PDFs.
+- `server/core/confidence.js`: 3-band scoring (`ATTRIBUTED`, `PROBABLE`, `INCONCLUSIVE`).
+- `test/attack-suite.js`: 8/8 robust attack benchmarks passing.
+- `contracts/DecryptionProvenance.sol`: Deployed on Sepolia testnet and verified on local Hardhat.
 
 ## Contributing
 

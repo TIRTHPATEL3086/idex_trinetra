@@ -19,7 +19,7 @@ import {
 import { validate } from '../middleware/validate.js';
 import * as chain from '../core/chain.js';
 import * as bktree from '../core/bktree.js';
-import { decrypt as aesDecrypt, sha256, md5, embed, hashes } from '../core/index.js';
+import { decrypt as aesDecrypt, sha256, md5, embed, hashes, isPdf, embedPdf } from '../core/index.js';
 import { buildPayload, shortIdOf } from '../core/payload.js';
 
 /**
@@ -94,18 +94,28 @@ router.post('/', validate(DecryptBody), async (req, res, next) => {
     });
 
     // --- 9. Embed the invisible mark ---------------------------------------
-    const marked = await embed(plaintext, payloadBits, delta);
+    const isDocPdf = asset.mimeType === 'application/pdf' || isPdf(plaintext);
+    const marked = isDocPdf
+      ? await embedPdf(plaintext, payloadBits, receiptIdHex)
+      : await embed(plaintext, payloadBits, delta);
 
     // --- 10. Perceptual hashes of the RELEASED bytes ------------------------
-    const raw = await hashes(marked.buffer);
-    // The hashes are unsigned 64-bit; Postgres BIGINT is signed 64-bit, so wrap
-    // them into the signed range. The Hamming metric masks to the low 64 bits,
-    // so distances are unaffected.
-    const h = {
-      pHash: toSigned64(raw.pHash),
-      dHash: raw.dHash == null ? null : toSigned64(raw.dHash),
-      aHash: raw.aHash == null ? null : toSigned64(raw.aHash),
-    };
+    let h;
+    if (isDocPdf) {
+      const pdfHash = BigInt('0x' + sha256(marked.buffer).toString('hex').slice(0, 16));
+      h = {
+        pHash: toSigned64(pdfHash),
+        dHash: toSigned64(pdfHash),
+        aHash: toSigned64(pdfHash),
+      };
+    } else {
+      const raw = await hashes(marked.buffer);
+      h = {
+        pHash: toSigned64(raw.pHash),
+        dHash: raw.dHash == null ? null : toSigned64(raw.dHash),
+        aHash: raw.aHash == null ? null : toSigned64(raw.aHash),
+      };
+    }
 
     // Persist the released copy so /api/files/marked/:receiptId can serve it.
     await fs.mkdir(env.markedDir, { recursive: true });
@@ -198,6 +208,8 @@ function toSigned64(value) {
 
 function extFor(mimeType) {
   switch (mimeType) {
+    case 'application/pdf':
+      return '.pdf';
     case 'image/jpeg':
     case 'image/jpg':
       return '.jpg';
