@@ -33,6 +33,10 @@ export const notImplemented = (what) =>
   new ApiError('CORE_NOT_READY', `core:${what} is not implemented yet`, 503, { module: what });
 
 export const badInput = (msg, meta) => new ApiError('BAD_INPUT', msg, 400, meta);
+export const unauthenticated = (msg = 'Sign in to continue.') =>
+  new ApiError('UNAUTHENTICATED', msg, 401);
+export const forbidden = (msg = 'Your role does not permit this.', meta) =>
+  new ApiError('FORBIDDEN', msg, 403, meta);
 export const notFound = (msg = 'Not found') => new ApiError('NOT_FOUND', msg, 404);
 export const tooLarge = (msg) => new ApiError('PAYLOAD_TOO_LARGE', msg, 413);
 export const unsupportedMedia = (msg) => new ApiError('UNSUPPORTED_MEDIA', msg, 415);

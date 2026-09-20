@@ -4,9 +4,11 @@ import cors from 'cors';
 import { env, warnAboutConfig } from './lib/env.js';
 import { prisma, dbStatus } from './lib/prisma.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import { attachUser } from './middleware/auth.js';
 import * as bktree from './core/bktree.js';
 import * as chain from './core/chain.js';
 
+import authRouter from './routes/auth.js';
 import healthRouter from './routes/health.js';
 import assetsRouter from './routes/assets.js';
 import usersRouter from './routes/users.js';
@@ -45,7 +47,14 @@ app.use((req, res, next) => {
   next();
 });
 
+// Decode the session cookie on every request. This never rejects — it only
+// populates `req.user`; the individual routes decide what that entitles you to.
+app.use(attachUser);
+
 // ------------------------------------------------------------- routes ------
+// /auth and /health stay open: the login screen itself needs to render, and it
+// shows the system status chip before anyone has signed in.
+app.use('/api/auth', authRouter);
 app.use('/api/health', healthRouter);
 app.use('/api/assets', assetsRouter);
 app.use('/api/users', usersRouter);

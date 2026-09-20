@@ -17,6 +17,8 @@ import {
   bufferToHex,
 } from '../lib/refs.js';
 import { validate } from '../middleware/validate.js';
+import { requireAuth, requireAnyCap, forbidden } from '../middleware/auth.js';
+import { can } from '../lib/permissions.js';
 import * as chain from '../core/chain.js';
 import * as bktree from '../core/bktree.js';
 import { decrypt as aesDecrypt, sha256, md5, embed, hashes, isPdf, embedPdf } from '../core/index.js';
@@ -39,11 +41,25 @@ const DecryptBody = z.object({
   delta: z.coerce.number().int().min(2).max(48).optional(),
 });
 
-router.post('/', validate(DecryptBody), async (req, res, next) => {
+const guard = requireAnyCap('decrypt:self', 'decrypt:any');
+
+router.post('/', guard, validate(DecryptBody), async (req, res, next) => {
   const startedAt = Date.now();
   try {
     const { assetId, userId, deviceLabel } = req.valid;
     const delta = req.valid.delta ?? env.watermarkDelta;
+
+    // An OFFICER holds `decrypt:self` only: they may release a copy in their
+    // own name and nobody else's. The receipt names whoever the mark will
+    // identify, so releasing one as another officer would put an innocent name
+    // on a copy they never touched — the one failure this system exists to
+    // prevent.
+    if (!can(req.user.role, 'decrypt:any') && userId !== req.user.id) {
+      throw forbidden(
+        'You may only release a copy in your own name. Releasing one on behalf of another officer requires an administrator.',
+        { role: req.user.role, attemptedUserId: userId }
+      );
+    }
 
     // --- 2. Load Asset + User from Postgres --------------------------------
     const [asset, user] = await Promise.all([
@@ -174,7 +190,7 @@ router.post('/', validate(DecryptBody), async (req, res, next) => {
 /** Serves the watermarked copy. Mounted separately in index.js. */
 export const filesRouter = Router();
 
-filesRouter.get('/marked/:receiptId', async (req, res, next) => {
+filesRouter.get('/marked/:receiptId', requireAuth, async (req, res, next) => {
   try {
     const key = String(req.params.receiptId).replace(/^0x/, '');
     if (!/^[0-9a-f]{4,64}$/i.test(key)) throw badInput('Malformed receiptId');
@@ -185,6 +201,14 @@ filesRouter.get('/marked/:receiptId', async (req, res, next) => {
       include: { asset: true },
     });
     if (!event?.markedPath) throw notFound(`No marked file for ${key}`);
+
+    // Every marked copy carries a watermark naming exactly one person. Handing
+    // one to anybody else would put their mark in a stranger's hands, so a copy
+    // is downloadable only by the officer it was released to — or by an admin,
+    // who could have released it themselves anyway.
+    if (!can(req.user.role, 'decrypt:any') && event.userId !== req.user.id) {
+      throw forbidden('That copy was released to another officer.');
+    }
 
     const buffer = await fs.readFile(event.markedPath).catch(() => null);
     if (!buffer) throw notFound('The marked file is no longer on disk.');

@@ -18,13 +18,31 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Listeners notified when the API says the session is gone, so a 401 in any
+ * corner of the app lands the user back on the sign-in screen instead of
+ * showing an error they cannot act on.
+ */
+const sessionLostHandlers = new Set();
+export function onSessionLost(fn) {
+  sessionLostHandlers.add(fn);
+  return () => sessionLostHandlers.delete(fn);
+}
+
 async function request(path, options = {}) {
-  const res = await fetch(`${BASE}${path}`, options);
+  // Always send the session cookie — it is httpOnly, so this is the only way
+  // the browser will attach it, and it is what every guarded route reads.
+  const res = await fetch(`${BASE}${path}`, { credentials: 'include', ...options });
   const isJson = res.headers.get('content-type')?.includes('application/json');
   const body = isJson ? await res.json() : null;
 
   if (!res.ok) {
     const err = body?.error;
+    // 401 on anything other than the session probe itself means the cookie
+    // expired mid-session; tell the app so it can show the login screen.
+    if (res.status === 401 && !path.startsWith('/api/auth/')) {
+      for (const fn of sessionLostHandlers) fn();
+    }
     throw new ApiError(err?.code || 'INTERNAL', err?.message || res.statusText, res.status);
   }
   return body;
@@ -33,6 +51,20 @@ async function request(path, options = {}) {
 // ------------------------------------------------------------ endpoints ----
 
 export const getHealth = () => request('/api/health');
+
+// ------------------------------------------------------------------ auth ---
+
+export const login = (email, password) =>
+  request('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+
+export const logout = () => request('/api/auth/logout', { method: 'POST' });
+
+/** Who am I — called once on boot to restore a session from the cookie. */
+export const getMe = () => request('/api/auth/me');
 
 export const getAssets = () => request('/api/assets');
 

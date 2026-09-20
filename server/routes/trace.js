@@ -5,6 +5,7 @@ import { env } from '../lib/env.js';
 import { badInput } from '../lib/errors.js';
 import { bufferToHex } from '../lib/refs.js';
 import { singleFile } from '../middleware/upload.js';
+import { requireCap } from '../middleware/auth.js';
 import * as chain from '../core/chain.js';
 import * as bktree from '../core/bktree.js';
 import { hashes, extract, score, sha256, hamming, isPdf, extractPdf } from '../core/index.js';
@@ -25,7 +26,7 @@ import { parsePayload, bitAgreement, bitsMatching, PAYLOAD_BITS } from '../core/
  */
 const router = Router();
 
-router.post('/', singleFile, async (req, res, next) => {
+router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => {
   const startedAt = Date.now();
   try {
     if (!req.file) throw badInput('No file uploaded. Send multipart field "file".');
@@ -170,7 +171,7 @@ router.post('/', singleFile, async (req, res, next) => {
 
 // ----------------------------------------- GET /api/trace/investigations ----
 /** Investigation history — nice-to-have for the dashboard, cheap to serve. */
-router.get('/investigations', async (_req, res, next) => {
+router.get('/investigations', requireCap('trace:history'), async (_req, res, next) => {
   try {
     const rows = await prisma.investigation.findMany({
       orderBy: { createdAt: 'desc' },

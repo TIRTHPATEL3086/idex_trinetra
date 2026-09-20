@@ -98,8 +98,51 @@ npm run dev                   # API  → http://localhost:4000
 npm run client:dev            # UI   → http://localhost:5173
 ```
 
+The UI opens on a sign-in screen. `npm run db:seed` prints one account per
+role; `admin@example.gov` / `admin123` reaches every screen. See
+[Roles](#roles).
+
 `GET /api/health` reports database, chain and index status, and lists anything
 degraded in `warnings`.
+
+---
+
+## Roles
+
+Sign-in is required for everything except `/api/health`. Four roles, and the
+split is the same separation-of-duties argument the verdict bands rest on:
+
+| Role           | Documents    | Decrypt       | Trace | Timeline   | Robustness |
+| -------------- | ------------ | ------------- | ----- | ---------- | ---------- |
+| `ADMIN`        | view, upload | anyone        | yes   | everyone's | yes        |
+| `OFFICER`      | view         | **self only** | no    | own only   | yes        |
+| `INVESTIGATOR` | view         | **no**        | yes   | everyone's | yes        |
+| `AUDITOR`      | view         | no            | no    | everyone's | yes        |
+
+An investigator cannot decrypt, so the person who examines the evidence can
+never mint a marked copy and manufacture the leak they then "discover". An
+officer cannot trace, so nobody investigates their own leak, and `/api/decrypt`
+refuses any `userId` but their own — a receipt names whoever the watermark will
+identify, and releasing one in someone else's name is the exact failure this
+system exists to prevent.
+
+`server/lib/permissions.js` is the only place this table lives. The API
+enforces it; the frontend reads the same capability list off `/api/auth/me` and
+hides what it cannot do. Hiding a button is a courtesy — the refusal is the
+control, and nothing in the client is trusted to make it.
+
+**Seeded accounts** (`npm run db:seed` prints them):
+
+| Role           | Email               | Password     |
+| -------------- | ------------------- | ------------ |
+| `ADMIN`        | `admin@example.gov` | `admin123`   |
+| `OFFICER`      | `u017@example.gov`  | `officer123` |
+| `INVESTIGATOR` | `a004@example.gov`  | `analyst123` |
+| `AUDITOR`      | `audit@example.gov` | `auditor123` |
+
+Sessions are an httpOnly, SameSite=Lax cookie holding an HMAC-signed token
+(`AUTH_SECRET`, 12 h by default). Passwords are scrypt. Both are built on
+`node:crypto` — no bcrypt, no jsonwebtoken, nothing to install.
 
 ---
 
@@ -107,22 +150,26 @@ degraded in `warnings`.
 
 Base path `/api`. Every failure returns `{ "error": { "code", "message" } }`.
 
-| Method | Route                      | Purpose                                                           |
-| ------ | -------------------------- | ----------------------------------------------------------------- |
-| `GET`  | `/health`                  | Database, chain and index status                                  |
-| `GET`  | `/assets`                  | List protected documents                                          |
-| `POST` | `/assets`                  | Upload and encrypt (multipart: `file`, `title`, `classification`) |
-| `GET`  | `/assets/:id`              | One document, with its refs                                       |
-| `GET`  | `/users`                   | Officers, with their hashed `userRef`                             |
-| `POST` | `/decrypt`                 | Release a watermarked copy and anchor the receipt                 |
-| `POST` | `/trace`                   | Attribute a leaked file (multipart: `file`)                       |
-| `GET`  | `/trace/investigations`    | Recent investigations                                             |
-| `GET`  | `/audit/:assetId`          | Per-document access timeline                                      |
-| `GET`  | `/metrics`                 | Watermark robustness measurements                                 |
-| `GET`  | `/files/marked/:receiptId` | Download a released copy                                          |
+| Method | Route                      | Purpose                                                           | Who                        |
+| ------ | -------------------------- | ----------------------------------------------------------------- | -------------------------- |
+| `GET`  | `/health`                  | Database, chain and index status                                  | anyone                     |
+| `POST` | `/auth/login`              | Sign in, sets an httpOnly session cookie                          | anyone                     |
+| `POST` | `/auth/logout`             | Clear the session                                                 | anyone                     |
+| `GET`  | `/auth/me`                 | The current session and its capabilities                          | signed in                  |
+| `GET`  | `/assets`                  | List protected documents                                          | signed in                  |
+| `POST` | `/assets`                  | Upload and encrypt (multipart: `file`, `title`, `classification`) | admin                      |
+| `GET`  | `/assets/:id`              | One document, with its refs                                       | signed in                  |
+| `GET`  | `/users`                   | Officers, with their hashed `userRef`                             | all; an officer gets self  |
+| `POST` | `/decrypt`                 | Release a watermarked copy and anchor the receipt                 | admin; officer for self    |
+| `POST` | `/trace`                   | Attribute a leaked file (multipart: `file`)                       | admin, investigator        |
+| `GET`  | `/trace/investigations`    | Recent investigations                                             | admin, investigator, audit |
+| `GET`  | `/audit/:assetId`          | Per-document access timeline                                      | all; an officer gets own   |
+| `GET`  | `/metrics`                 | Watermark robustness measurements                                 | signed in                  |
+| `GET`  | `/files/marked/:receiptId` | Download a released copy                                          | admin, or the recipient    |
 
-Error codes: `BAD_INPUT` · `NOT_FOUND` · `PAYLOAD_TOO_LARGE` ·
-`UNSUPPORTED_MEDIA` · `CHAIN_ERROR` · `CORE_NOT_READY` · `INTERNAL`.
+Error codes: `BAD_INPUT` · `UNAUTHENTICATED` · `FORBIDDEN` · `NOT_FOUND` ·
+`PAYLOAD_TOO_LARGE` · `UNSUPPORTED_MEDIA` · `CHAIN_ERROR` · `CORE_NOT_READY` ·
+`INTERNAL`.
 
 ## Layout
 
@@ -132,9 +179,9 @@ scripts/           deployment
 prisma/            schema + seed
 server/
   index.js         Express app and boot sequence
-  routes/          assets · decrypt · trace · audit · metrics · users · health
-  middleware/      Zod validation, uploads, the shared error shape
-  lib/             config, Prisma client, ref hashing, error types
+  routes/          auth · assets · decrypt · trace · audit · metrics · users · health
+  middleware/      Zod validation, uploads, session + role guards, error shape
+  lib/             config, Prisma client, ref hashing, auth, permissions, errors
   core/
     watermark.js   Haar DWT + QIM embed/extract
     phash.js       pHash · dHash · aHash
@@ -145,7 +192,7 @@ server/
     payload.js     48-bit payload codec
     chain.js       ethers v6 contract wrapper
     bktree.js      BK-tree over perceptual hashes
-client/            React + Vite + Tailwind dashboard
+client/            React + Vite + Tailwind dashboard (login, role-gated routes)
 test/              smoke test, attack suite, contract tests
 ```
 

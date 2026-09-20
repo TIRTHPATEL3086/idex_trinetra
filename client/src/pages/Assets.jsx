@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getAssets, uploadAsset } from '../lib/api.js';
+import { useAuth } from '../lib/auth.jsx';
 
 /**
  * The document register.
@@ -8,6 +9,9 @@ import { getAssets, uploadAsset } from '../lib/api.js';
  * stacked card list (mobile). Nothing overflows horizontally at 320px.
  */
 export default function Assets() {
+  const { can } = useAuth();
+  const mayUpload = can('assets:upload');
+
   const [assets, setAssets] = useState(null);
   const [error, setError] = useState(null);
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -28,10 +32,12 @@ export default function Assets() {
         title="Protected documents"
         subtitle="Encrypted at rest. Every decryption is watermarked and anchored on-chain."
         action={
-          <button type="button" className="btn-lime" onClick={() => setUploadOpen(true)}>
-            <PlusIcon />
-            Upload document
-          </button>
+          mayUpload ? (
+            <button type="button" className="btn-lime" onClick={() => setUploadOpen(true)}>
+              <PlusIcon />
+              Upload document
+            </button>
+          ) : null
         }
       />
 
@@ -40,11 +46,17 @@ export default function Assets() {
 
       {!error && assets && <Overview assets={assets} />}
 
-      {!error && assets?.length === 0 && <Notice>No documents yet. Upload one to begin.</Notice>}
+      {!error && assets?.length === 0 && (
+        <Notice>
+          {mayUpload
+            ? 'No documents yet. Upload one to begin.'
+            : 'No documents in the register yet. An administrator adds them.'}
+        </Notice>
+      )}
 
       {!error && assets?.length > 0 && <DocumentList assets={assets} />}
 
-      {uploadOpen && (
+      {uploadOpen && mayUpload && (
         <UploadModal
           onClose={() => setUploadOpen(false)}
           onDone={() => {

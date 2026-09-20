@@ -2,6 +2,8 @@ import { Router } from 'express';
 
 import { prisma } from '../lib/prisma.js';
 import { bufferToHex } from '../lib/refs.js';
+import { requireAuth } from '../middleware/auth.js';
+import { can, ROLE_META } from '../lib/permissions.js';
 
 /**
  * Populates the officer picker on the decrypt screen.
@@ -12,14 +14,21 @@ import { bufferToHex } from '../lib/refs.js';
  */
 const router = Router();
 
-router.get('/', async (_req, res, next) => {
+router.get('/', requireAuth, async (req, res, next) => {
   try {
-    const rows = await prisma.user.findMany({ orderBy: { id: 'asc' } });
+    // The officer picker on the decrypt screen is the only consumer of this
+    // route, and an officer may only pick themselves — so that is all they get.
+    // The roster of who else holds clearance is not theirs to browse.
+    const rows = can(req.user.role, 'users:read')
+      ? await prisma.user.findMany({ orderBy: { id: 'asc' } })
+      : [req.user];
     res.json({
       users: rows.map((u) => ({
         userId: u.id,
         name: u.name,
         dept: u.dept,
+        role: u.role,
+        roleLabel: ROLE_META[u.role]?.label ?? u.role,
         userRef: bufferToHex(u.userRef),
       })),
     });

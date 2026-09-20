@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { ROOT } from '../lib/env.js';
+import { requireCap } from '../middleware/auth.js';
 
 /**
  * Serves whatever `test/attack-suite.js` last wrote to `test/metrics.json`:
@@ -17,7 +18,7 @@ const router = Router();
 
 const METRICS_PATH = path.join(ROOT, 'test', 'metrics.json');
 
-router.get('/', async (_req, res, next) => {
+router.get('/', requireCap('metrics:read'), async (_req, res, next) => {
   try {
     const raw = await fs.readFile(METRICS_PATH, 'utf8').catch(() => null);
 
