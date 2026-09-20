@@ -20,6 +20,7 @@ import { PrismaClient } from '@prisma/client';
 
 import { env, masterKey } from '../server/lib/env.js';
 import { assetRef, userRef, hexToBuffer } from '../server/lib/refs.js';
+import { hashPassword } from '../server/lib/auth.js';
 
 const prisma = new PrismaClient();
 
@@ -32,12 +33,55 @@ function encrypt(buffer, key) {
   return { ciphertext, iv, authTag: cipher.getAuthTag() };
 }
 
+/**
+ * Demo accounts, one per role so the separation of duties can actually be
+ * demonstrated rather than described. The passwords are deliberately obvious:
+ * these are seed rows on a local database, and a password nobody can remember
+ * is the fastest way to lose ninety seconds in front of a judge.
+ */
 const USERS = [
-  { name: 'Officer U-017', dept: 'Ops Wing', email: 'u017@example.gov' },
-  { name: 'Officer U-023', dept: 'Signals', email: 'u023@example.gov' },
-  { name: 'Officer U-041', dept: 'Logistics', email: 'u041@example.gov' },
-  { name: 'Analyst A-004', dept: 'Intel Cell', email: 'a004@example.gov' },
-  { name: 'Admin Desk', dept: 'HQ', email: 'admin@example.gov' },
+  {
+    name: 'Officer U-017',
+    dept: 'Ops Wing',
+    email: 'u017@example.gov',
+    role: 'OFFICER',
+    password: 'officer123',
+  },
+  {
+    name: 'Officer U-023',
+    dept: 'Signals',
+    email: 'u023@example.gov',
+    role: 'OFFICER',
+    password: 'officer123',
+  },
+  {
+    name: 'Officer U-041',
+    dept: 'Logistics',
+    email: 'u041@example.gov',
+    role: 'OFFICER',
+    password: 'officer123',
+  },
+  {
+    name: 'Analyst A-004',
+    dept: 'Intel Cell',
+    email: 'a004@example.gov',
+    role: 'INVESTIGATOR',
+    password: 'analyst123',
+  },
+  {
+    name: 'Admin Desk',
+    dept: 'HQ',
+    email: 'admin@example.gov',
+    role: 'ADMIN',
+    password: 'admin123',
+  },
+  {
+    name: 'Oversight Cell',
+    dept: 'Vigilance',
+    email: 'audit@example.gov',
+    role: 'AUDITOR',
+    password: 'auditor123',
+  },
 ];
 
 const ASSETS = [
@@ -64,11 +108,14 @@ async function main() {
         name: u.name,
         dept: u.dept,
         email: u.email,
+        role: u.role,
+        passwordHash: hashPassword(u.password),
+        active: true,
         // The ONLY identity that ever reaches the chain.
         userRef: hexToBuffer(userRef(id)),
       },
     });
-    console.log(`  user  ${id}  ${u.name.padEnd(16)} ${u.dept}`);
+    console.log(`  user  ${id}  ${u.name.padEnd(16)} ${u.role.padEnd(13)} ${u.dept}`);
   }
   await prisma.$executeRawUnsafe(
     `SELECT setval(pg_get_serial_sequence('"User"','id'), ${USERS.length})`
@@ -106,8 +153,14 @@ async function main() {
     `SELECT setval(pg_get_serial_sequence('"Asset"','id'), ${ASSETS.length})`
   );
 
-  console.log(`\nDone — ${USERS.length} users, ${ASSETS.length} assets.`);
-  console.log('Check it with: npm run db:studio\n');
+  console.log(`\nDone — ${USERS.length} users, ${ASSETS.length} assets.\n`);
+  console.log('  Sign in at http://localhost:5173 with any of:');
+  console.log('  ' + '─'.repeat(56));
+  for (const u of USERS) {
+    console.log(`  ${u.role.padEnd(13)} ${u.email.padEnd(22)} ${u.password}`);
+  }
+  console.log('  ' + '─'.repeat(56));
+  console.log('\n  Check the data with: npm run db:studio\n');
 }
 
 /**

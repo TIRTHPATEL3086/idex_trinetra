@@ -1,0 +1,8 @@
+-- CreateEnum
+CREATE TYPE "Role" AS ENUM ('ADMIN', 'OFFICER', 'INVESTIGATOR', 'AUDITOR');
+
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN     "active" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN     "lastLoginAt" TIMESTAMP(3),
+ADD COLUMN     "passwordHash" TEXT,
+ADD COLUMN     "role" "Role" NOT NULL DEFAULT 'OFFICER';

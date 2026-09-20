@@ -2,7 +2,10 @@ import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react';
 
 import { getHealth } from './lib/api.js';
+import { useAuth, ROLE_UI, initialsOf } from './lib/auth.jsx';
+import { RequireAuth, RequireCap } from './components/RequireAuth.jsx';
 import Logo from './components/Logo.jsx';
+import Login from './pages/Login.jsx';
 import Assets from './pages/Assets.jsx';
 import Decrypt from './pages/Decrypt.jsx';
 import Trace from './pages/Trace.jsx';
@@ -21,15 +24,37 @@ import Robustness from './pages/Robustness.jsx';
  * Verdict colours stay semantic (green / amber / slate, never red).
  */
 
+/**
+ * Every screen names the capability it needs. The sidebar hides what the role
+ * cannot reach and the router refuses it anyway — the same list drives both, so
+ * a hidden link and a refused route can never disagree.
+ */
 const NAV = [
-  { to: '/assets', label: 'Documents', icon: DocIcon },
-  { to: '/decrypt', label: 'Decrypt', icon: KeyIcon },
-  { to: '/trace', label: 'Trace', icon: SearchIcon },
-  { to: '/timeline', label: 'Timeline', icon: ClockIcon },
-  { to: '/robustness', label: 'Robustness', icon: ChartIcon },
+  { to: '/assets', label: 'Documents', icon: DocIcon, cap: 'assets:read' },
+  { to: '/decrypt', label: 'Decrypt', icon: KeyIcon, cap: 'decrypt:self' },
+  { to: '/trace', label: 'Trace', icon: SearchIcon, cap: 'trace:run' },
+  { to: '/timeline', label: 'Timeline', icon: ClockIcon, cap: 'audit:own' },
+  { to: '/robustness', label: 'Robustness', icon: ChartIcon, cap: 'metrics:read' },
 ];
 
 export default function App() {
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route
+        path="/*"
+        element={
+          <RequireAuth>
+            <Shell />
+          </RequireAuth>
+        }
+      />
+    </Routes>
+  );
+}
+
+function Shell() {
+  const { user, can } = useAuth();
   const health = useHealth();
   const [navOpen, setNavOpen] = useState(false);
   const location = useLocation();
@@ -60,12 +85,20 @@ export default function App() {
             <MenuIcon />
           </button>
 
-          <Logo size="sm" />
+          {/* The wordmark costs ~125px the header cannot spare once the
+              account control joins the row — below sm the tile alone carries it. */}
+          <span className="sm:hidden">
+            <Logo size="sm" iconOnly />
+          </span>
+          <span className="hidden sm:block">
+            <Logo size="sm" />
+          </span>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
             <HealthChip health={health} />
             <NotificationsBell health={health} />
             <WalletButton />
+            <AccountMenu user={user} />
           </div>
         </header>
 
@@ -80,17 +113,57 @@ export default function App() {
             />
           )}
 
-          <Sidebar health={health} open={navOpen} />
+          <Sidebar health={health} open={navOpen} can={can} user={user} />
 
           <main className="scroll-slim min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-6 sm:px-6 sm:py-7 lg:px-8">
             <div className="mx-auto w-full max-w-6xl">
               <Routes>
-                <Route path="/" element={<Navigate to="/assets" replace />} />
-                <Route path="/assets" element={<Assets />} />
-                <Route path="/decrypt" element={<Decrypt />} />
-                <Route path="/trace" element={<Trace />} />
-                <Route path="/timeline" element={<Timeline />} />
-                <Route path="/robustness" element={<Robustness />} />
+                {/* Land on the first screen this role can actually use. */}
+                <Route path="/" element={<Navigate to={user?.landing || '/assets'} replace />} />
+                <Route
+                  path="/login"
+                  element={<Navigate to={user?.landing || '/assets'} replace />}
+                />
+                <Route
+                  path="/assets"
+                  element={
+                    <RequireCap capability="assets:read">
+                      <Assets />
+                    </RequireCap>
+                  }
+                />
+                <Route
+                  path="/decrypt"
+                  element={
+                    <RequireCap capability="decrypt:self">
+                      <Decrypt />
+                    </RequireCap>
+                  }
+                />
+                <Route
+                  path="/trace"
+                  element={
+                    <RequireCap capability="trace:run">
+                      <Trace />
+                    </RequireCap>
+                  }
+                />
+                <Route
+                  path="/timeline"
+                  element={
+                    <RequireCap capability="audit:own">
+                      <Timeline />
+                    </RequireCap>
+                  }
+                />
+                <Route
+                  path="/robustness"
+                  element={
+                    <RequireCap capability="metrics:read">
+                      <Robustness />
+                    </RequireCap>
+                  }
+                />
                 <Route path="*" element={<p className="text-ink-muted">No such screen.</p>} />
               </Routes>
             </div>
@@ -101,7 +174,8 @@ export default function App() {
   );
 }
 
-function Sidebar({ health, open }) {
+function Sidebar({ health, open, can, user }) {
+  const items = NAV.filter((n) => can(n.cap));
   return (
     <aside
       className={`scroll-slim fixed inset-y-0 left-0 z-40 flex w-64 max-w-[82vw] flex-col overflow-y-auto border-r border-line bg-white p-4 transition-transform duration-200 lg:static lg:z-auto lg:w-60 lg:max-w-none lg:translate-x-0 ${
@@ -116,7 +190,7 @@ function Sidebar({ health, open }) {
         Menu
       </div>
       <nav className="space-y-1">
-        {NAV.map(({ to, label, icon: Icon }) => (
+        {items.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}
@@ -137,10 +211,13 @@ function Sidebar({ health, open }) {
       </nav>
 
       <div className="mt-auto space-y-3 pt-6">
-        <NavLink to="/trace" className="btn-dark w-full">
-          <SearchIcon light />
-          Trace a leak
-        </NavLink>
+        {can('trace:run') && (
+          <NavLink to="/trace" className="btn-dark w-full">
+            <SearchIcon light />
+            Trace a leak
+          </NavLink>
+        )}
+        <RoleCard user={user} />
         <HealthBadge health={health} />
       </div>
     </aside>
@@ -210,6 +287,114 @@ function Row({ k, v, good }) {
     <div className="flex items-center justify-between">
       <dt>{k}</dt>
       <dd className={good ? 'text-attributed' : 'text-inconclusive'}>{v}</dd>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------- account --- */
+
+/**
+ * The signed-in identity: avatar, role, sign out.
+ *
+ * Below `sm` only the avatar shows — the header already carries a menu button,
+ * a bell and a wallet, and four labelled controls do not fit at 320px.
+ */
+function AccountMenu({ user }) {
+  const { signOut } = useAuth();
+  const [open, setOpen] = useState(false);
+  const meta = ROLE_UI[user?.role] ?? {};
+
+  if (!user) return null;
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-label="Account"
+        aria-expanded={open}
+        className="flex items-center gap-2 rounded-full border border-line bg-white py-1 pl-1 pr-1 transition hover:border-ink-faint sm:pr-3"
+      >
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-night text-[11px] font-bold text-lime">
+          {initialsOf(user.name)}
+        </span>
+        <span className="hidden text-left sm:block">
+          <span className="block text-[11px] font-bold leading-tight text-ink">{user.name}</span>
+          <span className="block text-[10px] leading-tight text-ink-faint">{meta.short}</span>
+        </span>
+      </button>
+
+      {open && (
+        <>
+          <button
+            type="button"
+            aria-label="Close account menu"
+            className="fixed inset-0 z-40 cursor-default"
+            onClick={() => setOpen(false)}
+          />
+          <div className="absolute right-0 z-50 mt-2 w-[17rem] max-w-[calc(100vw-2rem)] rounded-2xl border border-line bg-white p-3 shadow-panel">
+            <div className="flex items-center gap-3 px-1 pb-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-night text-xs font-bold text-lime">
+                {initialsOf(user.name)}
+              </span>
+              <div className="min-w-0">
+                <div className="truncate text-sm font-bold text-ink">{user.name}</div>
+                <div className="truncate text-xs text-ink-muted">{user.email}</div>
+              </div>
+            </div>
+
+            <div className="space-y-2 border-t border-line pt-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">
+                  Role
+                </span>
+                <span className={`pill ${meta.badge ?? 'bg-line text-ink'}`}>{meta.short}</span>
+              </div>
+              <p className="text-[11px] leading-relaxed text-ink-muted">{meta.blurb}</p>
+
+              {/* The hashed handle — the only identity that reaches the chain.
+                  Shown here, deliberately apart from the name above it. */}
+              <div className="rounded-xl bg-[#fbfbf7] px-3 py-2">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-ink-faint">
+                  On-chain handle
+                </div>
+                <div className="mono mt-0.5 break-all text-[10px] text-ink-muted">
+                  {user.userRef}
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                signOut();
+              }}
+              className="btn-ghost mt-3 w-full"
+            >
+              Sign out
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** The role reminder pinned above the health badge in the sidebar. */
+function RoleCard({ user }) {
+  if (!user) return null;
+  const meta = ROLE_UI[user.role] ?? {};
+  return (
+    <div className="rounded-2xl border border-line bg-[#fbfbf7] p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-ink-faint">
+          Signed in as
+        </span>
+        <span className={`pill ${meta.badge ?? 'bg-line text-ink'}`}>{meta.short}</span>
+      </div>
+      <div className="mt-1.5 truncate text-xs font-bold text-ink">{user.name}</div>
+      <div className="truncate text-[11px] text-ink-muted">{user.dept}</div>
     </div>
   );
 }

@@ -28,6 +28,20 @@ model Asset {
   events DecryptionEvent[]
 }
 
+/// Who may sign in, and what they are allowed to do once they have.
+///
+/// The split is deliberate — it is the same separation-of-duties argument the
+/// verdict bands rest on. An INVESTIGATOR cannot decrypt, so the person who
+/// examines the evidence can never mint a marked copy and manufacture it. An
+/// OFFICER cannot trace, so nobody investigates their own leak. Only an ADMIN
+/// holds both, and an AUDITOR holds neither.
+enum Role {
+  ADMIN /// Registry administrator — uploads, releases, investigates, audits.
+  OFFICER /// Clearance holder — may release a copy to THEMSELVES only.
+  INVESTIGATOR /// Forensic analyst — traces leaks. Must never decrypt.
+  AUDITOR /// Oversight — read-only. Neither decrypts nor traces.
+}
+
 /// A person who may decrypt. The NAME NEVER GOES ON CHAIN — only `userRef`.
 model User {
   id      Int     @id @default(autoincrement())
@@ -35,6 +49,12 @@ model User {
   userRef Bytes   @unique // keccak256(userId || salt)
   dept    String?
   email   String? @unique
+
+  // ---- authentication. None of this ever reaches the chain either. ----
+  role         Role      @default(OFFICER)
+  passwordHash String? // scrypt: <salt-hex>:<key-hex>. Null = cannot sign in.
+  active       Boolean   @default(true)
+  lastLoginAt  DateTime?
 
   events DecryptionEvent[]
 }

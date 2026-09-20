@@ -24,6 +24,12 @@ export const env = {
   masterKeyHex: process.env.MASTER_KEY_HEX || '00'.repeat(32),
   refSalt: process.env.REF_SALT || 'sih26237-do-not-change-me',
 
+  // ---------- auth ----------
+  // Signs the session cookie. Changing it invalidates every live session,
+  // which is exactly what you want if one is ever suspected of leaking.
+  authSecret: process.env.AUTH_SECRET || 'sih26237-dev-session-secret-change-me',
+  sessionTtlHours: num(process.env.SESSION_TTL_HOURS, 12),
+
   // ---------- watermark ----------
   watermarkDelta: num(process.env.WATERMARK_DELTA, 12),
   watermarkSeed: process.env.WATERMARK_SEED || 'sih26237-coefficient-permutation-seed',
@@ -65,5 +71,8 @@ export function warnAboutConfig(log = console.warn) {
   }
   if (env.chainMode === 'off') {
     log('[config] CHAIN_MODE=off — receipts will NOT be anchored on chain.');
+  }
+  if (!process.env.AUTH_SECRET) {
+    log('[config] AUTH_SECRET is unset — using the built-in dev secret. Set it in production.');
   }
 }

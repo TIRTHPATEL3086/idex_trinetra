@@ -9,6 +9,7 @@ import { badInput, notFound } from '../lib/errors.js';
 import { assetRef, hexToBuffer, bufferToHex } from '../lib/refs.js';
 import { singleFile } from '../middleware/upload.js';
 import { validate } from '../middleware/validate.js';
+import { requireCap } from '../middleware/auth.js';
 import { encrypt, sha256 } from '../core/index.js';
 
 /**
@@ -29,57 +30,63 @@ const UploadBody = z.object({
 });
 
 // ------------------------------------------------- POST /api/assets ---------
-router.post('/', singleFile, validate(UploadBody), async (req, res, next) => {
-  try {
-    if (!req.file) throw badInput('No file uploaded. Send multipart field "file".');
+router.post(
+  '/',
+  requireCap('assets:upload'),
+  singleFile,
+  validate(UploadBody),
+  async (req, res, next) => {
+    try {
+      if (!req.file) throw badInput('No file uploaded. Send multipart field "file".');
 
-    const plaintext = req.file.buffer;
-    const originalSha = sha256(plaintext);
+      const plaintext = req.file.buffer;
+      const originalSha = sha256(plaintext);
 
-    // Encrypt before anything touches the filesystem.
-    const { ciphertext, iv, authTag } = encrypt(plaintext, masterKey());
+      // Encrypt before anything touches the filesystem.
+      const { ciphertext, iv, authTag } = encrypt(plaintext, masterKey());
 
-    await fs.mkdir(env.cipherDir, { recursive: true });
+      await fs.mkdir(env.cipherDir, { recursive: true });
 
-    // Create the row first so the id is available for the filename and the ref.
-    const created = await prisma.asset.create({
-      data: {
-        title: req.valid.title,
-        classification: req.valid.classification,
-        mimeType: req.file.mimetype,
-        originalSha,
-        // Placeholder — a unique value we immediately overwrite with the real ref.
-        assetRef: Buffer.from(`pending-${Date.now()}-${Math.random()}`),
-        iv,
-        authTag,
-        sizeBytes: plaintext.length,
-      },
-    });
+      // Create the row first so the id is available for the filename and the ref.
+      const created = await prisma.asset.create({
+        data: {
+          title: req.valid.title,
+          classification: req.valid.classification,
+          mimeType: req.file.mimetype,
+          originalSha,
+          // Placeholder — a unique value we immediately overwrite with the real ref.
+          assetRef: Buffer.from(`pending-${Date.now()}-${Math.random()}`),
+          iv,
+          authTag,
+          sizeBytes: plaintext.length,
+        },
+      });
 
-    const cipherPath = path.join(env.cipherDir, `asset-${created.id}.bin`);
-    await fs.writeFile(cipherPath, ciphertext);
+      const cipherPath = path.join(env.cipherDir, `asset-${created.id}.bin`);
+      await fs.writeFile(cipherPath, ciphertext);
 
-    const asset = await prisma.asset.update({
-      where: { id: created.id },
-      data: {
-        cipherPath,
-        assetRef: hexToBuffer(assetRef(created.id)),
-      },
-    });
+      const asset = await prisma.asset.update({
+        where: { id: created.id },
+        data: {
+          cipherPath,
+          assetRef: hexToBuffer(assetRef(created.id)),
+        },
+      });
 
-    res.status(201).json({
-      assetId: asset.id,
-      title: asset.title,
-      sha256: Buffer.from(asset.originalSha).toString('hex'),
-      sizeBytes: asset.sizeBytes,
-    });
-  } catch (err) {
-    next(err);
+      res.status(201).json({
+        assetId: asset.id,
+        title: asset.title,
+        sha256: Buffer.from(asset.originalSha).toString('hex'),
+        sizeBytes: asset.sizeBytes,
+      });
+    } catch (err) {
+      next(err);
+    }
   }
-});
+);
 
 // -------------------------------------------------- GET /api/assets ---------
-router.get('/', async (_req, res, next) => {
+router.get('/', requireCap('assets:read'), async (_req, res, next) => {
   try {
     const rows = await prisma.asset.findMany({
       orderBy: { createdAt: 'desc' },
@@ -101,7 +108,7 @@ router.get('/', async (_req, res, next) => {
 });
 
 // ---------------------------------------------- GET /api/assets/:id ---------
-router.get('/:assetId', async (req, res, next) => {
+router.get('/:assetId', requireCap('assets:read'), async (req, res, next) => {
   try {
     const assetId = Number(req.params.assetId);
     if (!Number.isInteger(assetId)) throw badInput('assetId must be an integer');

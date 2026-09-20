@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getAssets, getUsers, decryptAsset, markedFileUrl, shortHash } from '../lib/api.js';
 import { Header, Notice } from './Assets.jsx';
+import { useAuth } from '../lib/auth.jsx';
 
 /**
  * Pick a document, an officer and a device, then release a watermarked copy.
@@ -8,6 +9,12 @@ import { Header, Notice } from './Assets.jsx';
  * orchestration), so a marked copy can never exist without a receipt.
  */
 export default function Decrypt() {
+  const { user, can } = useAuth();
+  // Only an administrator may release a copy in someone else's name. For an
+  // officer the field is not a choice at all, so it is not rendered as one —
+  // /api/users returns only themselves, and the API refuses any other id.
+  const mayChooseOfficer = can('decrypt:any');
+
   const [assets, setAssets] = useState([]);
   const [users, setUsers] = useState([]);
   const [form, setForm] = useState({ assetId: '', userId: '', deviceLabel: 'DESK-114' });
@@ -23,11 +30,14 @@ export default function Decrypt() {
         setForm((f) => ({
           ...f,
           assetId: String(a.assets[0]?.assetId ?? ''),
-          userId: String(u.users[0]?.userId ?? ''),
+          // Default to yourself when you are in the list at all.
+          userId: String(
+            u.users.find((x) => x.userId === user?.userId)?.userId ?? u.users[0]?.userId ?? ''
+          ),
         }));
       })
       .catch((e) => setError(e.message));
-  }, []);
+  }, [user?.userId]);
 
   const officer = users.find((u) => String(u.userId) === form.userId);
   const asset = assets.find((a) => String(a.assetId) === form.assetId);
@@ -76,17 +86,27 @@ export default function Decrypt() {
           </Field>
 
           <Field label="Officer">
-            <select
-              className="input"
-              value={form.userId}
-              onChange={(e) => setForm({ ...form, userId: e.target.value })}
-            >
-              {users.map((u) => (
-                <option key={u.userId} value={u.userId}>
-                  {u.name} · {u.dept}
-                </option>
-              ))}
-            </select>
+            {mayChooseOfficer ? (
+              <select
+                className="input"
+                value={form.userId}
+                onChange={(e) => setForm({ ...form, userId: e.target.value })}
+              >
+                {users.map((u) => (
+                  <option key={u.userId} value={u.userId}>
+                    {u.name} · {u.dept}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="rounded-xl border border-line bg-[#fbfbf7] px-3.5 py-2.5">
+                <div className="text-sm font-bold text-ink">{user?.name}</div>
+                <div className="mt-0.5 text-[11px] leading-relaxed text-ink-muted">
+                  {user?.dept} · the copy is watermarked with your identity, so it can only be
+                  released in your name.
+                </div>
+              </div>
+            )}
           </Field>
 
           <Field label="Device label">
