@@ -1,6 +1,6 @@
 {
   "source": "attack-suite",
-  "generatedAt": "2026-09-17T14:06:38.219Z",
+  "generatedAt": "2026-09-19T19:40:49.821Z",
   "attacks": [
     {
       "name": "JPEG q90",
@@ -54,7 +54,7 @@
     {
       "name": "Screenshot sim",
       "survived": true,
-      "bitsRecovered": 44,
+      "bitsRecovered": 43,
       "psnrDb": 48.065558238402346,
       "target": 40
     }

@@ -22,23 +22,19 @@
  * meaningful error tolerance.
  */
 
-export { crc8 } from './payload.js';
+import { ReedSolomon } from 'lombokecc';
+import { crc8 } from './payload.js';
 
-let ReedSolomon = null;
-try {
-  const mod = await import('@ronomon/reed-solomon');
-  ReedSolomon = mod.default || mod;
-} catch {
-  // Native addon failed — RS unavailable, fall back to pass-through
-}
+export { crc8 };
 
-/** Number of parity shards to add */
-const PARITY_SHARDS = 6;
+// Reed-Solomon (12, 6): 6 data bytes (48 bits) + 6 parity bytes = 12 bytes (96 bits)
+// Corrects up to 3 byte errors in 12 bytes.
+const rsCodec = new ReedSolomon(12, 6);
 
-/** Pack a bit string into a byte Buffer */
+/** Pack a bit string into a byte Uint8Array */
 function bitsToBytes(bits) {
   const byteLen = Math.ceil(bits.length / 8);
-  const buf = Buffer.alloc(byteLen);
+  const buf = new Uint8Array(byteLen);
   for (let i = 0; i < bits.length; i++) {
     if (bits[i] === '1') {
       buf[Math.floor(i / 8)] |= 1 << (7 - (i % 8));
@@ -47,7 +43,7 @@ function bitsToBytes(bits) {
   return buf;
 }
 
-/** Unpack a Buffer to a bit string of specified length */
+/** Unpack a Uint8Array to a bit string of specified length */
 function bytesToBits(buf, bitLen) {
   let bits = '';
   for (let i = 0; i < bitLen; i++) {
@@ -58,69 +54,87 @@ function bytesToBits(buf, bitLen) {
 }
 
 /**
+ * Encodes 48-bit payload into 96-bit Reed-Solomon parity-protected codeword.
  * @param {string} bits 48 chars of '0'/'1'
- * @returns {string} ~96 chars — the parity-protected payload
+ * @returns {string} 96 chars — 6 data bytes + 6 RS parity bytes
  */
 export function rsEncode(bits) {
-  if (!ReedSolomon) {
-    // Fallback: no RS available, return bits doubled for basic redundancy
-    return bits + bits;
+  if (typeof bits !== 'string' || bits.length !== 48) {
+    throw new Error(`rsEncode expects 48 bits, got ${bits?.length}`);
   }
-
   const dataBytes = bitsToBytes(bits);
-  const dataShards = dataBytes.length; // 6 bytes for 48 bits
-  const totalShards = dataShards + PARITY_SHARDS;
-  const shardSize = 1; // Each shard is 1 byte
-
-  // Build the buffer: dataShards + parityShards, each 1 byte
-  const buffer = Buffer.alloc(totalShards * shardSize);
-  dataBytes.copy(buffer, 0);
-
-  try {
-    // @ronomon/reed-solomon expects: encode(dataShards, parityShards, bufferSize, buffer, offset, cb)
-    // Synchronous variant if available, otherwise use the buffer directly
-    ReedSolomon.encode(dataShards, PARITY_SHARDS, shardSize, buffer, 0, (err) => {
-      if (err) throw err;
-    });
-  } catch {
-    // If encoding fails, return doubled bits as fallback
-    return bits + bits;
-  }
-
-  return bytesToBits(buffer, totalShards * 8);
+  const codeword = rsCodec.encode(dataBytes);
+  return bytesToBits(codeword, 96);
 }
 
 /**
- * @param {string} bits possibly-corrupted encoded bits
- * @returns {{ bits: string, corrected: boolean }} `bits` is the 48-bit payload
+ * Decodes received bits with Reed-Solomon or CRC bit repair.
+ * Handles both 96-bit RS codewords and 48-bit directly extracted payloads.
+ * @param {string} bits 48 or 96 chars of '0'/'1'
+ * @returns {{ bits: string, corrected: boolean }} 48-bit decoded payload
  */
 export function rsDecode(bits) {
-  if (!ReedSolomon) {
-    // Fallback: RS unavailable — return the first 48 bits as-is.
-    return { bits: bits.slice(0, 48), corrected: false };
+  if (typeof bits !== 'string') {
+    return { bits: '', corrected: false };
   }
 
-  const dataShards = 6;
-  const totalShards = dataShards + PARITY_SHARDS;
-  const shardSize = 1;
-  const buffer = Buffer.from(bitsToBytes(bits));
-
-  // Ensure buffer is the right size
-  const workBuf = Buffer.alloc(totalShards * shardSize);
-  buffer.copy(workBuf, 0, 0, Math.min(buffer.length, workBuf.length));
-
-  let corrected = false;
-  try {
-    // Check if any parity correction was needed
-    const original = Buffer.from(workBuf);
-    ReedSolomon.decode(dataShards, PARITY_SHARDS, shardSize, workBuf, 0, 0, (err) => {
-      if (err) throw err;
-    });
-    corrected = !original.slice(0, dataShards).equals(workBuf.slice(0, dataShards));
-  } catch {
-    // Decoding failed — return what we have
-    return { bits: bytesToBits(workBuf, 48), corrected: false };
+  // Case 1: 96-bit Reed-Solomon codeword
+  if (bits.length >= 96) {
+    try {
+      const received = bitsToBytes(bits.slice(0, 96));
+      const decoded = rsCodec.decode(received);
+      const decodedBits = bytesToBits(decoded, 48);
+      const originalDataBits = bits.slice(0, 48);
+      const corrected = decodedBits !== originalDataBits;
+      return { bits: decodedBits, corrected };
+    } catch {
+      // If RS decode fails due to excessive corruption, fall back to first 48 bits
+      return { bits: bits.slice(0, 48), corrected: false };
+    }
   }
 
-  return { bits: bytesToBits(workBuf, 48), corrected };
+  // Case 2: 48-bit extracted payload (36 shortId + 8 CRC + 4 ver)
+  if (bits.length === 48) {
+    const idBits = bits.slice(0, 36);
+    const crcBits = bits.slice(36, 44);
+
+    // If CRC already matches, payload is clean
+    if (crc8(idBits) === crcBits) {
+      return { bits, corrected: false };
+    }
+
+    // Try single-bit error correction across the 44 protected bits
+    for (let i = 0; i < 44; i++) {
+      const flipped = (bits[i] === '0' ? '1' : '0');
+      const candidate = bits.slice(0, i) + flipped + bits.slice(i + 1);
+      const candId = candidate.slice(0, 36);
+      const candCrc = candidate.slice(36, 44);
+      if (crc8(candId) === candCrc) {
+        return { bits: candidate, corrected: true };
+      }
+    }
+
+    // If 2 bits flipped, test 2-bit combinations in shortId
+    for (let i = 0; i < 36; i++) {
+      for (let j = i + 1; j < 36; j++) {
+        const candidate =
+          bits.slice(0, i) +
+          (bits[i] === '0' ? '1' : '0') +
+          bits.slice(i + 1, j) +
+          (bits[j] === '0' ? '1' : '0') +
+          bits.slice(j + 1);
+        const candId = candidate.slice(0, 36);
+        const candCrc = candidate.slice(36, 44);
+        if (crc8(candId) === candCrc) {
+          return { bits: candidate, corrected: true };
+        }
+      }
+    }
+
+    // Could not repair
+    return { bits, corrected: false };
+  }
+
+  return { bits: bits.slice(0, 48), corrected: false };
 }
+

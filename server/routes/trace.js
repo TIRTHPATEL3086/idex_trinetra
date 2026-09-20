@@ -7,7 +7,7 @@ import { bufferToHex } from '../lib/refs.js';
 import { singleFile } from '../middleware/upload.js';
 import * as chain from '../core/chain.js';
 import * as bktree from '../core/bktree.js';
-import { hashes, extract, score, sha256, hamming } from '../core/index.js';
+import { hashes, extract, score, sha256, hamming, isPdf, extractPdf } from '../core/index.js';
 import { parsePayload, bitAgreement, bitsMatching, PAYLOAD_BITS } from '../core/payload.js';
 
 /**
@@ -31,15 +31,31 @@ router.post('/', singleFile, async (req, res, next) => {
     if (!req.file) throw badInput('No file uploaded. Send multipart field "file".');
 
     const buffer = req.file.buffer;
+    const isDocPdf = req.file.mimetype === 'application/pdf' || isPdf(buffer);
 
     // --- 2. Perceptual hashes of the leaked file ---------------------------
-    const leaked = await hashes(buffer);
+    let leaked;
+    if (isDocPdf) {
+      const pdfHash = BigInt('0x' + sha256(buffer).toString('hex').slice(0, 16));
+      leaked = { pHash: pdfHash, dHash: pdfHash, aHash: pdfHash };
+    } else {
+      leaked = await hashes(buffer);
+    }
 
     // --- 3. BK-tree OR-vote across dHash / pHash / aHash -------------------
     const { candidates, checked } = bktree.searchAll(leaked, env.bktreeMaxDist);
 
-    // --- 4. Pull the 48 bits back out of the pixels ------------------------
-    const marked = await extract(buffer);
+    // --- 4. Pull the 48 bits back out of the document or pixels ------------
+    let marked;
+    if (isDocPdf) {
+      marked = (await extractPdf(buffer)) || {
+        payloadBits: '0'.repeat(PAYLOAD_BITS),
+        bitConfidence: 0,
+        eccCorrected: false,
+      };
+    } else {
+      marked = await extract(buffer);
+    }
 
     // --- 5. shortId -> the exact DecryptionEvent (O(1) on a unique index) --
     let event = null;
