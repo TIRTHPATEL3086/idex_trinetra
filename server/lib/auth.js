@@ -134,11 +134,12 @@ export function parseCookies(header) {
  * form post cannot carry it, Secure once we are actually on https.
  */
 export function sessionCookie(token, expiresAt) {
+  const sameSite = env.nodeEnv === 'production' ? 'SameSite=None' : 'SameSite=Lax';
   const parts = [
     `${SESSION_COOKIE}=${encodeURIComponent(token)}`,
     'Path=/',
     'HttpOnly',
-    'SameSite=Lax',
+    sameSite,
     `Expires=${expiresAt.toUTCString()}`,
     `Max-Age=${Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000))}`,
   ];
@@ -148,11 +149,12 @@ export function sessionCookie(token, expiresAt) {
 
 /** The same cookie, already expired — what logout sends. */
 export function clearedCookie() {
+  const sameSite = env.nodeEnv === 'production' ? 'SameSite=None' : 'SameSite=Lax';
   const parts = [
     `${SESSION_COOKIE}=`,
     'Path=/',
     'HttpOnly',
-    'SameSite=Lax',
+    sameSite,
     'Expires=Thu, 01 Jan 1970 00:00:00 GMT',
     'Max-Age=0',
   ];

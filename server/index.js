@@ -25,6 +25,9 @@ import keysRouter from './routes/keys.js';
 
 const app = express();
 
+// Trust reverse proxy headers (required on Render, Heroku, AWS for secure cookies)
+app.set('trust proxy', 1);
+
 app.use(
   cors({
     origin: (origin, cb) => {
