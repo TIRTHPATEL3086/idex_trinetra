@@ -21,6 +21,11 @@ import { PrismaClient } from '@prisma/client';
 import { env, masterKey } from '../server/lib/env.js';
 import { assetRef, userRef, hexToBuffer } from '../server/lib/refs.js';
 import { hashPassword } from '../server/lib/auth.js';
+import {
+  generatePqcKeyPair,
+  encryptKeyBundle,
+  encapsulateKey,
+} from '../server/core/pqc.js';
 
 const prisma = new PrismaClient();
 
@@ -96,12 +101,21 @@ async function main() {
   // Wipe in FK order so re-running is always safe.
   await prisma.investigation.deleteMany();
   await prisma.decryptionEvent.deleteMany();
+  await prisma.assetKeyEncapsulation.deleteMany();
   await prisma.asset.deleteMany();
   await prisma.user.deleteMany();
 
   // ---- users -------------------------------------------------------------
+  const userPqcMap = new Map();
+
   for (const [i, u] of USERS.entries()) {
     const id = i + 1;
+    const pqc = generatePqcKeyPair();
+    const encryptedPqcKeys = encryptKeyBundle(
+      { kemSecretKey: pqc.kemSecretKey, dsaSecretKey: pqc.dsaSecretKey },
+      u.password
+    );
+
     await prisma.user.create({
       data: {
         id,
@@ -113,9 +127,14 @@ async function main() {
         active: true,
         // The ONLY identity that ever reaches the chain.
         userRef: hexToBuffer(userRef(id)),
+        kemPublicKey: Buffer.from(pqc.kemPublicKey),
+        dsaPublicKey: Buffer.from(pqc.dsaPublicKey),
+        encryptedPqcKeys,
       },
     });
-    console.log(`  user  ${id}  ${u.name.padEnd(16)} ${u.role.padEnd(13)} ${u.dept}`);
+
+    userPqcMap.set(id, { u, pqc });
+    console.log(`  user  ${id}  ${u.name.padEnd(16)} ${u.role.padEnd(13)} ${u.dept} [PQC enrolled]`);
   }
   await prisma.$executeRawUnsafe(
     `SELECT setval(pg_get_serial_sequence('"User"','id'), ${USERS.length})`
@@ -127,11 +146,12 @@ async function main() {
   for (const [i, a] of ASSETS.entries()) {
     const id = i + 1;
     const plaintext = makePng(320, 200, a.seed);
-    const { ciphertext, iv, authTag } = encrypt(plaintext, masterKey());
+    const contentKey = crypto.randomBytes(32);
+    const { ciphertext, iv, authTag } = encrypt(plaintext, contentKey);
     const cipherPath = path.join(env.cipherDir, `asset-${id}.bin`);
     await fs.writeFile(cipherPath, ciphertext);
 
-    await prisma.asset.create({
+    const asset = await prisma.asset.create({
       data: {
         id,
         title: a.title,
@@ -145,15 +165,33 @@ async function main() {
         sizeBytes: plaintext.length,
       },
     });
+
+    // Encapsulate content key for all users so any authorized role can decrypt
+    for (const [userId, { pqc }] of userPqcMap.entries()) {
+      const { sharedSecret, ciphertext: kemCiphertext } = encapsulateKey(pqc.kemPublicKey);
+      const { ciphertext: encKey, iv: keyIv, authTag: keyTag } = encrypt(contentKey, sharedSecret);
+
+      await prisma.assetKeyEncapsulation.create({
+        data: {
+          assetId: asset.id,
+          userId,
+          kemCiphertext: Buffer.from(kemCiphertext),
+          encryptedKey: encKey,
+          iv: keyIv,
+          authTag: keyTag,
+        },
+      });
+    }
+
     console.log(
-      `  asset ${id}  ${a.title.padEnd(24)} ${a.classification.padEnd(13)} ${plaintext.length} B`
+      `  asset ${id}  ${a.title.padEnd(24)} ${a.classification.padEnd(13)} ${plaintext.length} B [${userPqcMap.size} recipients encapsulated]`
     );
   }
   await prisma.$executeRawUnsafe(
     `SELECT setval(pg_get_serial_sequence('"Asset"','id'), ${ASSETS.length})`
   );
 
-  console.log(`\nDone — ${USERS.length} users, ${ASSETS.length} assets.\n`);
+  console.log(`\nDone — ${USERS.length} users, ${ASSETS.length} assets (all PQC-enabled).\n`);
   console.log('  Sign in at http://localhost:5173 with any of:');
   console.log('  ' + '─'.repeat(56));
   for (const u of USERS) {

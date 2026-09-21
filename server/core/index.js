@@ -27,3 +27,15 @@ export {
   PAYLOAD_BITS,
   SHORT_ID_BITS,
 } from './payload.js';
+
+// Post-Quantum Cryptography (NIST FIPS 203 & FIPS 204)
+export {
+  generatePqcKeyPair,
+  encapsulateKey,
+  decapsulateKey,
+  signDecryptionReceipt,
+  verifyDecryptionSignature,
+  encryptKeyBundle,
+  decryptKeyBundle,
+  PQC_ALGORITHMS,
+} from './pqc.js';

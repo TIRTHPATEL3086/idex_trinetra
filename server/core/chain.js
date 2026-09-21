@@ -18,14 +18,16 @@ import { chainError } from '../lib/errors.js';
  * marked file — there must never be a marked copy without a receipt.
  */
 
-// Minimal ABI — the four things the backend actually calls.
+// Minimal ABI — the methods the backend actually calls.
 export const ABI = [
   'function logDecryption(bytes32 receiptId, bytes32 assetRef, bytes32 userRef, bytes32 contentSha, bytes32 payloadCommit) external',
-  'function getReceipt(bytes32 receiptId) external view returns (tuple(bytes32 assetRef, bytes32 userRef, bytes32 contentSha, bytes32 payloadCommit, uint64 timestamp, bool exists))',
+  'function logDecryptionWithSignature(bytes32 receiptId, bytes32 assetRef, bytes32 userRef, bytes32 contentSha, bytes32 payloadCommit, bytes32 sigCommit) external',
+  'function getReceipt(bytes32 receiptId) external view returns (tuple(bytes32 assetRef, bytes32 userRef, bytes32 contentSha, bytes32 payloadCommit, uint64 timestamp, bool exists, bytes32 signatureCommit))',
   'function hasReceipt(bytes32 receiptId) external view returns (bool)',
   'function receiptsOfAsset(bytes32 assetRef) external view returns (bytes32[])',
   'function totalReceipts() external view returns (uint256)',
   'event DecryptionLogged(bytes32 indexed receiptId, bytes32 indexed assetRef, bytes32 indexed userRef, bytes32 contentSha, bytes32 payloadCommit, uint64 timestamp)',
+  'event DecryptionLoggedWithSignature(bytes32 indexed receiptId, bytes32 indexed assetRef, bytes32 indexed userRef, bytes32 contentSha, bytes32 payloadCommit, bytes32 signatureCommit, uint64 timestamp)',
 ];
 
 let cached = null;
@@ -92,7 +94,14 @@ export function isChainEnabled() {
  *                     etherscanUrl:string|null, chainMode:string,
  *                     skipped:boolean, reason?:string }>}
  */
-export async function logDecryption({ receiptId, assetRef, userRef, contentSha, payloadCommit }) {
+export async function logDecryption({
+  receiptId,
+  assetRef,
+  userRef,
+  contentSha,
+  payloadCommit,
+  signatureCommit,
+}) {
   const c = getContract();
 
   if (!c) {
@@ -115,13 +124,37 @@ export async function logDecryption({ receiptId, assetRef, userRef, contentSha, 
   }
 
   try {
-    const tx = await c.contract.logDecryption(
-      receiptId,
-      assetRef,
-      userRef,
-      contentSha,
-      payloadCommit
-    );
+    let tx;
+    if (signatureCommit && typeof c.contract.logDecryptionWithSignature === 'function') {
+      try {
+        tx = await c.contract.logDecryptionWithSignature(
+          receiptId,
+          assetRef,
+          userRef,
+          contentSha,
+          payloadCommit,
+          signatureCommit
+        );
+      } catch {
+        // Fall back to 5-param classical signature if contract on Sepolia does not have 6-param method
+        tx = await c.contract.logDecryption(
+          receiptId,
+          assetRef,
+          userRef,
+          contentSha,
+          payloadCommit
+        );
+      }
+    } else {
+      tx = await c.contract.logDecryption(
+        receiptId,
+        assetRef,
+        userRef,
+        contentSha,
+        payloadCommit
+      );
+    }
+
     const receipt = await tx.wait();
     return {
       txHash: tx.hash,

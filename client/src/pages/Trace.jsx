@@ -83,27 +83,35 @@ const BAND = {
     ring: 'ring-attributed',
     text: 'text-attributed',
     chip: 'bg-attributed/10 text-attributed',
-    blurb: 'A confident match. The evidence points to one officer.',
+    blurb: 'A confident match (≥85%). Cryptographic & visual proof confirms the officer.',
   },
   PROBABLE: {
     label: 'Probable',
     ring: 'ring-probable',
     text: 'text-probable',
     chip: 'bg-probable/10 text-probable',
-    blurb: 'A lead, not a conclusion. Treat as a candidate to investigate.',
+    blurb: 'High probability match (60%–84%). Officer identified with high confidence.',
+  },
+  SUSPICION: {
+    label: 'Suspect Pool',
+    ring: 'ring-amber-500',
+    text: 'text-amber-600',
+    chip: 'bg-amber-500/10 text-amber-600',
+    blurb: 'Investigation window (30%–59%). Showing ranked suspect pool for inquiry.',
   },
   INCONCLUSIVE: {
     label: 'Inconclusive',
     ring: 'ring-inconclusive',
     text: 'text-inconclusive',
     chip: 'bg-inconclusive/10 text-inconclusive',
-    blurb: 'Below the threshold. The system does not name anyone here.',
+    blurb: 'Below the 30% threshold. Watermark destroyed or file is unrelated.',
   },
 };
 
 function Verdict({ result }) {
   const band = BAND[result.verdict] || BAND.INCONCLUSIVE;
   const pct = Math.round((result.confidence || 0) * 100);
+  const showSuspectPool = !result.match && result.suspects && result.suspects.length > 0 && pct >= 30;
 
   return (
     <div className="grid gap-5 lg:grid-cols-3">
@@ -123,13 +131,19 @@ function Verdict({ result }) {
         <p className="mt-3 max-w-[15rem] text-xs text-ink-muted">{band.blurb}</p>
       </div>
 
-      {/* match + reasons */}
+      {/* match + suspect pool + reasons */}
       <div className="space-y-5 lg:col-span-2">
         {result.match ? (
           <div className="rounded-3xl bg-night bg-gradient-to-br from-[#20220f] to-night p-5 text-white shadow-panel">
-            <h3 className="mb-3 text-sm font-bold">Matched release</h3>
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-              <Mt k="Officer" v={result.match.userName} />
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-lime">Matched release (Direct Attribution ≥60%)</h3>
+              <span className="rounded-full bg-lime/20 px-2.5 py-0.5 text-[11px] font-bold text-lime">
+                OFFICER IDENTIFIED
+              </span>
+            </div>
+            <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+              <Mt k="Officer Name" v={result.match.userName} />
+              <Mt k="Officer ID" v={`U-00${result.match.userId || '—'}`} />
               <Mt k="Department" v={result.match.department} />
               <Mt k="Document" v={result.match.assetTitle} />
               <Mt k="Device" v={result.match.deviceLabel} />
@@ -146,13 +160,131 @@ function Verdict({ result }) {
                 View on Etherscan ↗
               </a>
             )}
+
+            {/* Post-Quantum Non-Repudiation Proof Card */}
+            {result.match.pqcProof && (
+              <div className="mt-4 border-t border-white/10 pt-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+                      NIST ML-DSA-65 Non-Repudiation Proof
+                    </span>
+                  </div>
+                  <span className="rounded-md bg-emerald-500/20 px-2 py-0.5 text-[11px] font-bold text-emerald-300">
+                    {result.match.pqcProof.signatureVerified ? 'CRYPTOGRAPHICALLY VERIFIED' : 'PENDING ENROLLMENT'}
+                  </span>
+                </div>
+                <p className="mt-1.5 text-xs text-white/70">
+                  The recipient digitally signed this document release using their Post-Quantum private key (NIST FIPS 204). The signature is mathematically bound to the on-chain receipt — non-repudiation holds in a court of law.
+                </p>
+                <div className="mt-3 grid gap-2 rounded-xl bg-black/30 p-3 text-xs">
+                  {result.match.pqcProof.signatureCommit && (
+                    <div>
+                      <span className="text-white/40">Signature Commit (On-Chain): </span>
+                      <span className="mono text-lime font-medium">
+                        {result.match.pqcProof.signatureCommit}
+                      </span>
+                    </div>
+                  )}
+                  {result.match.pqcProof.signatureHex && (
+                    <div>
+                      <span className="text-white/40">ML-DSA-65 Signature: </span>
+                      <span className="mono text-white/80">
+                        {result.match.pqcProof.signatureHex}
+                      </span>
+                    </div>
+                  )}
+                  {result.match.pqcProof.publicKeyHex && (
+                    <div>
+                      <span className="text-white/40">Officer PQC Public Key: </span>
+                      <span className="mono text-white/80">
+                        {result.match.pqcProof.publicKeyHex}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : showSuspectPool ? (
+          <div className="card border-2 border-amber-300/40 bg-amber-500/5 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="flex h-3 w-3 rounded-full bg-amber-500 animate-ping" />
+                <h3 className="text-sm font-bold uppercase tracking-wider text-amber-700">
+                  Suspect Pool (शक के दायरे में अधिकारी) — 30%–60% Range
+                </h3>
+              </div>
+              <span className="rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-bold text-amber-700">
+                {result.suspects.length} Officers Under Investigation
+              </span>
+            </div>
+            <p className="mt-2 text-xs text-ink-muted leading-relaxed">
+              The uploaded file has suffered screenshot borders, crop, or compression noise. Single-person definitive attribution is held to prevent wrongful accusation. Based on <strong>watermark frequency correlation</strong> and <strong>decryption access chronology</strong>, the following officers fall inside the circle of suspicion:
+            </p>
+
+            <div className="mt-4 space-y-2.5">
+              {result.suspects.map((s) => (
+                <div
+                  key={s.rank}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200/50 bg-white p-3.5 shadow-sm"
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`grid h-8 w-8 place-items-center rounded-xl text-xs font-bold ${
+                        s.suspicionLevel === 'HIGH'
+                          ? 'bg-rose-500 text-white'
+                          : s.suspicionLevel === 'MEDIUM'
+                          ? 'bg-amber-500 text-white'
+                          : 'bg-slate-400 text-white'
+                      }`}
+                    >
+                      #{s.rank}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-ink">{s.userName}</span>
+                        <span className="rounded bg-slate-100 px-1.5 py-0.2 text-[10px] font-mono text-slate-600">
+                          ID: U-00{s.userId}
+                        </span>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                            s.suspicionLevel === 'HIGH'
+                              ? 'bg-rose-100 text-rose-700'
+                              : s.suspicionLevel === 'MEDIUM'
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-slate-100 text-slate-600'
+                          }`}
+                        >
+                          {s.suspicionLevel} SUSPICION
+                        </span>
+                      </div>
+                      <div className="text-xs text-ink-muted mt-0.5">
+                        {s.department || 'HQ'} · Device: <span className="font-mono">{s.deviceLabel || 'SECURE-NODE'}</span> · Decrypted: {new Date(s.decryptedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <div className="text-xs font-bold text-ink">{s.bitMatchPct}% Bit Match</div>
+                      <div className="text-[10px] text-ink-muted">({s.bitsMatched}/{s.totalBits} bits)</div>
+                    </div>
+                    <span className="rounded-lg bg-amber-50 border border-amber-200 px-2 py-1 text-[11px] font-semibold text-amber-800">
+                      Interrogate
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         ) : (
           <div className="card p-5">
             <h3 className="text-sm font-bold text-ink">No name returned</h3>
             <p className="mt-1 text-sm text-ink-muted">
-              Confidence is below the reporting threshold, so no officer is named. That is the
-              system working as intended — it does not guess.
+              Confidence is below the 30% reporting threshold, so no officer is named. That is the
+              system working as intended — it avoids false accusations when the watermark is completely destroyed.
             </p>
           </div>
         )}

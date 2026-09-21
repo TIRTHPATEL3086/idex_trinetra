@@ -27,6 +27,7 @@ contract DecryptionProvenance is AccessControl {
         bytes32 payloadCommit; // keccak256(payloadBits || salt)
         uint64 timestamp; // block-anchored; cannot be back-dated
         bool exists;
+        bytes32 signatureCommit; // keccak256(ML-DSA-65 signature) - NIST FIPS 204 non-repudiation proof
     }
 
     mapping(bytes32 => Receipt) private receipts; // receiptId -> Receipt
@@ -43,6 +44,16 @@ contract DecryptionProvenance is AccessControl {
         uint64 timestamp
     );
 
+    event DecryptionLoggedWithSignature(
+        bytes32 indexed receiptId,
+        bytes32 indexed assetRef,
+        bytes32 indexed userRef,
+        bytes32 contentSha,
+        bytes32 payloadCommit,
+        bytes32 signatureCommit,
+        uint64 timestamp
+    );
+
     /// @notice Stretch goal: 50 receipts anchored by one Merkle root, one tx.
     event BatchLogged(bytes32 indexed merkleRoot, uint32 count, uint64 timestamp);
 
@@ -56,9 +67,7 @@ contract DecryptionProvenance is AccessControl {
     }
 
     /**
-     * @notice Write one decryption receipt. Called by the backend the moment a
-     *         file is decrypted — BEFORE the watermarked copy is handed over.
-     *         If this reverts, no marked file ever leaves the system.
+     * @notice Write one decryption receipt without signature (classical).
      */
     function logDecryption(
         bytes32 receiptId,
@@ -67,6 +76,31 @@ contract DecryptionProvenance is AccessControl {
         bytes32 contentSha,
         bytes32 payloadCommit
     ) external onlyRole(LOGGER_ROLE) {
+        _logReceipt(receiptId, assetRef, userRef, contentSha, payloadCommit, bytes32(0));
+    }
+
+    /**
+     * @notice Write one decryption receipt with post-quantum ML-DSA-65 signature commit.
+     */
+    function logDecryptionWithSignature(
+        bytes32 receiptId,
+        bytes32 assetRef,
+        bytes32 userRef,
+        bytes32 contentSha,
+        bytes32 payloadCommit,
+        bytes32 sigCommit
+    ) external onlyRole(LOGGER_ROLE) {
+        _logReceipt(receiptId, assetRef, userRef, contentSha, payloadCommit, sigCommit);
+    }
+
+    function _logReceipt(
+        bytes32 receiptId,
+        bytes32 assetRef,
+        bytes32 userRef,
+        bytes32 contentSha,
+        bytes32 payloadCommit,
+        bytes32 sigCommit
+    ) internal {
         if (receiptId == bytes32(0)) revert ZeroReceiptId();
         if (receipts[receiptId].exists) revert ReceiptExists(receiptId);
 
@@ -76,7 +110,8 @@ contract DecryptionProvenance is AccessControl {
             contentSha: contentSha,
             payloadCommit: payloadCommit,
             timestamp: uint64(block.timestamp),
-            exists: true
+            exists: true,
+            signatureCommit: sigCommit
         });
 
         byAsset[assetRef].push(receiptId);
@@ -92,6 +127,18 @@ contract DecryptionProvenance is AccessControl {
             payloadCommit,
             uint64(block.timestamp)
         );
+
+        if (sigCommit != bytes32(0)) {
+            emit DecryptionLoggedWithSignature(
+                receiptId,
+                assetRef,
+                userRef,
+                contentSha,
+                payloadCommit,
+                sigCommit,
+                uint64(block.timestamp)
+            );
+        }
     }
 
     /// @notice Read one receipt back. Used by /api/trace to cross-check a match.

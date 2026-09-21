@@ -33,6 +33,7 @@
     "setup": "npm install && npm --prefix client install && npm run db:generate"
   },
   "dependencies": {
+    "@noble/post-quantum": "^0.7.1",
     "@openzeppelin/contracts": "^5.0.2",
     "@prisma/client": "^5.22.0",
     "cors": "^2.8.5",

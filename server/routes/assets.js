@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { Router } from 'express';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -11,13 +12,14 @@ import { singleFile } from '../middleware/upload.js';
 import { validate } from '../middleware/validate.js';
 import { requireCap } from '../middleware/auth.js';
 import { encrypt, sha256 } from '../core/index.js';
+import { encapsulateKey } from '../core/pqc.js';
 
 /**
- * Upload -> SHA-256 -> AES-256-GCM encrypt -> store -> list.
+ * Upload -> SHA-256 -> Per-Asset AES-256-GCM encrypt -> ML-KEM-768 broadcast encapsulation -> store.
  *
- * The plaintext is never written to disk. Multer keeps it in memory, we encrypt
- * it in memory, and only the ciphertext reaches `data/cipher/`. That is what
- * lets us say the system holds no readable copy of a protected document.
+ * The plaintext is never written to disk. A unique 32-byte content encryption key (CEK)
+ * is generated per asset. The CEK is then encapsulated using NIST ML-KEM-768 to every
+ * authorized recipient's Post-Quantum public key.
  */
 const router = Router();
 
@@ -27,7 +29,22 @@ const UploadBody = z.object({
     .enum(['RESTRICTED', 'CONFIDENTIAL', 'SECRET'])
     .optional()
     .default('CONFIDENTIAL'),
+  authorizedUserIds: z.any().optional(),
 });
+
+function parseAuthorizedIds(raw) {
+  if (!raw) return null;
+  if (Array.isArray(raw)) return raw.map(Number).filter((n) => Number.isInteger(n) && n > 0);
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.map(Number).filter((n) => Number.isInteger(n) && n > 0);
+    } catch {
+      return raw.split(',').map((s) => Number(s.trim())).filter((n) => Number.isInteger(n) && n > 0);
+    }
+  }
+  return null;
+}
 
 // ------------------------------------------------- POST /api/assets ---------
 router.post(
@@ -42,8 +59,11 @@ router.post(
       const plaintext = req.file.buffer;
       const originalSha = sha256(plaintext);
 
+      // Generate a fresh, unique 32-byte content key for this asset
+      const contentKey = crypto.randomBytes(32);
+
       // Encrypt before anything touches the filesystem.
-      const { ciphertext, iv, authTag } = encrypt(plaintext, masterKey());
+      const { ciphertext, iv, authTag } = encrypt(plaintext, contentKey);
 
       await fs.mkdir(env.cipherDir, { recursive: true });
 
@@ -73,11 +93,46 @@ router.post(
         },
       });
 
+      // Determine authorized recipients
+      const explicitIds = parseAuthorizedIds(req.valid.authorizedUserIds);
+      let targetUsers;
+      if (explicitIds && explicitIds.length > 0) {
+        targetUsers = await prisma.user.findMany({
+          where: { id: { in: explicitIds }, active: true },
+        });
+      } else {
+        // Default to all active users with PQC keys enrolled
+        targetUsers = await prisma.user.findMany({
+          where: { active: true, kemPublicKey: { not: null } },
+        });
+      }
+
+      // Per-recipient ML-KEM-768 broadcast encapsulation
+      let encapsulatedCount = 0;
+      for (const recipient of targetUsers) {
+        if (!recipient.kemPublicKey) continue;
+        const { sharedSecret, ciphertext: kemCiphertext } = encapsulateKey(recipient.kemPublicKey);
+        const { ciphertext: encKey, iv: keyIv, authTag: keyTag } = encrypt(contentKey, sharedSecret);
+
+        await prisma.assetKeyEncapsulation.create({
+          data: {
+            assetId: asset.id,
+            userId: recipient.id,
+            kemCiphertext: Buffer.from(kemCiphertext),
+            encryptedKey: encKey,
+            iv: keyIv,
+            authTag: keyTag,
+          },
+        });
+        encapsulatedCount++;
+      }
+
       res.status(201).json({
         assetId: asset.id,
         title: asset.title,
         sha256: Buffer.from(asset.originalSha).toString('hex'),
         sizeBytes: asset.sizeBytes,
+        encapsulatedCount,
       });
     } catch (err) {
       next(err);
@@ -90,7 +145,10 @@ router.get('/', requireCap('assets:read'), async (_req, res, next) => {
   try {
     const rows = await prisma.asset.findMany({
       orderBy: { createdAt: 'desc' },
-      include: { _count: { select: { events: true } } },
+      include: {
+        _count: { select: { events: true, encapsulations: true } },
+        encapsulations: { select: { userId: true } },
+      },
     });
 
     res.json({
@@ -100,6 +158,8 @@ router.get('/', requireCap('assets:read'), async (_req, res, next) => {
         classification: a.classification,
         createdAt: a.createdAt.toISOString(),
         decryptCount: a._count.events,
+        encapsulationCount: a._count.encapsulations,
+        authorizedUserIds: a.encapsulations.map((e) => e.userId),
       })),
     });
   } catch (err) {
@@ -115,7 +175,10 @@ router.get('/:assetId', requireCap('assets:read'), async (req, res, next) => {
 
     const a = await prisma.asset.findUnique({
       where: { id: assetId },
-      include: { _count: { select: { events: true } } },
+      include: {
+        _count: { select: { events: true, encapsulations: true } },
+        encapsulations: { select: { userId: true } },
+      },
     });
     if (!a) throw notFound(`No asset ${assetId}`);
 
@@ -129,6 +192,8 @@ router.get('/:assetId', requireCap('assets:read'), async (req, res, next) => {
       assetRef: bufferToHex(a.assetRef),
       createdAt: a.createdAt.toISOString(),
       decryptCount: a._count.events,
+      encapsulationCount: a._count.encapsulations,
+      authorizedUserIds: a.encapsulations.map((e) => e.userId),
     });
   } catch (err) {
     next(err);
