@@ -42,6 +42,31 @@ describe('DecryptionProvenance', function () {
     expect(await contract.totalReceipts()).to.equal(1n);
   });
 
+  it('stores a receipt with ML-DSA-65 signatureCommit and emits both events', async function () {
+    const receiptId = id('receipt-pqc-1');
+    const assetRef = id('asset-12');
+    const userRef = id('user-17');
+    const contentSha = id('content');
+    const payloadCommit = id('payload');
+    const sigCommit = id('mldsa65-signature-commit');
+
+    await expect(
+      contract.logDecryptionWithSignature(
+        receiptId,
+        assetRef,
+        userRef,
+        contentSha,
+        payloadCommit,
+        sigCommit
+      )
+    )
+      .to.emit(contract, 'DecryptionLoggedWithSignature')
+      .withArgs(receiptId, assetRef, userRef, contentSha, payloadCommit, sigCommit, anyUint64);
+
+    const r = await contract.getReceipt(receiptId);
+    expect(r.signatureCommit).to.equal(sigCommit);
+  });
+
   it('refuses a duplicate receiptId', async function () {
     const receiptId = id('receipt-dup');
     await contract.logDecryption(receiptId, id('a'), id('u'), id('c'), id('p'));

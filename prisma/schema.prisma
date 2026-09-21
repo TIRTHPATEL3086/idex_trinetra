@@ -25,7 +25,8 @@ model Asset {
   sizeBytes      Int      @default(0)
   createdAt      DateTime @default(now())
 
-  events DecryptionEvent[]
+  events         DecryptionEvent[]
+  encapsulations AssetKeyEncapsulation[]
 }
 
 /// Who may sign in, and what they are allowed to do once they have.
@@ -56,7 +57,32 @@ model User {
   active       Boolean   @default(true)
   lastLoginAt  DateTime?
 
-  events DecryptionEvent[]
+  // ---- Post-Quantum Cryptography (NIST FIPS 203 & FIPS 204) ----
+  kemPublicKey     Bytes? // ML-KEM-768 public key (1184 bytes)
+  dsaPublicKey     Bytes? // ML-DSA-65 public key (1952 bytes)
+  encryptedPqcKeys String? // AES-256-GCM encrypted private key bundle for backup/restore
+
+  events         DecryptionEvent[]
+  encapsulations AssetKeyEncapsulation[]
+}
+
+/// Per-recipient broadcast encryption key encapsulation (NIST ML-KEM-768).
+model AssetKeyEncapsulation {
+  id            Int      @id @default(autoincrement())
+  asset         Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  assetId       Int
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        Int
+
+  kemCiphertext Bytes    // ML-KEM-768 encapsulated key (1088 bytes)
+  encryptedKey  Bytes    // AES-256-GCM encrypted content key (32 bytes)
+  iv            Bytes    // 12 bytes
+  authTag       Bytes    // 16 bytes
+  createdAt     DateTime @default(now())
+
+  @@unique([assetId, userId])
+  @@index([assetId])
+  @@index([userId])
 }
 
 /// One decryption = one receipt = one watermarked copy. This is the register.
@@ -75,6 +101,11 @@ model DecryptionEvent {
 
   contentSha Bytes // SHA-256 of the marked file that was released
   md5Digest  Bytes // registry fingerprint (explicit PS requirement)
+
+  // Non-repudiation: recipient's PQC digital signature on release receipt
+  decryptionSignature Bytes? // ML-DSA-65 signature (3309 bytes)
+  signatureCommit     Bytes? // keccak256(decryptionSignature) anchored on chain
+  signatureAlgorithm  String? @default("ML-DSA-65")
 
   // Perceptual hashes — the BK-tree search index. Stored as BigInt (64 bits).
   pHash BigInt

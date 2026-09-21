@@ -9,6 +9,7 @@
  * The watermark itself is covered by `npm run attack:suite`, not here.
  */
 
+import nodeCrypto from 'node:crypto';
 import * as payload from '../server/core/payload.js';
 import * as bktree from '../server/core/bktree.js';
 
@@ -155,6 +156,80 @@ test('rsDecode corrects single flipped bit in 48-bit extracted payload', () => {
   const res = ecc.rsDecode(singleFlip);
   eq(res.corrected, true, 'corrected flag');
   eq(res.bits, bits, 'recovered bits');
+});
+
+// -------------------------------------------------- Post-Quantum Crypto -----
+
+const pqc = await import('../server/core/pqc.js');
+
+test('PQC keygen creates valid ML-KEM-768 and ML-DSA-65 key pairs', () => {
+  const keys = pqc.generatePqcKeyPair();
+  eq(keys.kemPublicKey.length, 1184, 'KEM pubkey len');
+  eq(keys.dsaPublicKey.length, 1952, 'DSA pubkey len');
+});
+
+test('ML-KEM-768 encapsulate and decapsulate roundtrip matches shared secret', () => {
+  const keys = pqc.generatePqcKeyPair();
+  const enc = pqc.encapsulateKey(keys.kemPublicKey);
+  eq(enc.cipherText.length, 1088, 'KEM ciphertext len');
+  eq(enc.sharedSecret.length, 32, 'KEM shared secret len');
+  const dec = pqc.decapsulateKey(enc.cipherText, keys.kemSecretKey);
+  eq(Buffer.from(dec).equals(enc.sharedSecret), true, 'shared secret matches');
+});
+
+test('ML-DSA-65 signs and verifies receipt data successfully', () => {
+  const keys = pqc.generatePqcKeyPair();
+  const message = Buffer.from('receipt:0x7f2c8b41e93ad6570c1f2b8e4a97d3510fbc62e8a4d17395c0e8b2f61a4d9037');
+  const sig = pqc.signDecryptionReceipt(keys.dsaSecretKey, message);
+  eq(sig.length, 3309, 'DSA signature len');
+  const valid = pqc.verifyDecryptionSignature(keys.dsaPublicKey, message, sig);
+  eq(valid, true, 'DSA signature valid');
+  const invalid = pqc.verifyDecryptionSignature(keys.dsaPublicKey, Buffer.from('tampered message'), sig);
+  eq(invalid, false, 'tampered message rejected');
+});
+
+test('PQC key bundle encrypts and decrypts with recipient passphrase', () => {
+  const keys = pqc.generatePqcKeyPair();
+  const bundle = pqc.encryptKeyBundle(keys, 'secure-passphrase-123');
+  const decrypted = pqc.decryptKeyBundle(bundle, 'secure-passphrase-123');
+  eq(decrypted.kemSecretKey.equals(keys.kemSecretKey), true, 'KEM secret key matches');
+  eq(decrypted.dsaSecretKey.equals(keys.dsaSecretKey), true, 'DSA secret key matches');
+});
+
+test('Complete PQC broadcast encryption and ML-DSA-65 non-repudiation pipeline', () => {
+  const officerKeys = pqc.generatePqcKeyPair();
+  const contentKey = nodeCrypto.randomBytes(32);
+
+  // Sender encapsulates content key to officer's KEM public key
+  const encap = pqc.encapsulateKey(officerKeys.kemPublicKey);
+  const iv = nodeCrypto.randomBytes(12);
+  const cipher = nodeCrypto.createCipheriv('aes-256-gcm', encap.sharedSecret, iv);
+  const encKey = Buffer.concat([cipher.update(contentKey), cipher.final()]);
+  const tag = cipher.getAuthTag();
+
+  // Recipient decapsulates
+  const decSharedSecret = pqc.decapsulateKey(encap.ciphertext, officerKeys.kemSecretKey);
+  const decipher = nodeCrypto.createDecipheriv('aes-256-gcm', decSharedSecret, iv);
+  decipher.setAuthTag(tag);
+  const recoveredContentKey = Buffer.concat([decipher.update(encKey), decipher.final()]);
+  eq(recoveredContentKey.equals(contentKey), true, 'content key recovered via ML-KEM-768');
+
+  // Recipient signs receipt
+  const receiptIdHex = '0x11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff';
+  const userRefHex = '0xaabbccddeeff11223344556677889900aabbccddeeff11223344556677889900';
+  const receiptDigest = nodeCrypto
+    .createHash('sha256')
+    .update(
+      Buffer.concat([
+        Buffer.from(receiptIdHex.slice(2), 'hex'),
+        Buffer.from(userRefHex.slice(2), 'hex'),
+      ])
+    )
+    .digest();
+
+  const signature = pqc.signDecryptionReceipt(receiptDigest, officerKeys.dsaSecretKey);
+  const verified = pqc.verifyDecryptionSignature(signature, receiptDigest, officerKeys.dsaPublicKey);
+  eq(verified, true, 'ML-DSA-65 signature verified on receipt digest');
 });
 
 // ---------------------------------------------------------------------------

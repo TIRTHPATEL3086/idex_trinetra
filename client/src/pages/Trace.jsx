@@ -146,6 +146,52 @@ function Verdict({ result }) {
                 View on Etherscan ↗
               </a>
             )}
+
+            {/* Post-Quantum Non-Repudiation Proof Card */}
+            {result.match.pqcProof && (
+              <div className="mt-4 border-t border-white/10 pt-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+                      NIST ML-DSA-65 Non-Repudiation Proof
+                    </span>
+                  </div>
+                  <span className="rounded-md bg-emerald-500/20 px-2 py-0.5 text-[11px] font-bold text-emerald-300">
+                    {result.match.pqcProof.signatureVerified ? 'CRYPTOGRAPHICALLY VERIFIED' : 'PENDING ENROLLMENT'}
+                  </span>
+                </div>
+                <p className="mt-1.5 text-xs text-white/70">
+                  The recipient digitally signed this document release using their Post-Quantum private key (NIST FIPS 204). The signature is mathematically bound to the on-chain receipt — non-repudiation holds in a court of law.
+                </p>
+                <div className="mt-3 grid gap-2 rounded-xl bg-black/30 p-3 text-xs">
+                  {result.match.pqcProof.signatureCommit && (
+                    <div>
+                      <span className="text-white/40">Signature Commit (On-Chain): </span>
+                      <span className="mono text-lime font-medium">
+                        {result.match.pqcProof.signatureCommit}
+                      </span>
+                    </div>
+                  )}
+                  {result.match.pqcProof.signatureHex && (
+                    <div>
+                      <span className="text-white/40">ML-DSA-65 Signature: </span>
+                      <span className="mono text-white/80">
+                        {result.match.pqcProof.signatureHex}
+                      </span>
+                    </div>
+                  )}
+                  {result.match.pqcProof.publicKeyHex && (
+                    <div>
+                      <span className="text-white/40">Officer PQC Public Key: </span>
+                      <span className="mono text-white/80">
+                        {result.match.pqcProof.publicKeyHex}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="card p-5">

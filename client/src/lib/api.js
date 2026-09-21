@@ -72,13 +72,25 @@ export const getAsset = (assetId) => request(`/api/assets/${assetId}`);
 
 export const getUsers = () => request('/api/users');
 
-export function uploadAsset({ file, title, classification }) {
+export function uploadAsset({ file, title, classification, authorizedUserIds }) {
   const form = new FormData();
   form.append('file', file);
   form.append('title', title);
   if (classification) form.append('classification', classification);
+  if (authorizedUserIds && authorizedUserIds.length > 0) {
+    form.append('authorizedUserIds', JSON.stringify(authorizedUserIds));
+  }
   return request('/api/assets', { method: 'POST', body: form });
 }
+
+export const getPqcPublicKey = (userId) => request(`/api/keys/public/${userId}`);
+export const getPqcKeyBundle = () => request('/api/keys/bundle');
+export const generatePqcKeys = (passphrase) =>
+  request('/api/keys/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ passphrase }),
+  });
 
 export const decryptAsset = ({ assetId, userId, deviceLabel }) =>
   request('/api/decrypt', {
