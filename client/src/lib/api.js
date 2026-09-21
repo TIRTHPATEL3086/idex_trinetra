@@ -92,11 +92,11 @@ export const generatePqcKeys = (passphrase) =>
     body: JSON.stringify({ passphrase }),
   });
 
-export const decryptAsset = ({ assetId, userId, deviceLabel }) =>
+export const decryptAsset = ({ assetId, userId, deviceLabel, passphrase }) =>
   request('/api/decrypt', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ assetId, userId, deviceLabel }),
+    body: JSON.stringify({ assetId, userId, deviceLabel, passphrase }),
   });
 
 export function traceFile(file) {

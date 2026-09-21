@@ -52,6 +52,7 @@ export default function Decrypt() {
         assetId: Number(form.assetId),
         userId: Number(form.userId),
         deviceLabel: form.deviceLabel || 'UNKNOWN-DEVICE',
+        passphrase: form.passphrase || undefined,
       });
       setResult(r);
       setStatus('done');
@@ -118,6 +119,16 @@ export default function Decrypt() {
             />
           </Field>
 
+          <Field label="Key Passphrase (optional)">
+            <input
+              type="password"
+              className="input"
+              value={form.passphrase || ''}
+              onChange={(e) => setForm({ ...form, passphrase: e.target.value })}
+              placeholder="Auto-unlocks for demo officers"
+            />
+          </Field>
+
           <button type="submit" className="btn-lime w-full" disabled={status === 'working'}>
             {status === 'working'
               ? 'Embedding invisible mark (Haar DWT)…'
@@ -162,6 +173,9 @@ function Receipt({ result, officer, asset, device }) {
           <ChainRow k="tx hash" v={shortHash(result.txHash, 10, 6)} />
           <ChainRow k="block" v={result.blockNumber ?? '—'} />
           <ChainRow k="payload" v={`${result.payloadBits?.length ?? 0} bits embedded`} />
+          {result.pqc?.signatureCommit && (
+            <ChainRow k="sig commit" v={shortHash(result.pqc.signatureCommit, 10, 6)} />
+          )}
         </dl>
         {result.etherscanUrl && (
           <a
@@ -172,6 +186,23 @@ function Receipt({ result, officer, asset, device }) {
           >
             View on Etherscan ↗
           </a>
+        )}
+
+        {/* PQC status inside receipt */}
+        {result.pqc && (
+          <div className="mt-4 border-t border-white/10 pt-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-emerald-400">
+                NIST Post-Quantum Cryptography
+              </span>
+              <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300">
+                {result.pqc.dsaAlgorithm ?? 'ML-DSA-65'}
+              </span>
+            </div>
+            <div className="mt-1 text-[11px] text-white/60">
+              Content decrypted via {result.pqc.kemAlgorithm}. Recipient signature committed to ledger.
+            </div>
+          </div>
         )}
       </div>
 
