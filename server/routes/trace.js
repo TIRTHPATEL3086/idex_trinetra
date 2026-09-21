@@ -74,13 +74,34 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
       // A malformed payload is a signal, not a crash. It just lowers the score.
     }
 
-    // Fall back to the nearest perceptual-hash candidate when the watermark
-    // was destroyed — this is what catches screenshots and heavy re-encodes.
+    // Fall back to the candidate with highest bit agreement among perceptual-hash candidates
+    // when CRC fails due to compression noise — this accurately identifies the leaker across candidates.
     if (!event && candidates.length) {
-      event = await prisma.decryptionEvent.findUnique({
-        where: { id: candidates[0].id },
+      const candidateEvents = await prisma.decryptionEvent.findMany({
+        where: { id: { in: candidates.map((c) => c.id) } },
         include: { asset: true, user: true },
       });
+
+      let bestEvent = null;
+      let bestMatching = -1;
+
+      for (const candEv of candidateEvents) {
+        const matches = bitsMatching(marked.payloadBits, candEv.payloadBits);
+        if (matches > bestMatching) {
+          bestMatching = matches;
+          bestEvent = candEv;
+        }
+      }
+
+      // To attribute to a specific officer among multiple candidates, the best
+      // candidate MUST significantly beat random chance (~24/48 bits).
+      // If bestMatching < 32/48, the watermark is too degraded to distinguish
+      // which officer decrypted it — so we refuse to guess and leave event = null.
+      if (bestMatching >= 32) {
+        event = bestEvent;
+      } else {
+        event = null;
+      }
     }
 
     // --- Distances between the leaked file and the candidate we settled on --
