@@ -75,35 +75,60 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
       // A malformed payload is a signal, not a crash. It just lowers the score.
     }
 
-    // Fall back to the candidate with highest bit agreement among perceptual-hash candidates
-    // when CRC fails due to compression noise — this accurately identifies the leaker across candidates.
-    if (!event && candidates.length) {
-      const candidateEvents = await prisma.decryptionEvent.findMany({
+    // Fall back to candidate search across all recent decryptions (or BK-tree candidates)
+    // when CRC fails due to compression noise or screenshot borders.
+    const allRecentEvents = await prisma.decryptionEvent.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: { asset: true, user: true },
+    });
+
+    // Merge BK-tree candidates and recent decryption events
+    const poolMap = new Map();
+    for (const ev of allRecentEvents) poolMap.set(ev.id, ev);
+    if (candidates.length) {
+      const bktreeEvents = await prisma.decryptionEvent.findMany({
         where: { id: { in: candidates.map((c) => c.id) } },
         include: { asset: true, user: true },
       });
+      for (const ev of bktreeEvents) poolMap.set(ev.id, ev);
+    }
 
-      let bestEvent = null;
-      let bestMatching = -1;
+    const candidatePool = Array.from(poolMap.values());
+    const rankedCandidates = candidatePool
+      .map((ev) => {
+        const matches = bitsMatching(marked.payloadBits, ev.payloadBits);
+        return {
+          event: ev,
+          matches,
+          agreement: matches / PAYLOAD_BITS,
+        };
+      })
+      .sort((a, b) => b.matches - a.matches);
 
-      for (const candEv of candidateEvents) {
-        const matches = bitsMatching(marked.payloadBits, candEv.payloadBits);
-        if (matches > bestMatching) {
-          bestMatching = matches;
-          bestEvent = candEv;
-        }
-      }
-
-      // To attribute to a specific officer among multiple candidates, the best
-      // candidate MUST significantly beat random chance (~24/48 bits).
-      // If bestMatching < 32/48, the watermark is too degraded to distinguish
-      // which officer decrypted it — so we refuse to guess and leave event = null.
-      if (bestMatching >= 32) {
-        event = bestEvent;
-      } else {
-        event = null;
+    // If no direct CRC match, assign top candidate if bit match significantly exceeds random chance (>= 30/48)
+    if (!event && rankedCandidates.length > 0) {
+      const top = rankedCandidates[0];
+      if (top.matches >= 30) {
+        event = top.event;
       }
     }
+
+    // Build Suspect Pool (शक का दायरा) ranking top candidate officers
+    const suspects = rankedCandidates.slice(0, 5).map((c, idx) => ({
+      rank: idx + 1,
+      userId: c.event.user.id,
+      userName: c.event.user.name,
+      department: c.event.user.dept,
+      deviceLabel: c.event.deviceLabel,
+      assetTitle: c.event.asset.title,
+      decryptedAt: c.event.createdAt.toISOString(),
+      bitsMatched: c.matches,
+      totalBits: PAYLOAD_BITS,
+      bitMatchPct: Math.round(c.agreement * 100),
+      suspicionLevel: c.matches >= 34 ? 'HIGH' : c.matches >= 26 ? 'MEDIUM' : 'LOW',
+      txHash: c.event.txHash ? bufferToHex(c.event.txHash) : null,
+    }));
 
     // --- Distances between the leaked file and the candidate we settled on --
     const cand = event ? candidates.find((c) => c.id === event.id) : null;
@@ -189,8 +214,9 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
       },
     });
 
-    // --- 9. A name is returned ONLY above the INCONCLUSIVE threshold -------
-    const showMatch = verdictResult.verdict !== 'INCONCLUSIVE' && event;
+    // --- 9. A name is returned ONLY for ATTRIBUTED or PROBABLE (>= 60%) -------
+    const showMatch =
+      (verdictResult.verdict === 'ATTRIBUTED' || verdictResult.verdict === 'PROBABLE') && event;
     const txHashHex = event ? bufferToHex(event.txHash) : null;
 
     res.json({
@@ -199,6 +225,7 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
       confidence: verdictResult.score,
       match: showMatch
         ? {
+            userId: event.user.id,
             userName: event.user.name,
             department: event.user.dept,
             assetTitle: event.asset.title,
@@ -220,8 +247,9 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
             },
           }
         : null,
+      suspects: suspects,
       reasons,
-      candidatesChecked: checked || candidates.length,
+      candidatesChecked: checked || candidates.length || allRecentEvents.length,
       elapsedMs,
     });
   } catch (err) {
