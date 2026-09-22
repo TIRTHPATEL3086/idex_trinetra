@@ -95,25 +95,10 @@ export const ROLE_UI = {
     tint: 'bg-lime',
     demo: { email: 'u017@example.gov', password: 'officer123' },
   },
-  INVESTIGATOR: {
-    label: 'Forensic Analyst',
-    short: 'Investigator',
-    blurb: 'Traces leaked files. Cannot decrypt, so cannot manufacture evidence.',
-    badge: 'bg-attributed/15 text-attributed',
-    tint: 'bg-attributed',
-    demo: { email: 'a004@example.gov', password: 'analyst123' },
-  },
-  AUDITOR: {
-    label: 'Oversight',
-    short: 'Auditor',
-    blurb: 'Read-only witness. Neither decrypts nor traces.',
-    badge: 'bg-probable/15 text-probable',
-    tint: 'bg-probable',
-    demo: { email: 'audit@example.gov', password: 'auditor123' },
-  },
+  // INVESTIGATOR and AUDITOR demo roles removed per project requirements
 };
 
-export const ROLE_ORDER = ['ADMIN', 'OFFICER', 'INVESTIGATOR', 'AUDITOR'];
+export const ROLE_ORDER = ['ADMIN', 'OFFICER'];
 
 /** Initials for the avatar — "Officer U-017" -> "OU". */
 export function initialsOf(name = '') {

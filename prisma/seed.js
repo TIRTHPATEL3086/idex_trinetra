@@ -66,27 +66,15 @@ const USERS = [
     role: 'OFFICER',
     password: 'officer123',
   },
-  {
-    name: 'Analyst A-004',
-    dept: 'Intel Cell',
-    email: 'a004@example.gov',
-    role: 'INVESTIGATOR',
-    password: 'analyst123',
-  },
-  {
-    name: 'Admin Desk',
-    dept: 'HQ',
-    email: 'admin@example.gov',
-    role: 'ADMIN',
-    password: 'admin123',
-  },
-  {
-    name: 'Oversight Cell',
-    dept: 'Vigilance',
-    email: 'audit@example.gov',
-    role: 'AUDITOR',
-    password: 'auditor123',
-  },
+// INVESTIGATOR demo user removed per project requirements
+// AUDITOR demo user removed per project requirements
+{
+  name: 'Admin Desk',
+  dept: 'HQ',
+  email: 'admin@example.gov',
+  role: 'ADMIN',
+  password: 'admin123',
+},
 ];
 
 const ASSETS = [

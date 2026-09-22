@@ -37,11 +37,10 @@ model Asset {
 /// OFFICER cannot trace, so nobody investigates their own leak. Only an ADMIN
 /// holds both, and an AUDITOR holds neither.
 enum Role {
-  ADMIN /// Registry administrator — uploads, releases, investigates, audits.
-  OFFICER /// Clearance holder — may release a copy to THEMSELVES only.
-  INVESTIGATOR /// Forensic analyst — traces leaks. Must never decrypt.
-  AUDITOR /// Oversight — read-only. Neither decrypts nor traces.
+  ADMIN // Registry administrator — uploads, releases, investigations, audits.
+  OFFICER // Clearance holder — may release a copy to themselves only.
 }
+
 
 /// A person who may decrypt. The NAME NEVER GOES ON CHAIN — only `userRef`.
 model User {
