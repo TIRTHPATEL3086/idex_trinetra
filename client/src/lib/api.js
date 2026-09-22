@@ -117,6 +117,9 @@ export const getInvestigations = () => request('/api/trace/investigations');
 
 export const getAudit = (assetId) => request(`/api/audit/${assetId}`);
 
+export const toggleUserActive = (userId) =>
+  request(`/api/users/${userId}/toggle-active`, { method: 'POST' });
+
 export const getMetrics = () => request('/api/metrics');
 
 export const markedFileUrl = (downloadUrl) => `${BASE}${downloadUrl}`;
