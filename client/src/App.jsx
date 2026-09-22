@@ -97,7 +97,7 @@ function Shell() {
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
             <HealthChip health={health} />
             <NotificationsBell health={health} />
-            <WalletButton />
+            <WalletButton health={health} />
             <AccountMenu user={user} />
           </div>
         </header>
@@ -404,7 +404,7 @@ function RoleCard({ user }) {
 const short = (a) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '');
 
 /** Real MetaMask connect via window.ethereum. Degrades cleanly with no wallet. */
-function WalletButton() {
+function WalletButton({ health }) {
   const [account, setAccount] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -416,9 +416,19 @@ function WalletButton() {
       .request({ method: 'eth_accounts' })
       .then((a) => a?.[0] && setAccount(a[0]))
       .catch(() => {});
-    const onChange = (a) => setAccount(a?.[0] ?? null);
-    eth.on?.('accountsChanged', onChange);
-    return () => eth.removeListener?.('accountsChanged', onChange);
+    const onAccountsChange = (a) => setAccount(a?.[0] ?? null);
+    const onChainChange = () => {
+      eth
+        .request({ method: 'eth_accounts' })
+        .then((a) => a?.[0] && setAccount(a[0]))
+        .catch(() => {});
+    };
+    eth.on?.('accountsChanged', onAccountsChange);
+    eth.on?.('chainChanged', onChainChange);
+    return () => {
+      eth.removeListener?.('accountsChanged', onAccountsChange);
+      eth.removeListener?.('chainChanged', onChainChange);
+    };
   }, []);
 
   async function connect() {
@@ -431,6 +441,30 @@ function WalletButton() {
     try {
       const a = await eth.request({ method: 'eth_requestAccounts' });
       setAccount(a?.[0] ?? null);
+
+      // Prompt network switch for local Hardhat node if running in local mode
+      if (health?.chainMode === 'local' || !health?.chainMode) {
+        try {
+          await eth.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0x7a69' }], // 31337 in hex
+          });
+        } catch (switchError) {
+          if (switchError.code === 4902) {
+            await eth.request({
+              method: 'wallet_addEthereumChain',
+              params: [
+                {
+                  chainId: '0x7a69',
+                  chainName: 'Hardhat Localhost',
+                  rpcUrls: ['http://127.0.0.1:8545'],
+                  nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+                },
+              ],
+            });
+          }
+        }
+      }
     } catch {
       /* user rejected — leave disconnected */
     } finally {
