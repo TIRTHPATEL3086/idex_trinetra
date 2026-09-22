@@ -100,11 +100,25 @@ export const requestDecryptChallenge = ({ assetId, userId }) =>
     body: JSON.stringify({ assetId, userId }),
   });
 
-export const decryptAsset = ({ assetId, userId, deviceLabel, passphrase, clientSignature, challengeId }) =>
+export const decryptAsset = ({
+  assetId,
+  userId,
+  deviceLabel,
+  passphrase,
+  clientSignature,
+  challengeId,
+}) =>
   request('/api/decrypt', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ assetId, userId, deviceLabel, passphrase, clientSignature, challengeId }),
+    body: JSON.stringify({
+      assetId,
+      userId,
+      deviceLabel,
+      passphrase,
+      clientSignature,
+      challengeId,
+    }),
   });
 
 export const batchDecryptAsset = ({

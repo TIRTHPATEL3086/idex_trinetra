@@ -147,3 +147,181 @@ h3 {
     @apply text-[11px] font-semibold uppercase tracking-wider text-ink-faint;
   }
 }
+
+/* ==========================================================================
+   Landing page — motion
+   ==========================================================================
+   The reference never animates `background-color`. It paints the page from a
+   fixed stack of three layers and cross-fades their opacity as sections scroll
+   past. Opacity is compositor-only, so the change costs nothing while the page
+   is moving; animating a colour would repaint every frame.
+   ========================================================================== */
+
+.site-background {
+  position: fixed;
+  inset: -1px;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background-color: #fff9f6;
+}
+
+.site-background__layer {
+  position: absolute;
+  inset: 0;
+  will-change: opacity;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  transition: opacity var(--background-transition-duration, 0.7s)
+    var(--background-transition-timing, cubic-bezier(0.4, 0, 0.2, 1));
+}
+
+.site-background__base {
+  background-color: #fff9f6;
+  opacity: 1;
+}
+.site-background__accent {
+  background-color: #ff7448;
+  opacity: var(--background-accent-opacity, 0);
+}
+.site-background__dark {
+  background-color: #0d1117;
+  opacity: var(--background-dark-opacity, 0);
+}
+
+/* Which layer is showing is a single attribute on <html>, set by whichever
+   section currently owns the viewport. */
+:root[data-home-background='base'] {
+  --background-accent-opacity: 0;
+  --background-dark-opacity: 0;
+}
+:root[data-home-background='accent'] {
+  --background-accent-opacity: 1;
+  --background-dark-opacity: 0;
+}
+:root[data-home-background='dark'] {
+  --background-accent-opacity: 0;
+  --background-dark-opacity: 1;
+}
+
+/* The body's own fill would paint over a z-index:-1 layer, so it steps aside
+   while the landing owns the page. */
+:root[data-home-background] body {
+  background-color: transparent;
+}
+
+/* -- entrances ------------------------------------------------------------ */
+
+@keyframes hero-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero-fade-up {
+  opacity: 0;
+  animation: 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards hero-fade-up;
+}
+.hero-fade-up--d1 {
+  animation-delay: 0.08s;
+}
+.hero-fade-up--d2 {
+  animation-delay: 0.16s;
+}
+.hero-fade-up--d3 {
+  animation-delay: 0.24s;
+}
+.hero-fade-up--d4 {
+  animation-delay: 0.32s;
+}
+.hero-fade-up--d5 {
+  animation-delay: 0.4s;
+}
+
+/* Sections below the fold wait until they are actually scrolled to. */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* -- marquee -------------------------------------------------------------- */
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-100% - var(--gap)));
+  }
+}
+
+.animate-marquee {
+  animation: marquee var(--duration, 34s) linear infinite;
+}
+/* Pausing on hover lets someone actually read a term they half-caught. */
+.marquee-track:hover .animate-marquee {
+  animation-play-state: paused;
+}
+
+/* -- ambient -------------------------------------------------------------- */
+
+@keyframes float-soft {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+.animate-float {
+  animation: float-soft 6s ease-in-out infinite;
+}
+
+@keyframes pill-edge-glow {
+  0%,
+  100% {
+    box-shadow: 0 8px 20px -8px rgba(15, 21, 29, 0.4);
+  }
+  50% {
+    box-shadow:
+      0 0 20px 2px rgba(255, 255, 255, 0.12),
+      0 8px 20px -8px rgba(15, 21, 29, 0.4);
+  }
+}
+.animate-pill-glow {
+  animation: pill-edge-glow 4s ease-in-out infinite;
+}
+
+/* Everything above is decoration. Anyone who has asked their system to stop
+   moving things gets the finished state immediately. */
+@media (prefers-reduced-motion: reduce) {
+  .hero-fade-up,
+  .animate-marquee,
+  .animate-float,
+  .animate-pill-glow {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .site-background__layer {
+    transition: none;
+  }
+}

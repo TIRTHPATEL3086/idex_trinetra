@@ -45,9 +45,6 @@ export default function Robustness() {
 
       {/* Production Telemetry KPI Tiles */}
       {live && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
-          <div className="rounded-xl border border-line bg-card/60 p-5 backdrop-blur-sm">
-            <div className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
           <div className="card p-5 shadow-xs">
             <div className="text-xs font-bold uppercase tracking-wider text-ink-muted">
@@ -59,10 +56,8 @@ export default function Robustness() {
             <p className="mt-1 text-xs text-ink-muted">Anchored & watermarked</p>
           </div>
 
-          <div className="rounded-xl border border-line bg-card/60 p-5 backdrop-blur-sm">
-            <div className="text-xs font-semibold uppercase tracking-wider text-accent">
           <div className="card p-5 shadow-xs">
-            <div className="text-xs font-bold uppercase tracking-wider text-lime-600">
+            <div className="text-xs font-bold uppercase tracking-wider text-accent-deep">
               Mean PSNR
             </div>
             <div className="mt-2 text-2xl sm:text-3xl font-extrabold tracking-tight text-ink">
@@ -71,8 +66,6 @@ export default function Robustness() {
             <p className="mt-1 text-xs text-ink-muted">&gt;40 dB threshold: Imperceptible</p>
           </div>
 
-          <div className="rounded-xl border border-line bg-card/60 p-5 backdrop-blur-sm">
-            <div className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
           <div className="card p-5 shadow-xs">
             <div className="text-xs font-bold uppercase tracking-wider text-ink-muted">
               PSNR Range
@@ -83,11 +76,6 @@ export default function Robustness() {
             <p className="mt-1 text-xs text-ink-muted">Min / Max observed</p>
           </div>
 
-          <div className="rounded-xl border border-line bg-card/60 p-5 backdrop-blur-sm">
-            <div className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
-              QIM Delta (Δ)
-            </div>
-            <div className="mt-2 text-3xl font-bold tracking-tight text-ink">16 – 24</div>
           <div className="card p-5 shadow-xs">
             <div className="text-xs font-bold uppercase tracking-wider text-ink-muted">
               QIM Delta (Δ)
@@ -102,7 +90,6 @@ export default function Robustness() {
 
       {/* Live Decryption PSNR History (if records exist) */}
       {live?.history?.length > 0 && (
-        <div className="rounded-xl border border-line bg-card p-5">
         <div className="card p-5 shadow-sm">
           <div className="flex items-center justify-between pb-3">
             <div>
@@ -114,10 +101,8 @@ export default function Robustness() {
                 Postgres.
               </p>
             </div>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent ring-1 ring-accent/20">
-              <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-lime-500/15 px-2.5 py-1 text-xs font-bold text-night ring-1 ring-lime-500/30">
-              <span className="h-1.5 w-1.5 rounded-full bg-lime-600 animate-pulse" />
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/15 px-2.5 py-1 text-xs font-bold text-noir ring-1 ring-accent/30">
+              <span className="h-1.5 w-1.5 rounded-full bg-accent-deep animate-pulse" />
               Live DB Telemetry
             </span>
           </div>
@@ -252,7 +237,7 @@ export default function Robustness() {
             10% crop, Poisson noise, 2° shear, 90° rotation, etc.).
           </p>
           <div className="mt-4">
-            <span className="inline-block rounded-lg bg-noir px-4 py-2 font-mono text-xs text-accent border border-line">
+            <span className="inline-block rounded-lg bg-noir/50 px-4 py-2 font-mono text-xs text-accent border border-line">
               npm run attack:suite
             </span>
           </div>

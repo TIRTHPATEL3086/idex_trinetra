@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { CheckIcon } from '../components/icons.jsx';
 
 import Logo from '../components/Logo.jsx';
 import { useAuth, ROLE_UI, ROLE_ORDER, DEMO_ACCOUNTS } from '../lib/auth.jsx';
@@ -49,7 +50,7 @@ export default function Login() {
 
   return (
     <div className="grid min-h-[100dvh] w-full place-items-center bg-canvas p-3 sm:p-5 lg:p-6">
-      <main className="w-full max-w-[1080px] overflow-hidden rounded-panel border border-line bg-white shadow-app lg:grid lg:grid-cols-[1.02fr_1fr] lg:rounded-[3.125rem]">
+      <main className="w-full max-w-[1080px] overflow-hidden rounded-2xl bg-white shadow-app sm:rounded-3xl lg:grid lg:grid-cols-[1.02fr_1fr]">
         <BrandPanel />
 
         {/* ------------------------------------------------------ the form -- */}
@@ -60,7 +61,7 @@ export default function Login() {
           </div>
 
           <header className="mb-6">
-            <h1 className="font-display text-[28px] font-extrabold leading-[1.08] tracking-tight text-ink sm:text-[34px]">
+            <h1 className="font-display text-2xl font-extrabold tracking-tight text-ink sm:text-[28px]">
               Sign in
             </h1>
             <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">
@@ -70,7 +71,9 @@ export default function Login() {
 
           <form onSubmit={submit} className="space-y-4" noValidate>
             <label className="block">
-              <span className="eyebrow mb-2 block">Email</span>
+              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-faint">
+                Email
+              </span>
               <input
                 type="email"
                 name="email"
@@ -87,7 +90,9 @@ export default function Login() {
             </label>
 
             <label className="block">
-              <span className="eyebrow mb-2 block">Password</span>
+              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-faint">
+                Password
+              </span>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
@@ -148,11 +153,11 @@ function BrandPanel() {
       {/* soft accent bloom, purely atmospheric */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-accent/12 blur-3xl"
+        className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-accent/20 blur-3xl"
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -bottom-28 -left-20 h-72 w-72 rounded-full bg-accent/[0.07] blur-3xl"
+        className="pointer-events-none absolute -bottom-28 -left-20 h-72 w-72 rounded-full bg-accent/10 blur-3xl"
       />
 
       <div className="relative">
@@ -168,8 +173,6 @@ function BrandPanel() {
           </span>
         </div>
 
-        <h2 className="mt-10 font-display text-[34px] font-extrabold leading-[1.08] tracking-tight">
-          Four roles,
         <h2 className="mt-10 font-display text-[30px] font-extrabold leading-[1.15] tracking-tight">
           Three roles,
           <br />
@@ -193,7 +196,7 @@ function BrandPanel() {
         ))}
       </ul>
 
-      <p className="relative mt-9 text-[11px] leading-relaxed text-white/45">
+      <p className="relative mt-9 text-[11px] leading-relaxed text-white/35">
         No name, department or device label ever reaches the blockchain — only keccak256(userId ‖
         salt).
       </p>
@@ -216,8 +219,7 @@ function DemoAccounts({ onPick, currentEmail }) {
   );
 
   return (
-    <div className="mt-6 rounded-2xl border border-line bg-[#faf8f5]">
-    <div className="mt-6 rounded-2xl border border-line bg-[#fbfbf7] transition-all">
+    <div className="mt-6 rounded-2xl border border-line bg-[#faf8f5] transition-all">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -251,15 +253,13 @@ function DemoAccounts({ onPick, currentEmail }) {
               <li key={acc.email}>
                 <button
                   type="button"
-                  onClick={() => onPick(role)}
-                  className="flex w-full items-center gap-3 rounded-xl bg-white px-3 py-2.5 text-left transition hover:bg-line/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   onClick={() => {
                     onPick(acc);
                     setOpen(false); // Automatically close dropdown on click!
                   }}
-                  className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-lime ${
+                  className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
                     isSelected
-                      ? 'bg-line/60 ring-1 ring-lime/70 shadow-sm'
+                      ? 'bg-line/60 ring-1 ring-accent/70 shadow-sm'
                       : 'bg-white hover:bg-line/40 hover:shadow-sm'
                   }`}
                 >
@@ -270,9 +270,7 @@ function DemoAccounts({ onPick, currentEmail }) {
                     {acc.short}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="mono truncate text-[12px] font-bold text-ink">
-                      {acc.email}
-                    </div>
+                    <div className="mono truncate text-[12px] font-bold text-ink">{acc.email}</div>
                     <div className="truncate text-[11px] text-ink-muted">
                       {acc.name} · <span className="font-semibold text-ink-faint">{acc.dept}</span>
                     </div>
@@ -280,11 +278,17 @@ function DemoAccounts({ onPick, currentEmail }) {
                   <span
                     className={`shrink-0 rounded-md px-2.5 py-1 text-[11px] font-bold transition ${
                       isSelected
-                        ? 'bg-lime text-night font-extrabold shadow-xs'
-                        : 'border border-line bg-[#fbfbf7] text-ink-muted group-hover:border-lime group-hover:bg-lime group-hover:text-night'
+                        ? 'bg-accent text-noir font-extrabold shadow-xs'
+                        : 'border border-line bg-[#faf8f5] text-ink-muted group-hover:border-accent group-hover:bg-accent group-hover:text-noir'
                     }`}
                   >
-                    {isSelected ? 'In Use ✓' : 'Use'}
+                    {isSelected ? (
+                      <span className="flex items-center gap-1">
+                        In Use <CheckIcon size={11} />
+                      </span>
+                    ) : (
+                      'Use'
+                    )}
                   </span>
                 </button>
               </li>

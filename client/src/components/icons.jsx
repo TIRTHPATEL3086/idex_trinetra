@@ -184,3 +184,30 @@ export function SignOutIcon(p) {
     </Icon>
   );
 }
+
+export function KeyIcon(p) {
+  return (
+    <Icon {...p}>
+      <circle cx="8" cy="8.2" r="4.2" {...S} />
+      <path d="m11.1 11.3 8.4 8.4M16.4 16.6l2-2M18.6 18.8l1.9-1.9" {...S} />
+    </Icon>
+  );
+}
+
+export function DownloadIcon(p) {
+  return (
+    <Icon {...p}>
+      <path d="M12 3.8v11M7.7 10.5 12 14.8l4.3-4.3" {...S} />
+      <path d="M4.5 16.2v2.1a1.9 1.9 0 0 0 1.9 1.9h11.2a1.9 1.9 0 0 0 1.9-1.9v-2.1" {...S} />
+    </Icon>
+  );
+}
+
+/** Dispatch — a release leaving the system, not a rocket. */
+export function SendIcon(p) {
+  return (
+    <Icon {...p}>
+      <path d="M20.5 3.5 10.8 13.2M20.5 3.5l-6.2 17-3.5-7.3-7.3-3.5 17-6.2Z" {...S} />
+    </Icon>
+  );
+}

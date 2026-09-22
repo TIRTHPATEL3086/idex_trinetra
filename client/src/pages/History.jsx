@@ -151,7 +151,7 @@ export default function History() {
           <div className="card overflow-x-auto scroll-slim shadow-sm">
             <table className="w-full min-w-[880px] text-sm">
               <thead>
-                <tr className="border-b border-line text-left text-xs text-ink-faint uppercase tracking-wide">
+                <tr className="border-b border-line bg-noir/[0.02] text-left text-xs font-bold uppercase tracking-wider text-ink-muted">
                   {[
                     'When',
                     'Officer',
@@ -163,29 +163,26 @@ export default function History() {
                     'PSNR',
                     'Sig',
                   ].map((h) => (
-                    <th key={h} className="px-4 py-3 font-semibold">
+                    <th key={h} className="px-4 py-3.5">
                       {h}
                     </th>
-                <tr className="border-b border-line bg-night/[0.02] text-left text-xs font-bold uppercase tracking-wider text-ink-muted">
-                  {['When', 'Officer', 'Dept', 'Document', 'Device', 'Receipt', 'Tx Hash', 'PSNR', 'Sig'].map((h) => (
-                    <th key={h} className="px-4 py-3.5">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-line/60">
                 {data.events.map((e) => (
-                  <tr
-                    key={e.id}
-                    className="border-b border-line/50 hover:bg-surface/60 transition-colors"
-                  >
-                    <td className="px-4 py-3 mono text-[11px] text-ink-muted whitespace-nowrap">
                   <tr key={e.id} className="hover:bg-line/25 transition-colors">
                     <td className="px-4 py-3.5 mono text-xs text-ink-muted whitespace-nowrap">
                       {new Date(e.at).toLocaleString()}
                     </td>
                     <td className="px-4 py-3.5 font-bold text-ink text-sm">{e.userName}</td>
-                    <td className="px-4 py-3.5 text-ink-muted text-xs font-medium">{e.department}</td>
-                    <td className="px-4 py-3.5 text-ink text-sm font-medium max-w-[180px] truncate" title={e.assetTitle}>
+                    <td className="px-4 py-3.5 text-ink-muted text-xs font-medium">
+                      {e.department}
+                    </td>
+                    <td
+                      className="px-4 py-3.5 text-ink text-sm font-medium max-w-[180px] truncate"
+                      title={e.assetTitle}
+                    >
                       {e.assetTitle}
                       {e.assetClassification && (
                         <span className="ml-1.5 rounded bg-surface px-1.5 py-0.5 text-[10px] font-bold text-ink-muted">
@@ -203,15 +200,9 @@ export default function History() {
                           href={e.etherscanUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-attributed hover:underline"
+                          className="font-semibold text-attributed hover:underline"
                         >
-                          <span className="inline-flex items-center gap-1">
-                            {shortHash(e.txHash, 6, 4)}
-                            <ExternalLinkIcon size={11} />
-                          </span>
-                        <a href={e.etherscanUrl} target="_blank" rel="noreferrer"
-                          className="font-semibold text-attributed hover:underline">
-                          {shortHash(e.txHash, 6, 4)} ↗
+                          {shortHash(e.txHash, 6, 4)} <ExternalLinkIcon size={11} />
                         </a>
                       ) : (
                         <span className="text-ink-muted">{shortHash(e.txHash, 6, 4)}</span>
@@ -222,10 +213,8 @@ export default function History() {
                     </td>
                     <td className="px-4 py-3.5">
                       {e.signatureAlgorithm ? (
-                        <span className="rounded-full bg-attributed-tint px-2 py-0.5 text-[10px] font-bold text-attributed-deep">
+                        <span className="rounded-full bg-attributed-tint px-2.5 py-0.5 text-xs font-bold text-attributed-deep">
                           <CheckIcon size={11} /> PQC
-                        <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700">
-                          ✓ PQC
                         </span>
                       ) : (
                         <span className="text-xs text-ink-faint">—</span>
