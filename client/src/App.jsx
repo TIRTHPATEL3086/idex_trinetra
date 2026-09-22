@@ -99,7 +99,12 @@ function Shell() {
           </span>
 
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-            <NotificationsBell health={health} />
+            {user?.role !== 'OFFICER' && (
+              <>
+                <HealthChip health={health} />
+                <NotificationsBell health={health} />
+              </>
+            )}
             <WalletButton health={health} />
             <AccountMenu user={user} />
           </div>
@@ -242,6 +247,12 @@ function Sidebar({ health, open, can, user }) {
             <SearchIcon light />
             Trace a leak
           </NavLink>
+        </div>
+      )}
+      {user?.role !== 'OFFICER' && (
+        <div className="mt-4 space-y-3">
+          <RoleCard user={user} />
+          <HealthBadge health={health} />
         </div>
       )}
     </aside>

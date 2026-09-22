@@ -52,16 +52,19 @@ export default function Decrypt() {
   const [singleResult, setSingleResult] = useState(null);
   const [batchResult, setBatchResult] = useState(null);
   const [sigStatus, setSigStatus] = useState(null); // null | 'signing' | 'ok' | 'skipped'
-
   useEffect(() => {
     Promise.all([getAssets(), getUsers()])
       .then(([a, u]) => {
-        setAssets(a.assets || []);
+        let availableAssets = a.assets || [];
+        if (user?.role === 'OFFICER') {
+          availableAssets = availableAssets.filter((x) => x.authorizedUserIds?.includes(user.userId));
+        }
+        setAssets(availableAssets);
         const uList = u.users || [];
         setUsers(uList);
 
-        if (a.assets?.[0]) {
-          setAssetId(String(a.assets[0].assetId));
+        if (availableAssets[0]) {
+          setAssetId(String(availableAssets[0].assetId));
         }
 
         // Default admin selection to all active officers
@@ -73,7 +76,7 @@ export default function Decrypt() {
         }
       })
       .catch((e) => setError(e.message));
-  }, [isAdmin]);
+  }, [isAdmin, user?.userId, user?.role]);
 
   const selectedAsset = assets.find((a) => String(a.assetId) === String(assetId));
 
@@ -165,8 +168,11 @@ export default function Decrypt() {
         setSigStatus('skipped');
       }
     } catch (sigErr) {
-      console.warn('[pqc] Client signing skipped or failed:', sigErr.message);
-      setSigStatus('skipped');
+      console.warn('[pqc] Client signing failed or incorrect passphrase:', sigErr.message);
+      setError('Decryption passphrase incorrect or invalid key bundle.');
+      setStatus('error');
+      setSigStatus('error');
+      return;
     }
 
     setStatus('working');

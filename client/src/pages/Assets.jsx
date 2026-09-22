@@ -9,7 +9,7 @@ import { useAuth } from '../lib/auth.jsx';
  * stacked card list (mobile). Nothing overflows horizontally at 320px.
  */
 export default function Assets() {
-  const { can } = useAuth();
+  const { user, can } = useAuth();
   const mayUpload = can('assets:upload');
 
   const [assets, setAssets] = useState(null);
@@ -17,6 +17,7 @@ export default function Assets() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [droppedInitialFile, setDroppedInitialFile] = useState(null);
   const [pageDragging, setPageDragging] = useState(false);
+  const [classificationFilter, setClassificationFilter] = useState('ALL');
 
   const reload = useCallback(() => {
     getAssets()
@@ -27,6 +28,17 @@ export default function Assets() {
   useEffect(() => {
     reload();
   }, [reload]);
+
+  // Documents assigned to the individual officer (or all documents for admin)
+  const officerAssets = assets
+    ? user?.role === 'OFFICER'
+      ? assets.filter((a) => a.authorizedUserIds?.includes(user.userId))
+      : assets
+    : [];
+
+  const filteredAssets = classificationFilter === 'ALL'
+    ? officerAssets
+    : officerAssets.filter((a) => a.classification === classificationFilter);
 
   return (
     <section className="space-y-6">
@@ -103,17 +115,30 @@ export default function Assets() {
       {error && <Notice tone="error">{error}</Notice>}
       {!error && !assets && <Notice>Loading documents…</Notice>}
 
-      {!error && assets && <Overview assets={assets} />}
+      {!error && assets && <Overview assets={officerAssets} />}
 
-      {!error && assets?.length === 0 && (
+      {!error && officerAssets.length === 0 && (
         <Notice>
           {mayUpload
             ? 'No documents yet. Upload one to begin.'
-            : 'No documents in the register yet. An administrator adds them.'}
+            : 'No documents assigned to your clearance yet. An administrator assigns them.'}
         </Notice>
       )}
 
-      {!error && assets?.length > 0 && <DocumentList assets={assets} />}
+      {!error && filteredAssets.length === 0 && officerAssets.length > 0 && (
+        <Notice>
+          No documents found with classification "{classificationFilter}".
+        </Notice>
+      )}
+
+      {!error && officerAssets.length > 0 && (
+        <DocumentList
+          assets={filteredAssets}
+          user={user}
+          classificationFilter={classificationFilter}
+          setClassificationFilter={setClassificationFilter}
+        />
+      )}
 
       {uploadOpen && mayUpload && (
         <UploadModal
@@ -393,8 +418,8 @@ function UploadModal({ initialFile, onClose, onDone }) {
 
 function Overview({ assets }) {
   const documents = assets.length;
-  const decryptions = assets.reduce((n, a) => n + (a.decryptCount || 0), 0);
   const secret = assets.filter((a) => a.classification === 'SECRET').length;
+  const decryptions = assets.reduce((sum, a) => sum + (a.decryptCount || 0), 0);
 
   return (
     <div className="relative overflow-hidden rounded-3xl bg-night p-6 text-white shadow-panel sm:p-7">
@@ -446,9 +471,32 @@ function StatTile({ label, value, highlight }) {
 
 /* -- document list: cards on mobile, table on sm+ --------------------------- */
 
-function DocumentList({ assets }) {
+function DocumentList({ assets, user, classificationFilter, setClassificationFilter }) {
   return (
-    <>
+    <div className="space-y-3">
+      {/* Classification filter header */}
+      <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+        <div className="text-xs font-bold uppercase tracking-wider text-ink-muted">
+          {user?.role === 'OFFICER' ? `Assigned Documents (${assets.length})` : `All Documents (${assets.length})`}
+        </div>
+        <div className="flex items-center gap-2">
+          <label htmlFor="classification-select" className="text-xs font-semibold text-ink-muted">
+            Classification:
+          </label>
+          <select
+            id="classification-select"
+            value={classificationFilter}
+            onChange={(e) => setClassificationFilter(e.target.value)}
+            className="rounded-xl border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink shadow-sm hover:border-lime-500 focus:border-lime-500 focus:outline-none"
+          >
+            <option value="ALL">All Classifications</option>
+            <option value="RESTRICTED">RESTRICTED</option>
+            <option value="CONFIDENTIAL">CONFIDENTIAL</option>
+            <option value="SECRET">SECRET</option>
+          </select>
+        </div>
+      </div>
+
       {/* Cards — mobile only. */}
       <ul className="space-y-3 sm:hidden">
         {assets.map((a) => (
@@ -508,7 +556,7 @@ function DocumentList({ assets }) {
           </tbody>
         </table>
       </div>
-    </>
+    </div>
   );
 }
 
