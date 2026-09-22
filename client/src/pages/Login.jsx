@@ -48,8 +48,8 @@ export default function Login() {
   };
 
   return (
-    <div className="grid min-h-[100dvh] w-full place-items-center bg-olive p-3 sm:p-5 lg:p-6">
-      <main className="w-full max-w-[1080px] overflow-hidden rounded-2xl bg-white shadow-app sm:rounded-3xl lg:grid lg:grid-cols-[1.02fr_1fr]">
+    <div className="grid min-h-[100dvh] w-full place-items-center bg-canvas p-3 sm:p-5 lg:p-6">
+      <main className="w-full max-w-[1080px] overflow-hidden rounded-panel border border-line bg-white shadow-app lg:grid lg:grid-cols-[1.02fr_1fr] lg:rounded-[3.125rem]">
         <BrandPanel />
 
         {/* ------------------------------------------------------ the form -- */}
@@ -60,7 +60,7 @@ export default function Login() {
           </div>
 
           <header className="mb-6">
-            <h1 className="font-display text-2xl font-extrabold tracking-tight text-ink sm:text-[28px]">
+            <h1 className="font-display text-[28px] font-extrabold leading-[1.08] tracking-tight text-ink sm:text-[34px]">
               Sign in
             </h1>
             <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">
@@ -70,9 +70,7 @@ export default function Login() {
 
           <form onSubmit={submit} className="space-y-4" noValidate>
             <label className="block">
-              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-faint">
-                Email
-              </span>
+              <span className="eyebrow mb-2 block">Email</span>
               <input
                 type="email"
                 name="email"
@@ -89,9 +87,7 @@ export default function Login() {
             </label>
 
             <label className="block">
-              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-faint">
-                Password
-              </span>
+              <span className="eyebrow mb-2 block">Password</span>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
@@ -126,7 +122,7 @@ export default function Login() {
 
             <button
               type="submit"
-              className="btn-lime h-12 w-full text-[15px]"
+              className="btn-accent h-12 w-full text-[15px]"
               disabled={status === 'working'}
             >
               {status === 'working' ? 'Signing in…' : 'Sign in'}
@@ -148,30 +144,32 @@ export default function Login() {
  */
 function BrandPanel() {
   return (
-    <aside className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-[#23260f] to-night p-11 text-white lg:flex">
-      {/* soft lime bloom, purely atmospheric */}
+    <aside className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-[#0d1117] to-noir p-11 text-white lg:flex">
+      {/* soft accent bloom, purely atmospheric */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-lime/20 blur-3xl"
+        className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-accent/12 blur-3xl"
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -bottom-28 -left-20 h-72 w-72 rounded-full bg-lime/10 blur-3xl"
+        className="pointer-events-none absolute -bottom-28 -left-20 h-72 w-72 rounded-full bg-accent/[0.07] blur-3xl"
       />
 
       <div className="relative">
         <div className="flex items-center gap-2.5">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[30%] bg-lime">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[30%] bg-accent">
             <FingerprintGlyph />
           </span>
           <span
             className="font-display leading-none"
             style={{ fontSize: 21, fontWeight: 800, letterSpacing: '-0.02em' }}
           >
-            Provenance<span className="text-lime">.</span>
+            Provenance<span className="text-accent">.</span>
           </span>
         </div>
 
+        <h2 className="mt-10 font-display text-[34px] font-extrabold leading-[1.08] tracking-tight">
+          Four roles,
         <h2 className="mt-10 font-display text-[30px] font-extrabold leading-[1.15] tracking-tight">
           Three roles,
           <br />
@@ -195,7 +193,7 @@ function BrandPanel() {
         ))}
       </ul>
 
-      <p className="relative mt-9 text-[11px] leading-relaxed text-white/35">
+      <p className="relative mt-9 text-[11px] leading-relaxed text-white/45">
         No name, department or device label ever reaches the blockchain — only keccak256(userId ‖
         salt).
       </p>
@@ -218,6 +216,7 @@ function DemoAccounts({ onPick, currentEmail }) {
   );
 
   return (
+    <div className="mt-6 rounded-2xl border border-line bg-[#faf8f5]">
     <div className="mt-6 rounded-2xl border border-line bg-[#fbfbf7] transition-all">
       <button
         type="button"
@@ -252,6 +251,8 @@ function DemoAccounts({ onPick, currentEmail }) {
               <li key={acc.email}>
                 <button
                   type="button"
+                  onClick={() => onPick(role)}
+                  className="flex w-full items-center gap-3 rounded-xl bg-white px-3 py-2.5 text-left transition hover:bg-line/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   onClick={() => {
                     onPick(acc);
                     setOpen(false); // Automatically close dropdown on click!
@@ -341,7 +342,7 @@ function ChevronIcon({ open }) {
 
 /** The logo glyph, drawn here so the panel does not depend on Logo's layout. */
 function FingerprintGlyph() {
-  const p = { fill: 'none', stroke: '#141410', strokeWidth: 1.7, strokeLinecap: 'round' };
+  const p = { fill: 'none', stroke: '#0f151d', strokeWidth: 1.7, strokeLinecap: 'round' };
   return (
     <svg width="21" height="21" viewBox="0 0 24 24" aria-hidden="true">
       <path d="M4.5 13.2A7.5 7.5 0 0 1 19 10.5" {...p} />
@@ -350,7 +351,7 @@ function FingerprintGlyph() {
       <path d="M7.2 15.8c.35 1.5.4 2.4.3 3.4" {...p} />
       <path d="M9.6 12a2.5 2.5 0 0 1 4.9.6c0 2.3-.3 4.6-1 6.8" {...p} />
       <path d="M10.7 19.9c.3-.9.5-1.7.7-2.6" {...p} />
-      <circle cx="12" cy="12.3" r="1.15" fill="#141410" />
+      <circle cx="12" cy="12.3" r="1.15" fill="#0f151d" />
     </svg>
   );
 }

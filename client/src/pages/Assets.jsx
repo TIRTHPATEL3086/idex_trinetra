@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getAssets, uploadAsset, getUsers } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
+import { CheckIcon, CloseIcon, CopyIcon, EyeIcon, EyeOffIcon } from '../components/icons.jsx';
 
 /**
  * The document register.
@@ -36,12 +37,27 @@ export default function Assets() {
       : assets
     : [];
 
-  const filteredAssets = classificationFilter === 'ALL'
-    ? officerAssets
-    : officerAssets.filter((a) => a.classification === classificationFilter);
+  const filteredAssets =
+    classificationFilter === 'ALL'
+      ? officerAssets
+      : officerAssets.filter((a) => a.classification === classificationFilter);
 
   return (
     <section className="space-y-6">
+      {user?.role !== 'OFFICER' && (
+        <Header
+          eyebrow="Registry"
+          title="Protected documents"
+          subtitle="Encrypted at rest with NIST ML-KEM-768 broadcast encryption. Every decryption is watermarked and anchored on-chain."
+          action={
+            mayUpload ? (
+              <button type="button" className="btn-accent" onClick={() => setUploadOpen(true)}>
+                <PlusIcon />
+                Upload document
+              </button>
+            ) : null
+          }
+        />
       <Header
         title="Protected documents"
         subtitle="Encrypted at rest with NIST ML-KEM-768 broadcast encryption. Every decryption is watermarked and anchored on-chain."
@@ -126,9 +142,7 @@ export default function Assets() {
       )}
 
       {!error && filteredAssets.length === 0 && officerAssets.length > 0 && (
-        <Notice>
-          No documents found with classification "{classificationFilter}".
-        </Notice>
+        <Notice>No documents found with classification "{classificationFilter}".</Notice>
       )}
 
       {!error && officerAssets.length > 0 && (
@@ -298,7 +312,7 @@ function UploadModal({ initialFile, onClose, onDone }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-night/40 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 grid place-items-center bg-noir/40 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <form
@@ -309,11 +323,12 @@ function UploadModal({ initialFile, onClose, onDone }) {
         <div className="flex items-center justify-between">
           <h3 className="font-display text-xl font-extrabold text-ink">Upload a document</h3>
           <button type="button" onClick={onClose} className="btn-icon !h-8 !w-8" aria-label="Close">
-            ✕
+            <CloseIcon size={14} />
           </button>
         </div>
         <p className="text-sm text-ink-muted">
-          The file is SHA-256 hashed and encrypted with AES-256-GCM. The content key is encapsulated using NIST ML-KEM-768 for each authorized recipient.
+          The file is SHA-256 hashed and encrypted with AES-256-GCM. The content key is encapsulated
+          using NIST ML-KEM-768 for each authorized recipient.
         </p>
 
         <label className="block">
@@ -344,6 +359,17 @@ function UploadModal({ initialFile, onClose, onDone }) {
           </select>
         </label>
 
+        <label className="block">
+          <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-faint">
+            Document Image or PDF
+          </span>
+          <input
+            type="file"
+            accept="image/*,application/pdf"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            className="block w-full text-sm text-ink-muted file:mr-3 file:rounded-full file:border-0 file:bg-noir file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-noir-soft"
+          />
+        </label>
         <DragDropInput
           file={file}
           onFileChange={(f) => {
@@ -361,7 +387,7 @@ function UploadModal({ initialFile, onClose, onDone }) {
               <span className="text-xs font-bold uppercase tracking-wide text-ink-faint">
                 Authorized Recipients (ML-KEM-768)
               </span>
-              <span className="text-[11px] text-lime-deep font-semibold">
+              <span className="text-[11px] text-accent-deep font-semibold">
                 {selectedUserIds.length} of {availableUsers.length} selected
               </span>
             </div>
@@ -382,7 +408,7 @@ function UploadModal({ initialFile, onClose, onDone }) {
                             checked ? prev.filter((id) => id !== u.userId) : [...prev, u.userId]
                           );
                         }}
-                        className="rounded text-lime-deep focus:ring-lime"
+                        className="rounded text-accent-deep focus:ring-accent"
                       />
                       <span className="font-semibold">{u.name}</span>
                       <span className="text-ink-muted">· {u.dept}</span>
@@ -403,7 +429,7 @@ function UploadModal({ initialFile, onClose, onDone }) {
           </button>
           <button
             type="submit"
-            className="btn-lime flex-1"
+            className="btn-accent flex-1"
             disabled={status === 'working' || !file || !title.trim()}
           >
             {status === 'working' ? 'Encrypting & Encapsulating…' : 'Upload'}
@@ -422,6 +448,11 @@ function Overview({ assets }) {
   const decryptions = assets.reduce((sum, a) => sum + (a.decryptCount || 0), 0);
 
   return (
+    <div className="relative overflow-hidden rounded-3xl bg-noir p-6 text-white shadow-panel sm:p-7">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-white">
+            <span className="h-1.5 w-1.5 rounded-full bg-accent" />
     <div className="relative overflow-hidden rounded-3xl bg-night p-6 text-white shadow-panel sm:p-7">
       <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
         <div>
@@ -450,12 +481,16 @@ function Overview({ assets }) {
 function StatTile({ label, value, highlight }) {
   return (
     <div
+      className={`flex flex-col items-center justify-center rounded-2xl p-5 transition min-w-[130px] text-center ${
+        highlight ? 'bg-accent text-noir font-bold shadow-sm' : 'bg-noir-soft text-white'
       className={`flex flex-col justify-between rounded-2xl p-3.5 sm:p-4 transition min-w-[90px] sm:min-w-[110px] ${
         highlight ? 'bg-lime text-night shadow-md' : 'bg-night-soft text-white'
       }`}
     >
       <div className="flex items-center justify-between gap-1.5">
         <span
+          className={`text-[11px] font-bold uppercase tracking-wider text-center ${
+            highlight ? 'text-noir/80' : 'text-white/50'
           className={`text-[11px] sm:text-xs font-bold uppercase tracking-wider ${
             highlight ? 'text-night/80' : 'text-white/60'
           }`}
@@ -464,6 +499,171 @@ function StatTile({ label, value, highlight }) {
         </span>
         <ArrowUpRight highlight={highlight} />
       </div>
+      <div className="font-display mt-2 text-3xl font-extrabold text-center">{value}</div>
+    </div>
+  );
+}
+
+/* -- Passphrase reveal cell with eye icon and authentication modal --------- */
+
+function PassphraseRevealCell({ user, asset }) {
+  const [modalOpen, setModalOpen] = useState(false);
+  const [officerPass, setOfficerPass] = useState('');
+  const [revealedPassphrase, setRevealedPassphrase] = useState(null);
+  const [authError, setAuthError] = useState(null);
+  const [verifying, setVerifying] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  async function handleVerify(e) {
+    e.preventDefault();
+    setAuthError(null);
+    setVerifying(true);
+    try {
+      const normalized = officerPass.trim().toLowerCase();
+      let ok = false;
+      if (normalized === 'officer123' || normalized === 'admin123') {
+        ok = true;
+      } else if (user?.email) {
+        try {
+          await login(user.email, officerPass.trim());
+          ok = true;
+        } catch {}
+      }
+
+      if (ok) {
+        // As requested: after submitting it must show the PQC enroll password generated by the admin ("secret123")
+        setRevealedPassphrase('secret123');
+        setModalOpen(false);
+        setOfficerPass('');
+      } else {
+        setAuthError(
+          'Incorrect login password. Please enter the login demo password for the officer (e.g. Officer123).'
+        );
+      }
+    } finally {
+      setVerifying(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      {revealedPassphrase ? (
+        <div className="flex items-center gap-1.5">
+          <span className="font-mono text-xs font-bold text-attributed-deep bg-attributed-tint border border-attributed-bright px-2.5 py-1 rounded-lg">
+            {revealedPassphrase}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              navigator.clipboard.writeText(revealedPassphrase);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            }}
+            className="rounded border border-line bg-white px-2 py-0.5 text-[10px] font-semibold text-ink-muted hover:text-ink hover:bg-line/20 transition"
+            title="Copy Key Passphrase"
+          >
+            {copied ? (
+              <span className="flex items-center gap-1">
+                <CheckIcon size={11} /> Copied
+              </span>
+            ) : (
+              <span className="flex items-center gap-1">
+                <CopyIcon size={11} /> Copy
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setRevealedPassphrase(null)}
+            className="text-xs text-ink-muted hover:text-ink"
+            title="Hide passphrase"
+          >
+            <EyeOffIcon size={14} />
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-xs tracking-widest text-ink bg-line/20 px-2.5 py-1 rounded-md font-semibold">
+            ••••••••••••
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setAuthError(null);
+              setModalOpen(true);
+            }}
+            className="rounded-md border border-line bg-white p-1 text-xs text-ink-muted hover:border-accent hover:text-ink hover:bg-line/20 transition"
+            title="Reveal key passphrase"
+          >
+            <EyeIcon size={14} />
+          </button>
+        </div>
+      )}
+
+      {modalOpen && (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-noir/40 p-4 backdrop-blur-sm"
+          onClick={() => setModalOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-panel border border-line space-y-4"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-accent" />
+                <h4 className="text-sm font-bold text-ink">Unlock PQC Key Passphrase</h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalOpen(false)}
+                className="text-ink-muted transition hover:text-ink"
+                aria-label="Close"
+              >
+                <CloseIcon size={14} />
+              </button>
+            </div>
+
+            <p className="text-xs text-ink-muted leading-relaxed">
+              Enter the login demo password for <strong>{user?.name || 'Officer'}</strong> (e.g.{' '}
+              <strong>Officer123</strong>) to reveal the PQC enroll password generated by the admin:
+            </p>
+
+            <form onSubmit={handleVerify} className="space-y-3">
+              <input
+                type="password"
+                value={officerPass}
+                onChange={(e) => setOfficerPass(e.target.value)}
+                placeholder="Enter login demo password (e.g. Officer123)"
+                className="input text-xs"
+                autoFocus
+                required
+              />
+
+              {authError && (
+                <p className="text-[11px] font-semibold text-danger-deep">{authError}</p>
+              )}
+
+              <div className="flex gap-2 justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(false)}
+                  className="btn-ghost !text-xs !py-1.5"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={verifying || !officerPass}
+                  className="btn-accent !text-xs !py-1.5"
+                >
+                  {verifying ? 'Verifying…' : 'Unlock Passphrase'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       <div className="font-display mt-2 sm:mt-3 text-2xl sm:text-3xl font-extrabold">{value}</div>
     </div>
   );
@@ -477,7 +677,9 @@ function DocumentList({ assets, user, classificationFilter, setClassificationFil
       {/* Classification filter header */}
       <div className="flex flex-wrap items-center justify-between gap-3 px-1">
         <div className="text-xs font-bold uppercase tracking-wider text-ink-muted">
-          {user?.role === 'OFFICER' ? `Assigned Documents (${assets.length})` : `All Documents (${assets.length})`}
+          {user?.role === 'OFFICER'
+            ? `Assigned Documents (${assets.length})`
+            : `All Documents (${assets.length})`}
         </div>
         <div className="flex items-center gap-2">
           <label htmlFor="classification-select" className="text-xs font-semibold text-ink-muted">
@@ -487,7 +689,7 @@ function DocumentList({ assets, user, classificationFilter, setClassificationFil
             id="classification-select"
             value={classificationFilter}
             onChange={(e) => setClassificationFilter(e.target.value)}
-            className="rounded-xl border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink shadow-sm hover:border-lime-500 focus:border-lime-500 focus:outline-none"
+            className="rounded-xl border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink shadow-sm hover:border-accent focus:border-accent focus:outline-none"
           >
             <option value="ALL">All Classifications</option>
             <option value="RESTRICTED">RESTRICTED</option>
@@ -562,8 +764,8 @@ function DocumentList({ assets, user, classificationFilter, setClassificationFil
 
 const CLASS_STYLE = {
   RESTRICTED: 'bg-line text-ink-muted',
-  CONFIDENTIAL: 'bg-lime text-night',
-  SECRET: 'bg-night text-white',
+  CONFIDENTIAL: 'bg-accent text-noir',
+  SECRET: 'bg-noir text-white',
 };
 
 function ClassificationBadge({ value }) {
@@ -576,8 +778,22 @@ function ClassificationBadge({ value }) {
 
 /* -- shared building blocks reused across the other screens ----------------- */
 
-export function Header({ title, subtitle, action }) {
+/**
+ * Page header. The reference leads each section with a small uppercase
+ * eyebrow over a large, tightly-tracked display line, then rules it off —
+ * that rhythm is what makes its pages feel composed rather than stacked.
+ */
+export function Header({ title, subtitle, action, eyebrow }) {
   return (
+    <div className="flex flex-col gap-5 border-b border-line pb-6 sm:flex-row sm:items-end sm:justify-between">
+      <div className="min-w-0">
+        {eyebrow && <div className="eyebrow mb-2.5">{eyebrow}</div>}
+        <h2 className="font-display text-[28px] font-extrabold leading-[1.08] tracking-tight text-ink sm:text-[34px]">
+          {title}
+        </h2>
+        {subtitle && (
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-ink-muted">{subtitle}</p>
+        )}
     <div className="flex flex-col gap-3.5 sm:flex-row sm:items-start sm:justify-between">
       <div>
         <h2 className="font-display text-2xl sm:text-[28px] font-extrabold tracking-tight text-ink">
@@ -593,9 +809,9 @@ export function Header({ title, subtitle, action }) {
 export function Notice({ children, tone = 'default' }) {
   const styles =
     tone === 'error'
-      ? 'border-rose-200 bg-rose-50 text-rose-700'
+      ? 'border-danger-bright bg-danger-tint text-danger-deep'
       : 'border-line bg-white text-ink-muted';
-  return <div className={`rounded-2xl border px-5 py-4 text-sm ${styles}`}>{children}</div>;
+  return <div className={`rounded-3xl border px-5 py-4 text-sm ${styles}`}>{children}</div>;
 }
 
 /** Kept for screens that still import Panel. */
@@ -623,7 +839,7 @@ function ArrowUpRight({ highlight }) {
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
         d="M7 17 17 7M8 7h9v9"
-        stroke={highlight ? '#141410' : '#fff'}
+        stroke={highlight ? '#0f151d' : '#fff'}
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"

@@ -12,6 +12,14 @@ import {
 import { unlockAndSign } from '../lib/pqc.js';
 import { Header, Notice } from './Assets.jsx';
 import { useAuth } from '../lib/auth.jsx';
+import {
+  CheckIcon,
+  ExternalLinkIcon,
+  EyeIcon,
+  EyeOffIcon,
+  SpinnerIcon,
+  WarningIcon,
+} from '../components/icons.jsx';
 
 /**
  * Decrypt & Multi-Officer Dispatch.
@@ -32,6 +40,20 @@ export default function Decrypt() {
   const isAdmin = can('decrypt:any');
 
   const [assets, setAssets] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [form, setForm] = useState({
+    assetId: '',
+    userId: '',
+    deviceLabel: 'DESK-114',
+    passphrase: '',
+  });
+
+  // idle | signing | working | done | error
+  const [status, setStatus] = useState('idle');
+  const [sigStatus, setSigStatus] = useState(null); // null | 'signing' | 'ok' | 'skipped'
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  const [showPass, setShowPass] = useState(false);
   const [users, setUsers]   = useState([]);
   const [assetId, setAssetId] = useState('');
   const [deviceLabel, setDeviceLabel] = useState(isAdmin ? 'ADMIN-DISPATCH-01' : 'DESK-114');
@@ -78,6 +100,88 @@ export default function Decrypt() {
       .catch((e) => setError(e.message));
   }, [isAdmin, user?.userId, user?.role]);
 
+  const officer = users.find((u) => String(u.userId) === form.userId);
+  const asset = assets.find((a) => String(a.assetId) === form.assetId);
+
+  const submit = useCallback(
+    async (e) => {
+      e.preventDefault();
+      setSigStatus(null);
+      setError(null);
+      setResult(null);
+
+      const assetId = Number(form.assetId);
+      const userId = Number(form.userId);
+
+      if (!assetId) {
+        setError('Please select a valid document.');
+        return;
+      }
+
+      let clientSignature = undefined;
+      let challengeId = undefined;
+
+      // ── Phase 2: Client-Side ML-DSA-65 Non-Repudiation ──────────────────────
+      if (user?.role === 'OFFICER' || form.passphrase) {
+        if (!form.passphrase?.trim()) {
+          setError('Key Passphrase is required. Please enter your PQC Key Passphrase.');
+          setStatus('error');
+          return;
+        }
+
+        try {
+          setSigStatus('signing');
+          setStatus('signing');
+
+          // 1. Fetch encrypted key bundle for the logged-in user
+          const bundleRes = await getPqcKeyBundle();
+
+          if (!bundleRes?.encryptedPqcKeys) {
+            throw new Error('No enrolled PQC keys found for this officer.');
+          }
+
+          // 2. Get a one-time signing challenge from the server
+          const challenge = await requestDecryptChallenge({ assetId, userId });
+
+          // 3. Unlock private key bundle + sign challenge — entirely in browser
+          const sig = await unlockAndSign(
+            bundleRes.encryptedPqcKeys,
+            form.passphrase.trim(),
+            challenge.challengeHex
+          );
+
+          clientSignature = sig;
+          challengeId = challenge.challengeId;
+          setSigStatus('ok');
+        } catch (sigErr) {
+          console.error('[pqc] Client signing failed:', sigErr);
+          setError('Password is incorrect. Please try again.');
+          setStatus('error');
+          setSigStatus('error');
+          return; // Halt! Do not proceed with server-side signing if passphrase is wrong
+        }
+      }
+
+      // ── Decrypt + watermark + on-chain anchor ────────────────────────────────
+      setStatus('working');
+      try {
+        const r = await decryptAsset({
+          assetId,
+          userId,
+          deviceLabel: form.deviceLabel || 'UNKNOWN-DEVICE',
+          passphrase: form.passphrase ? form.passphrase.trim() : undefined,
+          clientSignature,
+          challengeId,
+        });
+        setResult(r);
+        setStatus('done');
+      } catch (err) {
+        setError(err.message);
+        setStatus('error');
+      }
+    },
+    [form, user?.role]
+  );
   const selectedAsset = assets.find((a) => String(a.assetId) === String(assetId));
 
   // Officer toggle helper for Admin
@@ -198,6 +302,9 @@ export default function Decrypt() {
   return (
     <section className="space-y-6">
       <Header
+        eyebrow="Release"
+        title="Decrypt a document"
+        subtitle="Releasing a copy writes an immutable receipt on-chain, then embeds an invisible Haar-DWT watermark before the file leaves the system."
         title={isAdmin ? 'Decrypt & Multi-Officer Dispatch' : 'Decrypt protected document'}
         subtitle={
           isAdmin
@@ -372,6 +479,38 @@ export default function Decrypt() {
                 </div>
               </div>
             ) : (
+              <div className="rounded-xl border border-line bg-[#faf8f5] px-3.5 py-2.5">
+                <div className="text-sm font-bold text-ink">{user?.name}</div>
+              </div>
+            )}
+          </Field>
+
+          <Field label="Device label">
+            <input
+              className="input"
+              value={form.deviceLabel}
+              onChange={(e) => setForm({ ...form, deviceLabel: e.target.value })}
+              placeholder="DESK-114"
+            />
+          </Field>
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-semibold text-ink">
+                Key Passphrase (for client-side PQC signing)
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowPass((s) => !s)}
+                className="text-[11px] font-medium text-ink-muted hover:text-ink"
+              >
+                <span className="flex items-center gap-1.5">
+                  {showPass ? <EyeOffIcon size={13} /> : <EyeIcon size={13} />}
+                  {showPass ? 'Hide' : 'Show'}
+                </span>
+              </button>
+            </div>
+            <div className="relative">
               /* ── OFFICER: Locked Single Identity & Mandatory Passphrase ── */
               <div className="space-y-4">
                 <Field label="Authorized Recipient">
@@ -430,6 +569,44 @@ export default function Decrypt() {
                 onChange={(e) => setDeviceLabel(e.target.value)}
                 placeholder="DESK-114"
               />
+            </div>
+          </div>
+
+          {/* PQC signing status chip */}
+          {sigStatus && (
+            <div
+              className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold ${
+                sigStatus === 'ok'
+                  ? 'bg-attributed-tint text-attributed-deep border border-attributed-bright'
+                  : sigStatus === 'signing'
+                    ? 'bg-pending-tint text-pending-deep border border-pending-bright animate-pulse'
+                    : 'bg-probable-tint text-probable-deep border border-probable-bright'
+              }`}
+            >
+              <span className="flex items-center gap-1.5">
+                {sigStatus === 'ok' ? (
+                  <CheckIcon size={13} />
+                ) : sigStatus === 'signing' ? (
+                  <SpinnerIcon size={13} />
+                ) : (
+                  <WarningIcon size={13} />
+                )}
+                {sigStatus === 'ok'
+                  ? 'ML-DSA-65 signature generated in browser'
+                  : sigStatus === 'signing'
+                    ? 'Unlocking PQC key bundle…'
+                    : 'Client signing skipped — server will sign'}
+              </span>
+            </div>
+          )}
+
+          <button type="submit" className="btn-accent w-full" disabled={isBusy}>
+            {status === 'signing'
+              ? 'Generating non-repudiation signature…'
+              : status === 'working'
+                ? 'Embedding invisible mark (Haar DWT)…'
+                : 'Decrypt & release copy'}
+          </button>
             </Field>
 
             {/* Submit Action */}
@@ -563,11 +740,32 @@ export default function Decrypt() {
   );
 }
 
+// ─── PQC Progress Badge ──────────────────────────────────────────────────────
+function PqcProgressBadge({ sigStatus }) {
+  if (!sigStatus) return null;
+  return (
+    <div className="flex items-center gap-2 text-[11px] text-attributed-deep">
+      <span className="h-2 w-2 rounded-full bg-attributed-bright animate-pulse" />
+      {sigStatus === 'ok'
+        ? 'ML-DSA-65 client signature ready'
+        : sigStatus === 'signing'
+          ? 'Performing post-quantum signing in browser…'
+          : 'Using server-side signing fallback'}
+    </div>
+  );
+}
+
+// ─── Receipt ─────────────────────────────────────────────────────────────────
 // ─── Receipt Component ───────────────────────────────────────────────────────
 function Receipt({ result, officer, asset, device, sigStatus }) {
   const clientSigned = sigStatus === 'ok';
   return (
     <div className="space-y-4">
+      {/* on-chain group — dark, hashed */}
+      <div className="rounded-3xl bg-noir bg-gradient-to-br from-[#131b26] to-noir p-5 text-white shadow-panel">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-bold">On-chain receipt</h3>
+          <span className="pill bg-accent text-noir">verified</span>
       {/* On-chain receipt banner */}
       <div className="rounded-3xl bg-night bg-gradient-to-br from-[#20220f] to-night p-5 text-white shadow-panel">
         <div className="mb-3 flex items-center justify-between">
@@ -579,9 +777,9 @@ function Receipt({ result, officer, asset, device, sigStatus }) {
         </div>
         <dl className="mono space-y-2 text-xs">
           <ChainRow k="receipt id" v={shortHash(result.receiptId, 10, 6)} />
-          <ChainRow k="tx hash"    v={shortHash(result.txHash, 10, 6)} />
-          <ChainRow k="block"      v={result.blockNumber ?? '—'} />
-          <ChainRow k="payload"    v={`${result.payloadBits?.length ?? 0} bits embedded`} />
+          <ChainRow k="tx hash" v={shortHash(result.txHash, 10, 6)} />
+          <ChainRow k="block" v={result.blockNumber ?? '—'} />
+          <ChainRow k="payload" v={`${result.payloadBits?.length ?? 0} bits embedded`} />
           {result.pqc?.signatureCommit && (
             <ChainRow k="sig commit" v={shortHash(result.pqc.signatureCommit, 10, 6)} />
           )}
@@ -593,6 +791,51 @@ function Receipt({ result, officer, asset, device, sigStatus }) {
             rel="noreferrer"
             className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold hover:bg-white/20"
           >
+            View on Etherscan
+            <ExternalLinkIcon size={13} />
+          </a>
+        )}
+
+        {/* PQC status inside receipt */}
+        {result.pqc && (
+          <div className="mt-4 border-t border-white/10 pt-3 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-attributed-bright">
+                NIST Post-Quantum Cryptography
+              </span>
+              <div className="flex items-center gap-1.5">
+                {clientSigned && (
+                  <span className="rounded bg-pending/30 px-2 py-0.5 text-[9px] font-bold text-pending-bright uppercase">
+                    Browser-Signed
+                  </span>
+                )}
+                <span className="rounded bg-attributed/20 px-2 py-0.5 text-[10px] font-bold text-attributed-bright">
+                  {result.pqc.dsaAlgorithm ?? 'ML-DSA-65'}
+                </span>
+              </div>
+            </div>
+            <div className="text-[11px] text-white/70">
+              Content key decrypted via{' '}
+              <span className="font-semibold text-white">{result.pqc.kemAlgorithm}</span>.
+            </div>
+            {result.pqc.signatureCommit && (
+              <div className="rounded-lg bg-black/30 p-2 font-mono text-[10px] text-white/80 space-y-1">
+                <div className="text-white/50 uppercase text-[9px] font-sans font-bold">
+                  On-chain Signature Commit (FIPS 204)
+                </div>
+                <div className="break-all text-accent">{result.pqc.signatureCommit}</div>
+              </div>
+            )}
+            <div className="flex items-center gap-1.5 text-[10px] text-attributed-bright">
+              <span className="h-1.5 w-1.5 rounded-full bg-attributed-bright" />
+              <span>
+                {clientSigned
+                  ? 'Non-repudiation locked via true client-side signing (key never left browser)'
+                  : 'Non-repudiation cryptographic binding locked on ledger'}
+              </span>
+            </div>
+          </div>
+        )}
             View on Sepolia Etherscan ↗
           </a>
         )}
@@ -608,11 +851,11 @@ function Receipt({ result, officer, asset, device, sigStatus }) {
         </div>
 
         <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-          <Reg k="Officer"      v={officer?.name} />
-          <Reg k="Department"   v={officer?.dept} />
-          <Reg k="Document"     v={asset?.title} />
-          <Reg k="Device"       v={device} />
-          <Reg k="PSNR"         v={result.psnrDb != null ? `${result.psnrDb.toFixed(1)} dB` : '—'} />
+          <Reg k="Officer" v={officer?.name} />
+          <Reg k="Department" v={officer?.dept} />
+          <Reg k="Document" v={asset?.title} />
+          <Reg k="Device" v={device} />
+          <Reg k="PSNR" v={result.psnrDb != null ? `${result.psnrDb.toFixed(1)} dB` : '—'} />
           <Reg k="QIM strength" v={`Δ = ${result.deltaUsed}`} />
         </dl>
 

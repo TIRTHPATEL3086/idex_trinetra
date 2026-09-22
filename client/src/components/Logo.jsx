@@ -3,23 +3,24 @@
  *
  * The glyph is a fingerprint — the app's whole idea is that every released copy
  * carries a unique, invisible mark that identifies exactly who opened it, so a
- * fingerprint is the literal metaphor. It sits in a chunky, rounded lime tile
+ * fingerprint is the literal metaphor. It sits in a chunky, rounded coral tile
  * to echo the bold rounded logo style of the reference design; the wordmark is
- * set in Baloo 2 with a single lime accent dot.
+ * set in Bricolage Grotesque with a single coral dot.
  *
  * Our own mark — nothing is copied from another product.
  *
  * @param {'sm'|'md'} size
  * @param {boolean} iconOnly  render just the tile (for tight spaces)
+ * @param {boolean} onDark    invert the wordmark for a dark surface
  */
-export default function Logo({ size = 'md', iconOnly = false }) {
+export default function Logo({ size = 'md', iconOnly = false, onDark = false }) {
   const tile = size === 'sm' ? 34 : 40;
   const word = size === 'sm' ? 20 : 24;
 
   return (
     <div className="flex select-none items-center gap-2.5">
       <span
-        className="grid shrink-0 place-items-center rounded-[30%] bg-lime shadow-[0_6px_16px_-6px_rgba(180,224,44,0.9)]"
+        className="grid shrink-0 place-items-center rounded-[30%] bg-accent shadow-[0_6px_18px_-6px_rgba(255,116,72,0.85)]"
         style={{ width: tile, height: tile }}
       >
         <Fingerprint size={Math.round(tile * 0.62)} />
@@ -27,22 +28,22 @@ export default function Logo({ size = 'md', iconOnly = false }) {
 
       {!iconOnly && (
         <span
-          className="font-display leading-none text-ink"
+          className={`font-display leading-none ${onDark ? 'text-white' : 'text-ink'}`}
           style={{ fontSize: word, fontWeight: 800, letterSpacing: '-0.02em' }}
         >
           Provenance
-          <span className="text-lime-deep">.</span>
+          <span className={onDark ? 'text-accent' : 'text-accent-deep'}>.</span>
         </span>
       )}
     </div>
   );
 }
 
-/** Nested fingerprint ridges + a solid core, drawn in near-black on the lime tile. */
+/** Nested fingerprint ridges + a solid core, drawn in near-black on the coral tile. */
 function Fingerprint({ size = 24 }) {
   const p = {
     fill: 'none',
-    stroke: '#141410',
+    stroke: '#0f151d',
     strokeWidth: 1.7,
     strokeLinecap: 'round',
   };
@@ -56,7 +57,7 @@ function Fingerprint({ size = 24 }) {
       <path d="M9.6 12a2.5 2.5 0 0 1 4.9.6c0 2.3-.3 4.6-1 6.8" {...p} />
       <path d="M10.7 19.9c.3-.9.5-1.7.7-2.6" {...p} />
       {/* core */}
-      <circle cx="12" cy="12.3" r="1.15" fill="#141410" />
+      <circle cx="12" cy="12.3" r="1.15" fill="#0f151d" />
     </svg>
   );
 }
