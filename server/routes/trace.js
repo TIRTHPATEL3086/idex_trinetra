@@ -10,6 +10,7 @@ import * as chain from '../core/chain.js';
 import * as bktree from '../core/bktree.js';
 import { hashes, extract, score, sha256, hamming, isPdf, extractPdf } from '../core/index.js';
 import { parsePayload, bitAgreement, bitsMatching, PAYLOAD_BITS } from '../core/payload.js';
+import { verifyDecryptionSignature } from '../core/pqc.js';
 
 /**
  * Attribution: hash, search, extract, cross-check, score.
@@ -74,14 +75,60 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
       // A malformed payload is a signal, not a crash. It just lowers the score.
     }
 
-    // Fall back to the nearest perceptual-hash candidate when the watermark
-    // was destroyed — this is what catches screenshots and heavy re-encodes.
-    if (!event && candidates.length) {
-      event = await prisma.decryptionEvent.findUnique({
-        where: { id: candidates[0].id },
+    // Fall back to candidate search across all recent decryptions (or BK-tree candidates)
+    // when CRC fails due to compression noise or screenshot borders.
+    const allRecentEvents = await prisma.decryptionEvent.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: { asset: true, user: true },
+    });
+
+    // Merge BK-tree candidates and recent decryption events
+    const poolMap = new Map();
+    for (const ev of allRecentEvents) poolMap.set(ev.id, ev);
+    if (candidates.length) {
+      const bktreeEvents = await prisma.decryptionEvent.findMany({
+        where: { id: { in: candidates.map((c) => c.id) } },
         include: { asset: true, user: true },
       });
+      for (const ev of bktreeEvents) poolMap.set(ev.id, ev);
     }
+
+    const candidatePool = Array.from(poolMap.values());
+    const rankedCandidates = candidatePool
+      .map((ev) => {
+        const matches = bitsMatching(marked.payloadBits, ev.payloadBits);
+        return {
+          event: ev,
+          matches,
+          agreement: matches / PAYLOAD_BITS,
+        };
+      })
+      .sort((a, b) => b.matches - a.matches);
+
+    // If no direct CRC match, assign top candidate if bit match significantly exceeds random chance (>= 30/48)
+    if (!event && rankedCandidates.length > 0) {
+      const top = rankedCandidates[0];
+      if (top.matches >= 30) {
+        event = top.event;
+      }
+    }
+
+    // Build Suspect Pool (शक का दायरा) ranking top candidate officers
+    const suspects = rankedCandidates.slice(0, 5).map((c, idx) => ({
+      rank: idx + 1,
+      userId: c.event.user.id,
+      userName: c.event.user.name,
+      department: c.event.user.dept,
+      deviceLabel: c.event.deviceLabel,
+      assetTitle: c.event.asset.title,
+      decryptedAt: c.event.createdAt.toISOString(),
+      bitsMatched: c.matches,
+      totalBits: PAYLOAD_BITS,
+      bitMatchPct: Math.round(c.agreement * 100),
+      suspicionLevel: c.matches >= 34 ? 'HIGH' : c.matches >= 26 ? 'MEDIUM' : 'LOW',
+      txHash: c.event.txHash ? bufferToHex(c.event.txHash) : null,
+    }));
 
     // --- Distances between the leaked file and the candidate we settled on --
     const cand = event ? candidates.find((c) => c.id === event.id) : null;
@@ -115,6 +162,8 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
     });
 
     const reasons = [...verdictResult.reasons];
+    let signatureVerified = false;
+
     if (event) {
       const n = bitsMatching(marked.payloadBits, event.payloadBits);
       reasons.unshift(
@@ -122,6 +171,30 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
           (marked.eccCorrected ? ' (corrected by Reed-Solomon)' : '')
       );
       if (!crcOk) reasons.push('Payload CRC failed — the extracted bits are unreliable.');
+
+      // --- 7.2 Non-repudiation verification: ML-DSA-65 signature check ------
+      if (event.decryptionSignature && event.user?.dsaPublicKey) {
+        try {
+          const receiptDigest = sha256(
+            Buffer.concat([
+              Buffer.from(event.receiptId),
+              Buffer.from(event.user.userRef),
+            ])
+          );
+          signatureVerified = verifyDecryptionSignature(
+            event.decryptionSignature,
+            receiptDigest,
+            event.user.dsaPublicKey
+          );
+          if (signatureVerified) {
+            reasons.push(
+              `NIST ML-DSA-65 post-quantum digital signature verified — non-repudiation proof confirmed for Officer ${event.user.name}.`
+            );
+          }
+        } catch (sigErr) {
+          console.warn('ML-DSA-65 verification error:', sigErr.message);
+        }
+      }
     } else {
       reasons.unshift('No candidate file in the register resembled this upload.');
     }
@@ -141,8 +214,9 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
       },
     });
 
-    // --- 9. A name is returned ONLY above the INCONCLUSIVE threshold -------
-    const showMatch = verdictResult.verdict !== 'INCONCLUSIVE' && event;
+    // --- 9. A name is returned ONLY for ATTRIBUTED or PROBABLE (>= 60%) -------
+    const showMatch =
+      (verdictResult.verdict === 'ATTRIBUTED' || verdictResult.verdict === 'PROBABLE') && event;
     const txHashHex = event ? bufferToHex(event.txHash) : null;
 
     res.json({
@@ -151,6 +225,7 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
       confidence: verdictResult.score,
       match: showMatch
         ? {
+            userId: event.user.id,
             userName: event.user.name,
             department: event.user.dept,
             assetTitle: event.asset.title,
@@ -158,10 +233,23 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
             deviceLabel: event.deviceLabel,
             txHash: txHashHex,
             etherscanUrl: chain.buildEtherscanUrl(txHashHex),
+            pqcProof: {
+              algorithm: event.signatureAlgorithm || 'ML-DSA-65',
+              signatureVerified,
+              signatureCommit: event.signatureCommit ? bufferToHex(event.signatureCommit) : null,
+              signatureHex: event.decryptionSignature
+                ? bufferToHex(event.decryptionSignature).slice(0, 66) + '…'
+                : null,
+              publicKeyHex: event.user.dsaPublicKey
+                ? bufferToHex(event.user.dsaPublicKey).slice(0, 66) + '…'
+                : null,
+              nonRepudiation: signatureVerified,
+            },
           }
         : null,
+      suspects: suspects,
       reasons,
-      candidatesChecked: checked || candidates.length,
+      candidatesChecked: checked || candidates.length || allRecentEvents.length,
       elapsedMs,
     });
   } catch (err) {

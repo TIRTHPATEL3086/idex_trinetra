@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { getAssets, uploadAsset } from '../lib/api.js';
+import { getAssets, uploadAsset, getUsers } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 
 /**
@@ -30,7 +30,7 @@ export default function Assets() {
     <section className="space-y-6">
       <Header
         title="Protected documents"
-        subtitle="Encrypted at rest. Every decryption is watermarked and anchored on-chain."
+        subtitle="Encrypted at rest with NIST ML-KEM-768 broadcast encryption. Every decryption is watermarked and anchored on-chain."
         action={
           mayUpload ? (
             <button type="button" className="btn-lime" onClick={() => setUploadOpen(true)}>
@@ -77,6 +77,18 @@ function UploadModal({ onClose, onDone }) {
   const [file, setFile] = useState(null);
   const [status, setStatus] = useState('idle'); // idle | working | error
   const [error, setError] = useState(null);
+  const [availableUsers, setAvailableUsers] = useState([]);
+  const [selectedUserIds, setSelectedUserIds] = useState([]);
+
+  useEffect(() => {
+    getUsers()
+      .then((data) => {
+        const eligible = (data.users || []).filter((u) => u.active);
+        setAvailableUsers(eligible);
+        setSelectedUserIds(eligible.map((u) => u.userId));
+      })
+      .catch(() => {});
+  }, []);
 
   async function submit(e) {
     e.preventDefault();
@@ -84,7 +96,12 @@ function UploadModal({ onClose, onDone }) {
     setStatus('working');
     setError(null);
     try {
-      await uploadAsset({ file, title: title.trim(), classification });
+      await uploadAsset({
+        file,
+        title: title.trim(),
+        classification,
+        authorizedUserIds: selectedUserIds,
+      });
       onDone();
     } catch (err) {
       setError(err.message);
@@ -109,8 +126,7 @@ function UploadModal({ onClose, onDone }) {
           </button>
         </div>
         <p className="text-sm text-ink-muted">
-          The file is SHA-256 hashed and AES-256-GCM encrypted before it touches disk. The plaintext
-          is never stored.
+          The file is SHA-256 hashed and encrypted with AES-256-GCM. The content key is encapsulated using NIST ML-KEM-768 for each authorized recipient.
         </p>
 
         <label className="block">
@@ -143,15 +159,56 @@ function UploadModal({ onClose, onDone }) {
 
         <label className="block">
           <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-faint">
-            Image file
+            Document Image or PDF
           </span>
           <input
             type="file"
-            accept="image/*"
+            accept="image/*,application/pdf"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             className="block w-full text-sm text-ink-muted file:mr-3 file:rounded-full file:border-0 file:bg-night file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-night-soft"
           />
         </label>
+
+        {/* Authorized Recipients Picker */}
+        {availableUsers.length > 0 && (
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs font-bold uppercase tracking-wide text-ink-faint">
+                Authorized Recipients (ML-KEM-768)
+              </span>
+              <span className="text-[11px] text-lime-deep font-semibold">
+                {selectedUserIds.length} of {availableUsers.length} selected
+              </span>
+            </div>
+            <div className="max-h-28 overflow-y-auto rounded-xl border border-line p-2 space-y-1 bg-line/10">
+              {availableUsers.map((u) => {
+                const checked = selectedUserIds.includes(u.userId);
+                return (
+                  <label
+                    key={u.userId}
+                    className="flex items-center justify-between gap-2 text-xs text-ink cursor-pointer hover:bg-white/60 p-1 rounded-lg"
+                  >
+                    <span className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          setSelectedUserIds((prev) =>
+                            checked ? prev.filter((id) => id !== u.userId) : [...prev, u.userId]
+                          );
+                        }}
+                        className="rounded text-lime-deep focus:ring-lime"
+                      />
+                      <span className="font-semibold">{u.name}</span>
+                      <span className="text-ink-muted">· {u.dept}</span>
+                    </span>
+                    <span className="pill !text-[10px] !py-0.5">{u.role}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {error && <Notice tone="error">{error}</Notice>}
 
@@ -164,7 +221,7 @@ function UploadModal({ onClose, onDone }) {
             className="btn-lime flex-1"
             disabled={status === 'working' || !file || !title.trim()}
           >
-            {status === 'working' ? 'Encrypting…' : 'Upload'}
+            {status === 'working' ? 'Encrypting & Encapsulating…' : 'Upload'}
           </button>
         </div>
       </form>
@@ -178,64 +235,67 @@ function Overview({ assets }) {
   const documents = assets.length;
   const decryptions = assets.reduce((n, a) => n + (a.decryptCount || 0), 0);
   const secret = assets.filter((a) => a.classification === 'SECRET').length;
-  const restricted = assets.filter((a) => a.classification === 'RESTRICTED').length;
 
   return (
-    <div className="rounded-3xl bg-night bg-gradient-to-br from-[#20220f] to-night p-4 shadow-panel sm:p-5">
-      <div className="mb-4 flex items-center justify-between px-1">
-        <h3 className="text-base font-bold text-white">Register overview</h3>
-        <span className="mono rounded-full border border-white/15 px-3 py-1 text-[11px] text-white/70">
-          Live
-        </span>
-      </div>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Tile label="Documents" value={documents} highlight />
-        <Tile label="Decryptions" value={decryptions} note="on-chain receipts" />
-        <Tile label="Classified SECRET" value={secret} />
-        <Tile label="Restricted" value={restricted} />
+    <div className="relative overflow-hidden rounded-3xl bg-night p-6 text-white shadow-panel sm:p-7">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-white/50">
+            <span className="h-1.5 w-1.5 rounded-full bg-lime" />
+            Registry overview
+          </div>
+          <div className="font-display mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl">
+            {documents} <span className="text-white/40 font-normal">protected documents</span>
+          </div>
+          <p className="mt-1 text-xs text-white/60">
+            Every document is AES-256-GCM encrypted. Each release writes an immutable receipt to the
+            blockchain and embeds an invisible Haar-DWT watermark.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          <StatTile label="Documents" value={documents} />
+          <StatTile label="Secret" value={secret} />
+          <StatTile label="Decryptions" value={decryptions} highlight />
+        </div>
       </div>
     </div>
   );
 }
 
-function Tile({ label, value, note, highlight }) {
+function StatTile({ label, value, highlight }) {
   return (
     <div
-      className={`rounded-2xl p-4 ${
-        highlight ? 'bg-lime text-night' : 'bg-white/[0.06] text-white'
+      className={`flex flex-col justify-between rounded-2xl p-4 transition ${
+        highlight ? 'bg-lime text-night' : 'bg-night-soft text-white'
       }`}
     >
-      <div className="flex items-start justify-between">
-        <span className={`text-xs font-semibold ${highlight ? 'text-night/70' : 'text-white/60'}`}>
-          {label}
-        </span>
+      <div className="flex items-center justify-between">
         <span
-          className={`grid h-6 w-6 place-items-center rounded-full ${
-            highlight ? 'bg-night/10' : 'bg-white/10'
+          className={`text-[11px] font-bold uppercase tracking-wider ${
+            highlight ? 'text-night/70' : 'text-white/50'
           }`}
         >
-          <ArrowUpRight highlight={highlight} />
+          {label}
         </span>
+        <ArrowUpRight highlight={highlight} />
       </div>
-      <div className="mt-3 text-2xl font-extrabold tracking-tight">{value}</div>
-      <div className={`mt-0.5 text-[11px] ${highlight ? 'text-night/60' : 'text-white/45'}`}>
-        {note || 'in the register'}
-      </div>
+      <div className="font-display mt-3 text-2xl font-extrabold">{value}</div>
     </div>
   );
 }
 
-/* -- document list ---------------------------------------------------------- */
+/* -- document list: cards on mobile, table on sm+ --------------------------- */
 
 function DocumentList({ assets }) {
   return (
     <>
-      {/* Card list — mobile. */}
+      {/* Cards — mobile only. */}
       <ul className="space-y-3 sm:hidden">
         {assets.map((a) => (
           <li key={a.assetId} className="card p-4">
-            <div className="flex items-start justify-between gap-3">
-              <span className="min-w-0 break-words font-bold text-ink">{a.title}</span>
+            <div className="flex items-start justify-between gap-2">
+              <div className="font-bold text-ink">{a.title}</div>
               <ClassificationBadge value={a.classification} />
             </div>
             <dl className="mono mt-3 grid grid-cols-2 gap-y-1.5 text-xs text-ink-muted">
@@ -255,6 +315,7 @@ function DocumentList({ assets }) {
             <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-ink-faint">
               <th className="px-5 py-3.5 font-bold">Document</th>
               <th className="px-5 py-3.5 font-bold">Classification</th>
+              <th className="px-5 py-3.5 font-bold">PQC Broadcast Encryption</th>
               <th className="hidden px-5 py-3.5 font-bold md:table-cell">Created</th>
               <th className="px-5 py-3.5 text-right font-bold">Decryptions</th>
             </tr>
@@ -268,6 +329,11 @@ function DocumentList({ assets }) {
                 <td className="px-5 py-4 font-bold text-ink">{a.title}</td>
                 <td className="px-5 py-4">
                   <ClassificationBadge value={a.classification} />
+                </td>
+                <td className="px-5 py-4">
+                  <span className="pill !bg-emerald-50 !text-emerald-700 font-semibold">
+                    {a.encapsulationCount ?? a.authorizedUserIds?.length ?? 0} Recipients (ML-KEM-768)
+                  </span>
                 </td>
                 <td className="mono hidden px-5 py-4 text-xs text-ink-muted md:table-cell">
                   {new Date(a.createdAt).toLocaleString()}

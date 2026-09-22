@@ -24,6 +24,9 @@ export const deviceRef = (deviceLabel) => salted('device', deviceLabel ?? 'unkno
 /** keccak256(payloadBits || salt) — proves the mark predates the leak. */
 export const payloadCommit = (payloadBits) => salted('payload', payloadBits);
 
+/** keccak256(decryptionSignature) — anchors post-quantum non-repudiation proof on chain. */
+export const signatureCommit = (sigBytes) => keccak256(Buffer.isBuffer(sigBytes) ? sigBytes : Buffer.from(sigBytes));
+
 /**
  * receiptId = keccak256(assetRef || userRef || contentSha || nonce)
  * The nonce makes two decryptions of the same file by the same person

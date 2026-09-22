@@ -33,12 +33,12 @@ export const WEIGHTS = {
   chain: 0.05,
 };
 
-export const BANDS = { ATTRIBUTED: 0.85, PROBABLE: 0.6 };
+export const BANDS = { ATTRIBUTED: 0.85, PROBABLE: 0.6, SUSPICION: 0.3 };
 
 /**
  * @param {{ bitConfidence:number, pHashDist:number, dHashDist:number,
  *           aHashDist:number, chainVerified:boolean }} sig
- * @returns {{ score:number, verdict:'ATTRIBUTED'|'PROBABLE'|'INCONCLUSIVE',
+ * @returns {{ score:number, verdict:'ATTRIBUTED'|'PROBABLE'|'SUSPICION'|'INCONCLUSIVE',
  *             reasons:string[] }}
  */
 export function score(sig) {
@@ -50,15 +50,32 @@ export function score(sig) {
     chainVerified = false,
   } = sig;
 
-  const scoreValue =
-    WEIGHTS.bitAgreement * bitConfidence +
-    WEIGHTS.pHash * (1 - pHashDist / 64) +
-    WEIGHTS.dHash * (1 - dHashDist / 64) +
-    WEIGHTS.aHash * (1 - aHashDist / 64) +
-    WEIGHTS.chain * (chainVerified ? 1 : 0);
+  let scoreValue;
+  const reasons = [];
+
+  // Detect screenshot or phone display capture:
+  // When visual distance is high (>28) due to phone/laptop borders, status bars,
+  // or window frames, but watermark bit agreement is elevated (>= 0.65, meaning >= 31/48 bits),
+  // the frequency-domain Haar DWT watermark is the primary forensic identifier.
+  const isScreenshotTransformed = (pHashDist > 28 && dHashDist > 28) && bitConfidence >= 0.65;
+
+  if (isScreenshotTransformed) {
+    // Watermark carries primary weight under screenshot transformation
+    scoreValue =
+      0.72 * bitConfidence +
+      0.13 * (1 - Math.min(pHashDist, dHashDist) / 64) +
+      0.15 * (chainVerified ? 1 : 0);
+    reasons.push('Display frame / screenshot transformation detected — watermark frequency content preserved');
+  } else {
+    scoreValue =
+      WEIGHTS.bitAgreement * bitConfidence +
+      WEIGHTS.pHash * (1 - pHashDist / 64) +
+      WEIGHTS.dHash * (1 - dHashDist / 64) +
+      WEIGHTS.aHash * (1 - aHashDist / 64) +
+      WEIGHTS.chain * (chainVerified ? 1 : 0);
+  }
 
   const verdict = verdictFor(scoreValue);
-  const reasons = [];
 
   // dHash reasoning
   if (dHashDist <= 8) reasons.push(`dHash distance ${dHashDist}/64 — strong visual match`);
@@ -83,5 +100,6 @@ export function score(sig) {
 export function verdictFor(value) {
   if (value >= BANDS.ATTRIBUTED) return 'ATTRIBUTED';
   if (value >= BANDS.PROBABLE) return 'PROBABLE';
+  if (value >= BANDS.SUSPICION) return 'SUSPICION';
   return 'INCONCLUSIVE';
 }

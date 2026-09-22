@@ -16,6 +16,7 @@ import decryptRouter, { filesRouter } from './routes/decrypt.js';
 import traceRouter from './routes/trace.js';
 import auditRouter from './routes/audit.js';
 import metricsRouter from './routes/metrics.js';
+import keysRouter from './routes/keys.js';
 
 /**
  * The Express application: routes, CORS, the shared error shape, and a boot
@@ -62,6 +63,7 @@ app.use('/api/decrypt', decryptRouter);
 app.use('/api/trace', traceRouter);
 app.use('/api/audit', auditRouter);
 app.use('/api/metrics', metricsRouter);
+app.use('/api/keys', keysRouter);
 app.use('/api/files', filesRouter);
 
 app.use(notFoundHandler);

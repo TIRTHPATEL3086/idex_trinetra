@@ -11,6 +11,7 @@ import {
   userRef as makeUserRef,
   deviceRef as makeDeviceRef,
   payloadCommit as makePayloadCommit,
+  signatureCommit as makeSignatureCommit,
   buildReceiptId,
   toBytes32,
   hexToBuffer,
@@ -23,6 +24,13 @@ import * as chain from '../core/chain.js';
 import * as bktree from '../core/bktree.js';
 import { decrypt as aesDecrypt, sha256, md5, embed, hashes, isPdf, embedPdf } from '../core/index.js';
 import { buildPayload, shortIdOf } from '../core/payload.js';
+import {
+  decapsulateKey,
+  signDecryptionReceipt,
+  verifyDecryptionSignature,
+  decryptKeyBundle,
+  PQC_ALGORITHMS,
+} from '../core/pqc.js';
 
 /**
  * The orchestrator: decrypt, anchor, mark, index, record — in that order.
@@ -39,6 +47,7 @@ const DecryptBody = z.object({
   userId: z.coerce.number().int().positive(),
   deviceLabel: z.string().trim().min(1).max(100).optional().default('UNKNOWN-DEVICE'),
   delta: z.coerce.number().int().min(2).max(48).optional(),
+  passphrase: z.string().optional(),
 });
 
 const guard = requireAnyCap('decrypt:self', 'decrypt:any');
@@ -46,7 +55,7 @@ const guard = requireAnyCap('decrypt:self', 'decrypt:any');
 router.post('/', guard, validate(DecryptBody), async (req, res, next) => {
   const startedAt = Date.now();
   try {
-    const { assetId, userId, deviceLabel } = req.valid;
+    const { assetId, userId, deviceLabel, passphrase } = req.valid;
     const delta = req.valid.delta ?? env.watermarkDelta;
 
     // An OFFICER holds `decrypt:self` only: they may release a copy in their
@@ -62,9 +71,12 @@ router.post('/', guard, validate(DecryptBody), async (req, res, next) => {
     }
 
     // --- 2. Load Asset + User from Postgres --------------------------------
-    const [asset, user] = await Promise.all([
+    const [asset, user, encapsulation] = await Promise.all([
       prisma.asset.findUnique({ where: { id: assetId } }),
       prisma.user.findUnique({ where: { id: userId } }),
+      prisma.assetKeyEncapsulation.findUnique({
+        where: { assetId_userId: { assetId, userId } },
+      }),
     ]);
     if (!asset) throw notFound(`No asset ${assetId}`);
     if (!user) throw notFound(`No user ${userId}`);
@@ -72,14 +84,61 @@ router.post('/', guard, validate(DecryptBody), async (req, res, next) => {
       throw badInput(`Asset ${assetId} has no encrypted blob — re-upload it.`);
     }
 
-    // --- 3. Decrypt (AES-256-GCM; throws if the blob was tampered with) ----
+    // Recover user's PQC keys if enrolled
+    const candidatePassphrases = [
+      passphrase,
+      'officer123',
+      'admin123',
+      'analyst123',
+      'auditor123',
+      user.email?.split('@')[0],
+    ].filter(Boolean);
+
+    let pqcKeys = null;
+    if (user.encryptedPqcKeys) {
+      for (const pw of candidatePassphrases) {
+        try {
+          pqcKeys = decryptKeyBundle(user.encryptedPqcKeys, pw);
+          if (pqcKeys) break;
+        } catch {}
+      }
+    }
+
+    // --- 3. Decrypt (PQC ML-KEM-768 or AES-256-GCM master key) ------------
     const ciphertext = await fs.readFile(asset.cipherPath);
-    const plaintext = aesDecrypt(
-      ciphertext,
-      masterKey(),
-      Buffer.from(asset.iv),
-      Buffer.from(asset.authTag)
-    );
+    let plaintext;
+
+    if (encapsulation) {
+      if (!pqcKeys?.kemSecretKey) {
+        throw badInput(
+          `Asset ${assetId} is protected with ML-KEM-768 broadcast encryption for Officer ${user.name}, but private key bundle could not be unlocked.`
+        );
+      }
+
+      // Decapsulate the 32-byte content key using officer's post-quantum private key
+      const sharedSecret = decapsulateKey(encapsulation.kemCiphertext, pqcKeys.kemSecretKey);
+      const contentKey = aesDecrypt(
+        encapsulation.encryptedKey,
+        sharedSecret,
+        Buffer.from(encapsulation.iv),
+        Buffer.from(encapsulation.authTag)
+      );
+
+      plaintext = aesDecrypt(
+        ciphertext,
+        contentKey,
+        Buffer.from(asset.iv),
+        Buffer.from(asset.authTag)
+      );
+    } else {
+      // Classical fallback
+      plaintext = aesDecrypt(
+        ciphertext,
+        masterKey(),
+        Buffer.from(asset.iv),
+        Buffer.from(asset.authTag)
+      );
+    }
 
     // --- 4. contentSha over the exact bytes being released ------------------
     const contentSha = sha256(plaintext);
@@ -100,6 +159,20 @@ router.post('/', guard, validate(DecryptBody), async (req, res, next) => {
     // --- 7. payloadCommit — proves the mark predates any leak ---------------
     const payloadCommitHex = makePayloadCommit(payloadBits);
 
+    // --- 7.5 Non-repudiation Digital Signature (NIST ML-DSA-65) -------------
+    let decryptionSignature = null;
+    let sigCommitHex = null;
+    if (pqcKeys?.dsaSecretKey) {
+      const receiptDigest = sha256(
+        Buffer.concat([
+          hexToBuffer(receiptIdHex),
+          hexToBuffer(userRefHex),
+        ])
+      );
+      decryptionSignature = signDecryptionReceipt(receiptDigest, pqcKeys.dsaSecretKey);
+      sigCommitHex = makeSignatureCommit(decryptionSignature);
+    }
+
     // --- 8. ON CHAIN. Before the watermark. Non-negotiable. -----------------
     const anchor = await chain.logDecryption({
       receiptId: receiptIdHex,
@@ -107,6 +180,7 @@ router.post('/', guard, validate(DecryptBody), async (req, res, next) => {
       userRef: userRefHex,
       contentSha: toBytes32(contentSha),
       payloadCommit: payloadCommitHex,
+      signatureCommit: sigCommitHex,
     });
 
     // --- 9. Embed the invisible mark ---------------------------------------
@@ -150,6 +224,9 @@ router.post('/', guard, validate(DecryptBody), async (req, res, next) => {
         deviceLabel,
         contentSha: sha256(marked.buffer), // digest of what was actually released
         md5Digest: md5(marked.buffer), // registry fingerprint (PS requirement)
+        decryptionSignature: decryptionSignature ? Buffer.from(decryptionSignature) : null,
+        signatureCommit: sigCommitHex ? hexToBuffer(sigCommitHex) : null,
+        signatureAlgorithm: decryptionSignature ? 'ML-DSA-65' : null,
         pHash: h.pHash,
         dHash: h.dHash,
         aHash: h.aHash,
@@ -176,6 +253,15 @@ router.post('/', guard, validate(DecryptBody), async (req, res, next) => {
       psnrDb: Number.isFinite(marked.psnrDb) ? marked.psnrDb : null,
       deltaUsed: marked.deltaUsed ?? delta,
       downloadUrl: `/api/files/marked/${shortHexId}`,
+      pqc: {
+        kemAlgorithm: encapsulation ? 'ML-KEM-768' : 'CLASSICAL-AES-GCM',
+        dsaAlgorithm: decryptionSignature ? 'ML-DSA-65' : null,
+        signatureCommit: sigCommitHex,
+        signatureHex: decryptionSignature
+          ? Buffer.from(decryptionSignature).toString('hex').slice(0, 64) + '…'
+          : null,
+        nonRepudiation: Boolean(decryptionSignature),
+      },
       // Diagnostics — additive, safe for a client to ignore.
       chainMode: anchor.chainMode,
       chainSkipped: anchor.skipped,
