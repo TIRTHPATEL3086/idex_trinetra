@@ -362,7 +362,10 @@ export async function embed(imageBuffer, payloadBits, delta = 12) {
  * @returns {Promise<{ payloadBits: string, bitConfidence: number, eccCorrected: boolean }>}
  *          bitConfidence in [0,1] — fraction of bits recovered with agreement
  */
-export async function extract(imageBuffer, delta = 12) {
+/**
+ * Extract 48 bits from an image at a single fixed orientation.
+ */
+async function extractSingle(imageBuffer, delta = 12) {
   const seed = env.watermarkSeed;
   const numBits = 48;
 
@@ -399,7 +402,7 @@ export async function extract(imageBuffer, delta = 12) {
     let votes = 0;
     for (let r = 0; r < REPEAT_FACTOR; r++) {
       const idx = permutedIndices[(b * REPEAT_FACTOR + r) % permutedIndices.length];
-      votes += extractBit(coeffs[idx], delta); // Use provided delta
+      votes += extractBit(coeffs[idx], delta);
     }
     const majorityBit = votes > REPEAT_FACTOR / 2 ? 1 : 0;
     const agreement = Math.max(votes, REPEAT_FACTOR - votes) / REPEAT_FACTOR;
@@ -423,5 +426,58 @@ export async function extract(imageBuffer, delta = 12) {
     // ECC not available
   }
 
-  return { payloadBits, bitConfidence, eccCorrected };
+  return { payloadBits, bitConfidence, eccCorrected, rotationAngle: 0 };
+}
+
+/**
+ * @param {Buffer} imageBuffer  possibly attacked/compressed/rotated image
+ * @param {number} delta        QIM strength used during embed (default 12)
+ * @param {{ multiOrientation?: boolean }} options
+ * @returns {Promise<{ payloadBits: string, bitConfidence: number, eccCorrected: boolean, rotationAngle?: number }>}
+ *          bitConfidence in [0,1] — fraction of bits recovered with agreement
+ */
+export async function extract(imageBuffer, delta = 12, { multiOrientation = true } = {}) {
+  // Fast path: attempt standard 0° orientation
+  const baseResult = await extractSingle(imageBuffer, delta);
+
+  let crcOk = false;
+  try {
+    const { parsePayload } = await import('./payload.js');
+    crcOk = parsePayload(baseResult.payloadBits).crcOk;
+  } catch {}
+
+  // If CRC is valid or orientation check is disabled, return immediately
+  if (crcOk || !multiOrientation) {
+    return baseResult;
+  }
+
+  // Multi-orientation scan (90°, 180°, 270°) to catch rotated leaks / smartphone photos
+  const angles = [90, 180, 270];
+  let bestResult = baseResult;
+
+  for (const angle of angles) {
+    try {
+      const rotated = await sharp(imageBuffer).rotate(angle).png().toBuffer();
+      const candidate = await extractSingle(rotated, delta);
+      candidate.rotationAngle = angle;
+
+      let candidateCrc = false;
+      try {
+        const { parsePayload } = await import('./payload.js');
+        candidateCrc = parsePayload(candidate.payloadBits).crcOk;
+      } catch {}
+
+      if (candidateCrc) {
+        return candidate; // Exact match found on rotation
+      }
+
+      if (candidate.bitConfidence > bestResult.bitConfidence) {
+        bestResult = candidate;
+      }
+    } catch {
+      // Rotation attempt skipped
+    }
+  }
+
+  return bestResult;
 }
