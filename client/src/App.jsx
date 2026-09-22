@@ -99,12 +99,6 @@ function Shell() {
           </span>
 
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-            {user?.role !== 'OFFICER' && (
-              <>
-                <HealthChip health={health} />
-                <NotificationsBell health={health} />
-              </>
-            )}
             <WalletButton health={health} />
             <AccountMenu user={user} />
           </div>
