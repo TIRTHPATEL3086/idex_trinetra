@@ -36,23 +36,25 @@ export default function Decrypt() {
   const [sigStatus, setSigStatus] = useState(null); // null | 'signing' | 'ok' | 'skipped'
   const [result, setResult]       = useState(null);
   const [error, setError]         = useState(null);
-  const [showPass, setShowPass]   = useState(false);
-
-  useEffect(() => {
+  const [showPass, setShowPass]   = useState(false);  useEffect(() => {
     Promise.all([getAssets(), getUsers()])
       .then(([a, u]) => {
-        setAssets(a.assets);
+        let availableAssets = a.assets;
+        if (user?.role === 'OFFICER') {
+          availableAssets = a.assets.filter((x) => x.authorizedUserIds?.includes(user.userId));
+        }
+        setAssets(availableAssets);
         setUsers(u.users);
         setForm((f) => ({
           ...f,
-          assetId: String(a.assets[0]?.assetId ?? ''),
+          assetId: String(availableAssets[0]?.assetId ?? ''),
           userId: String(
             u.users.find((x) => x.userId === user?.userId)?.userId ?? u.users[0]?.userId ?? ''
           ),
         }));
       })
       .catch((e) => setError(e.message));
-  }, [user?.userId]);
+  }, [user?.userId, user?.role]);
 
   const officer = users.find((u) => String(u.userId) === form.userId);
   const asset   = assets.find((a) => String(a.assetId) === form.assetId);
@@ -66,14 +68,22 @@ export default function Decrypt() {
     const assetId = Number(form.assetId);
     const userId  = Number(form.userId);
 
+    if (!assetId) {
+      setError('Please select a valid document.');
+      return;
+    }
+
     let clientSignature = undefined;
     let challengeId     = undefined;
 
     // ── Phase 2: Client-Side ML-DSA-65 Non-Repudiation ──────────────────────
-    // Only attempt if the officer provides a passphrase. The encrypted bundle
-    // is fetched from /api/keys/bundle (owner-only endpoint). The private key
-    // is unlocked and signs a one-time server challenge entirely in the browser.
-    if (form.passphrase) {
+    if (user?.role === 'OFFICER' || form.passphrase) {
+      if (!form.passphrase?.trim()) {
+        setError('Key Passphrase is required. Please enter your PQC Key Passphrase.');
+        setStatus('error');
+        return;
+      }
+
       try {
         setSigStatus('signing');
         setStatus('signing');
@@ -81,29 +91,29 @@ export default function Decrypt() {
         // 1. Fetch encrypted key bundle for the logged-in user
         const bundleRes = await getPqcKeyBundle();
 
-        if (bundleRes?.encryptedPqcKeys) {
-          // 2. Get a one-time signing challenge from the server
-          const challenge = await requestDecryptChallenge({ assetId, userId });
-
-          // 3. Unlock private key bundle + sign challenge — entirely in browser
-          const sig = await unlockAndSign(
-            bundleRes.encryptedPqcKeys,
-            form.passphrase,
-            challenge.challengeHex
-          );
-
-          clientSignature = sig;
-          challengeId     = challenge.challengeId;
-          setSigStatus('ok');
-        } else {
-          // Officer not enrolled — skip client-side signing gracefully
-          setSigStatus('skipped');
+        if (!bundleRes?.encryptedPqcKeys) {
+          throw new Error('No enrolled PQC keys found for this officer.');
         }
+
+        // 2. Get a one-time signing challenge from the server
+        const challenge = await requestDecryptChallenge({ assetId, userId });
+
+        // 3. Unlock private key bundle + sign challenge — entirely in browser
+        const sig = await unlockAndSign(
+          bundleRes.encryptedPqcKeys,
+          form.passphrase.trim(),
+          challenge.challengeHex
+        );
+
+        clientSignature = sig;
+        challengeId     = challenge.challengeId;
+        setSigStatus('ok');
       } catch (sigErr) {
-        // Signing failed (wrong passphrase / not enrolled) — continue without
-        // client sig; server will attempt server-side signing from stored keys
-        console.warn('[pqc] Client signing skipped:', sigErr.message);
-        setSigStatus('skipped');
+        console.error('[pqc] Client signing failed:', sigErr);
+        setError('Password is incorrect. Please try again.');
+        setStatus('error');
+        setSigStatus('error');
+        return; // Halt! Do not proceed with server-side signing if passphrase is wrong
       }
     }
 
@@ -114,7 +124,7 @@ export default function Decrypt() {
         assetId,
         userId,
         deviceLabel: form.deviceLabel || 'UNKNOWN-DEVICE',
-        passphrase:  form.passphrase || undefined,
+        passphrase:  form.passphrase ? form.passphrase.trim() : undefined,
         clientSignature,
         challengeId,
       });
@@ -124,7 +134,7 @@ export default function Decrypt() {
       setError(err.message);
       setStatus('error');
     }
-  }, [form]);
+  }, [form, user?.role]);
 
   const isBusy = status === 'working' || status === 'signing';
 
@@ -168,10 +178,6 @@ export default function Decrypt() {
             ) : (
               <div className="rounded-xl border border-line bg-[#fbfbf7] px-3.5 py-2.5">
                 <div className="text-sm font-bold text-ink">{user?.name}</div>
-                <div className="mt-0.5 text-[11px] leading-relaxed text-ink-muted">
-                  {user?.dept} · the copy is watermarked with your identity, so it can only be
-                  released in your name.
-                </div>
               </div>
             )}
           </Field>
@@ -204,31 +210,9 @@ export default function Decrypt() {
                 className="input pr-10"
                 value={form.passphrase || ''}
                 onChange={(e) => setForm({ ...form, passphrase: e.target.value })}
-                placeholder="Passphrase unlocks ML-DSA-65 private key locally"
+                placeholder="Enter PQC Key Passphrase"
+                required
               />
-            </div>
-            <div className="mt-1.5 flex flex-wrap items-center justify-between gap-1.5 text-[10px]">
-              <span className="text-ink-faint">
-                Decrypted <strong>only in browser</strong>. Leave blank for server-side signing.
-              </span>
-              <div className="flex gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setForm({ ...form, passphrase: 'officer123' })}
-                  className="rounded-md border border-edge bg-[#fbfbf7] px-2 py-0.5 text-[10px] font-medium text-ink hover:border-lime-500 hover:text-lime-700"
-                >
-                  Fill Default (<span className="mono">officer123</span>)
-                </button>
-                {form.passphrase && (
-                  <button
-                    type="button"
-                    onClick={() => setForm({ ...form, passphrase: '' })}
-                    className="text-[10px] text-ink-muted hover:text-rose-600"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
             </div>
           </div>
 

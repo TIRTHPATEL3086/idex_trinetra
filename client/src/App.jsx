@@ -99,8 +99,12 @@ function Shell() {
           </span>
 
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
-            <HealthChip health={health} />
-            <NotificationsBell health={health} />
+            {user?.role !== 'OFFICER' && (
+              <>
+                <HealthChip health={health} />
+                <NotificationsBell health={health} />
+              </>
+            )}
             <WalletButton health={health} />
             <AccountMenu user={user} />
           </div>
@@ -237,8 +241,12 @@ function Sidebar({ health, open, can, user }) {
             Trace a leak
           </NavLink>
         )}
-        <RoleCard user={user} />
-        <HealthBadge health={health} />
+        {user?.role !== 'OFFICER' && (
+          <>
+            <RoleCard user={user} />
+            <HealthBadge health={health} />
+          </>
+        )}
       </div>
     </aside>
   );
@@ -363,26 +371,28 @@ function AccountMenu({ user }) {
               </div>
             </div>
 
-            <div className="space-y-2 border-t border-line pt-3">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">
-                  Role
-                </span>
-                <span className={`pill ${meta.badge ?? 'bg-line text-ink'}`}>{meta.short}</span>
-              </div>
-              <p className="text-[11px] leading-relaxed text-ink-muted">{meta.blurb}</p>
+            {user?.role !== 'OFFICER' && (
+              <div className="space-y-2 border-t border-line pt-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">
+                    Role
+                  </span>
+                  <span className={`pill ${meta.badge ?? 'bg-line text-ink'}`}>{meta.short}</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-ink-muted">{meta.blurb}</p>
 
-              {/* The hashed handle — the only identity that reaches the chain.
-                  Shown here, deliberately apart from the name above it. */}
-              <div className="rounded-xl bg-[#fbfbf7] px-3 py-2">
-                <div className="text-[10px] font-bold uppercase tracking-wide text-ink-faint">
-                  On-chain handle
-                </div>
-                <div className="mono mt-0.5 break-all text-[10px] text-ink-muted">
-                  {user.userRef}
+                {/* The hashed handle — the only identity that reaches the chain.
+                    Shown here, deliberately apart from the name above it. */}
+                <div className="rounded-xl bg-[#fbfbf7] px-3 py-2">
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-ink-faint">
+                    On-chain handle
+                  </div>
+                  <div className="mono mt-0.5 break-all text-[10px] text-ink-muted">
+                    {user.userRef}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             <button
               type="button"
