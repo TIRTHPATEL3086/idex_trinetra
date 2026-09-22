@@ -33,6 +33,8 @@ export const CAPABILITIES = {
   'audit:own': ['ADMIN', 'OFFICER'],
   'metrics:read': ['ADMIN', 'OFFICER'],
   'users:read': ['ADMIN'],
+  // Added alongside the roster work; only the registry administrator writes users.
+  'users:write': ['ADMIN'],
 };
 
 

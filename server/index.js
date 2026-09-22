@@ -1,6 +1,11 @@
 import express from 'express';
 import cors from 'cors';
 
+// Enable clean JSON serialization for BigInt values across all Express routes
+BigInt.prototype.toJSON = function () {
+  return this.toString();
+};
+
 import { env, warnAboutConfig } from './lib/env.js';
 import { prisma, dbStatus } from './lib/prisma.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
@@ -24,6 +29,9 @@ import keysRouter from './routes/keys.js';
  */
 
 const app = express();
+
+// Trust reverse proxy headers (required on Render, Heroku, AWS for secure cookies)
+app.set('trust proxy', 1);
 
 app.use(
   cors({
@@ -65,6 +73,55 @@ app.use('/api/audit', auditRouter);
 app.use('/api/metrics', metricsRouter);
 app.use('/api/keys', keysRouter);
 app.use('/api/files', filesRouter);
+
+// Root landing endpoint
+app.get('/', (req, res) => {
+  const frontendUrl = env.corsOrigin[0] || 'http://localhost:5173';
+  if (req.accepts('html')) {
+    return res.send(`
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <title>Crypto Decryption Provenance API</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0b0f19; color: #f3f4f6; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+          .card { background: #111827; border: 1px solid #1f2937; padding: 2rem 2.5rem; border-radius: 1rem; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); max-width: 480px; width: 100%; text-align: center; }
+          .badge { display: inline-block; background: #064e3b; color: #34d399; font-size: 0.75rem; font-weight: 600; padding: 0.25rem 0.75rem; border-radius: 9999px; margin-bottom: 1rem; border: 1px solid #059669; }
+          h1 { font-size: 1.5rem; margin: 0 0 0.5rem; color: #fff; }
+          p { color: #9ca3af; font-size: 0.95rem; line-height: 1.5; margin: 0 0 1.5rem; }
+          .btn { display: inline-block; background: #2563eb; color: #fff; text-decoration: none; padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: 600; transition: background 0.2s; }
+          .btn:hover { background: #1d4ed8; }
+          .links { margin-top: 1.5rem; font-size: 0.85rem; color: #6b7280; display: flex; justify-content: center; gap: 1rem; }
+          .links a { color: #60a5fa; text-decoration: none; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <span class="badge">&#9679; API Server Online</span>
+          <h1>Backend API Running</h1>
+          <p>This is the REST API service (Port 4000). The web application interface is running on Port 5173.</p>
+          <a class="btn" href="${frontendUrl}">Open Frontend Dashboard (5173) &rarr;</a>
+          <div class="links">
+            <a href="/api/health">/api/health</a>
+            <a href="/api/auth/me">/api/auth/me</a>
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+  res.json({
+    name: 'SIH26237 — Crypto Decryption Provenance API',
+    status: 'online',
+    frontend: frontendUrl,
+    endpoints: {
+      health: '/api/health',
+      auth: '/api/auth/me',
+      assets: '/api/assets',
+    },
+  });
+});
 
 app.use(notFoundHandler);
 app.use(errorHandler);

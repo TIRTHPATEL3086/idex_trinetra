@@ -66,15 +66,14 @@ const USERS = [
     role: 'OFFICER',
     password: 'officer123',
   },
-// INVESTIGATOR demo user removed per project requirements
-// AUDITOR demo user removed per project requirements
-{
-  name: 'Admin Desk',
-  dept: 'HQ',
-  email: 'admin@example.gov',
-  role: 'ADMIN',
-  password: 'admin123',
-},
+  // INVESTIGATOR and AUDITOR demo users removed per project requirements.
+  {
+    name: 'Admin Desk',
+    dept: 'HQ',
+    email: 'admin@example.gov',
+    role: 'ADMIN',
+    password: 'admin123',
+  },
 ];
 
 const ASSETS = [

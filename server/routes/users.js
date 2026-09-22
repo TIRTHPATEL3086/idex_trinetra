@@ -30,7 +30,36 @@ router.get('/', requireAuth, async (req, res, next) => {
         role: u.role,
         roleLabel: ROLE_META[u.role]?.label ?? u.role,
         userRef: bufferToHex(u.userRef),
+        active: u.active,
       })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/:id/toggle-active', requireAuth, async (req, res, next) => {
+  try {
+    if (!can(req.user.role, 'users:write')) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Only an Administrator can revoke officer access.' } });
+    }
+    const id = Number(req.params.id);
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) return res.status(404).json({ error: { code: 'NOT_FOUND', message: `No user ${id}` } });
+
+    const updated = await prisma.user.update({
+      where: { id },
+      data: { active: !user.active },
+    });
+
+    res.json({
+      success: true,
+      userId: updated.id,
+      name: updated.name,
+      active: updated.active,
+      statusMessage: updated.active
+        ? `Officer ${updated.name} access restored`
+        : `Officer ${updated.name} access REVOKED under Zero-Trust policy`,
     });
   } catch (err) {
     next(err);

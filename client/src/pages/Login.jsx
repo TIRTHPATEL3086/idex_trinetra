@@ -1,24 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { CheckIcon } from '../components/icons.jsx';
 
 import Logo from '../components/Logo.jsx';
-import { getHealth } from '../lib/api.js';
-import { useAuth, ROLE_UI, ROLE_ORDER } from '../lib/auth.jsx';
+import { useAuth, ROLE_UI, ROLE_ORDER, DEMO_ACCOUNTS } from '../lib/auth.jsx';
 
 /**
  * Sign-in.
  *
- * The left panel is not decoration: this system's whole claim is that it never
- * accuses someone it cannot prove, and the four roles are how that holds in
- * practice — the analyst who examines the evidence cannot mint a marked copy,
- * and the officer who holds clearance cannot investigate their own leak. Saying
- * so on the door is cheaper than explaining it afterwards.
- *
- * Responsive contract (holds from 320px up):
- *   - below lg: one column, form first, role reference collapsed underneath
- *   - lg and up: the brand panel and the form sit side by side in one card
- *   - inputs are 16px on mobile so iOS does not zoom the page on focus
- *   - no horizontal scroll at any width
+ * The left panel highlights the separation of duties:
+ * Admin, Officer, and Investigator.
  */
 export default function Login() {
   const { signIn, user } = useAuth();
@@ -29,17 +20,10 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState('idle'); // idle | working | error
   const [error, setError] = useState(null);
-  const [health, setHealth] = useState(null);
 
   // Where to go after signing in: back to whatever was being asked for, or the
   // landing screen the role actually has permission to see.
   const from = location.state?.from;
-
-  useEffect(() => {
-    getHealth()
-      .then(setHealth)
-      .catch(() => setHealth({ ok: false }));
-  }, []);
 
   useEffect(() => {
     if (user) navigate(from || user.landing || '/assets', { replace: true });
@@ -58,15 +42,14 @@ export default function Login() {
     }
   }
 
-  const fillDemo = (role) => {
-    const demo = ROLE_UI[role].demo;
-    setForm({ email: demo.email, password: demo.password });
+  const fillDemo = (acc) => {
+    setForm({ email: acc.email, password: acc.password });
     setError(null);
     setStatus('idle');
   };
 
   return (
-    <div className="grid min-h-[100dvh] w-full place-items-center bg-olive p-3 sm:p-5 lg:p-6">
+    <div className="grid min-h-[100dvh] w-full place-items-center bg-canvas p-3 sm:p-5 lg:p-6">
       <main className="w-full max-w-[1080px] overflow-hidden rounded-2xl bg-white shadow-app sm:rounded-3xl lg:grid lg:grid-cols-[1.02fr_1fr]">
         <BrandPanel />
 
@@ -144,19 +127,14 @@ export default function Login() {
 
             <button
               type="submit"
-              className="btn-lime h-12 w-full text-[15px]"
+              className="btn-accent h-12 w-full text-[15px]"
               disabled={status === 'working'}
             >
               {status === 'working' ? 'Signing in…' : 'Sign in'}
             </button>
           </form>
 
-          <DemoAccounts onPick={fillDemo} />
-
-          <footer className="mt-7 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-4">
-            <SystemStatus health={health} />
-            <span className="text-[11px] text-ink-faint">SIH26237 · Provenance</span>
-          </footer>
+          <DemoAccounts onPick={fillDemo} currentEmail={form.email} />
         </section>
       </main>
     </div>
@@ -171,32 +149,32 @@ export default function Login() {
  */
 function BrandPanel() {
   return (
-    <aside className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-[#23260f] to-night p-11 text-white lg:flex">
-      {/* soft lime bloom, purely atmospheric */}
+    <aside className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-[#0d1117] to-noir p-11 text-white lg:flex">
+      {/* soft accent bloom, purely atmospheric */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-lime/20 blur-3xl"
+        className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-accent/20 blur-3xl"
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -bottom-28 -left-20 h-72 w-72 rounded-full bg-lime/10 blur-3xl"
+        className="pointer-events-none absolute -bottom-28 -left-20 h-72 w-72 rounded-full bg-accent/10 blur-3xl"
       />
 
       <div className="relative">
         <div className="flex items-center gap-2.5">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[30%] bg-lime">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[30%] bg-accent">
             <FingerprintGlyph />
           </span>
           <span
             className="font-display leading-none"
             style={{ fontSize: 21, fontWeight: 800, letterSpacing: '-0.02em' }}
           >
-            Provenance<span className="text-lime">.</span>
+            Provenance<span className="text-accent">.</span>
           </span>
         </div>
 
         <h2 className="mt-10 font-display text-[30px] font-extrabold leading-[1.15] tracking-tight">
-          Four roles,
+          Three roles,
           <br />
           on purpose.
         </h2>
@@ -229,50 +207,89 @@ function BrandPanel() {
 /* -------------------------------------------------------- demo accounts --- */
 
 /**
- * Collapsed by default. These are seed rows on a local database, and a judge
- * watching a ninety-second demo should not have to be told a password out loud.
+ * Demo accounts selector.
+ * Clicking 'Use' automatically closes the list smoothly and highlights
+ * the selected role chip (Admin, Officer, or Investigator) right beside the label.
  */
-function DemoAccounts({ onPick }) {
+function DemoAccounts({ onPick, currentEmail }) {
   const [open, setOpen] = useState(false);
 
+  const activeAccount = DEMO_ACCOUNTS.find(
+    (a) => a.email.toLowerCase() === (currentEmail || '').trim().toLowerCase()
+  );
+
   return (
-    <div className="mt-6 rounded-2xl border border-line bg-[#fbfbf7]">
+    <div className="mt-6 rounded-2xl border border-line bg-[#faf8f5] transition-all">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+        className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left transition hover:bg-line/20 rounded-2xl"
       >
-        <span className="text-xs font-bold uppercase tracking-wide text-ink-faint">
-          Demo accounts
-        </span>
-        <span className="flex items-center gap-2 text-xs font-semibold text-ink-muted">
-          {open ? 'Hide' : 'Show'}
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
+          <span className="text-xs font-bold uppercase tracking-wide text-ink-faint shrink-0">
+            Demo accounts
+          </span>
+          {activeAccount && (
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${activeAccount.badge} shadow-xs`}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
+              In use: {activeAccount.short} ({activeAccount.dept})
+            </span>
+          )}
+        </div>
+        <span className="flex items-center gap-1.5 text-xs font-semibold text-ink-muted shrink-0">
+          {open ? 'Hide' : activeAccount ? 'Change' : 'Show'}
           <ChevronIcon open={open} />
         </span>
       </button>
 
       {open && (
         <ul className="space-y-1.5 px-2.5 pb-2.5">
-          {ROLE_ORDER.map((role) => {
-            const meta = ROLE_UI[role];
+          {DEMO_ACCOUNTS.map((acc) => {
+            const isSelected = activeAccount?.email === acc.email;
             return (
-              <li key={role}>
+              <li key={acc.email}>
                 <button
                   type="button"
-                  onClick={() => onPick(role)}
-                  className="flex w-full items-center gap-3 rounded-xl bg-white px-3 py-2.5 text-left transition hover:bg-line/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-lime"
+                  onClick={() => {
+                    onPick(acc);
+                    setOpen(false); // Automatically close dropdown on click!
+                  }}
+                  className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                    isSelected
+                      ? 'bg-line/60 ring-1 ring-accent/70 shadow-sm'
+                      : 'bg-white hover:bg-line/40 hover:shadow-sm'
+                  }`}
                 >
                   <span
-                    className={`pill shrink-0 ${meta.badge}`}
-                    style={{ minWidth: 74, justifyContent: 'center' }}
+                    className={`pill shrink-0 ${acc.badge}`}
+                    style={{ minWidth: 80, justifyContent: 'center' }}
                   >
-                    {meta.short}
+                    {acc.short}
                   </span>
-                  <span className="mono min-w-0 flex-1 truncate text-[11px] text-ink-muted">
-                    {meta.demo.email}
+                  <div className="min-w-0 flex-1">
+                    <div className="mono truncate text-[12px] font-bold text-ink">{acc.email}</div>
+                    <div className="truncate text-[11px] text-ink-muted">
+                      {acc.name} · <span className="font-semibold text-ink-faint">{acc.dept}</span>
+                    </div>
+                  </div>
+                  <span
+                    className={`shrink-0 rounded-md px-2.5 py-1 text-[11px] font-bold transition ${
+                      isSelected
+                        ? 'bg-accent text-noir font-extrabold shadow-xs'
+                        : 'border border-line bg-[#faf8f5] text-ink-muted group-hover:border-accent group-hover:bg-accent group-hover:text-noir'
+                    }`}
+                  >
+                    {isSelected ? (
+                      <span className="flex items-center gap-1">
+                        In Use <CheckIcon size={11} />
+                      </span>
+                    ) : (
+                      'Use'
+                    )}
                   </span>
-                  <span className="shrink-0 text-[11px] font-semibold text-ink-faint">Use</span>
                 </button>
               </li>
             );
@@ -280,25 +297,6 @@ function DemoAccounts({ onPick }) {
         </ul>
       )}
     </div>
-  );
-}
-
-/* --------------------------------------------------------------- status --- */
-
-function SystemStatus({ health }) {
-  const tone = !health
-    ? { dot: 'bg-ink-faint', label: 'Checking…', text: 'text-ink-faint' }
-    : !health.ok
-      ? { dot: 'bg-inconclusive', label: 'API unreachable', text: 'text-inconclusive' }
-      : health.warnings?.length
-        ? { dot: 'bg-probable', label: 'Degraded', text: 'text-probable' }
-        : { dot: 'bg-attributed', label: 'All systems go', text: 'text-attributed' };
-
-  return (
-    <span className="inline-flex items-center gap-2 text-[11px] font-bold">
-      <span className={`h-2 w-2 rounded-full ${tone.dot}`} />
-      <span className={tone.text}>{tone.label}</span>
-    </span>
   );
 }
 
@@ -348,7 +346,7 @@ function ChevronIcon({ open }) {
 
 /** The logo glyph, drawn here so the panel does not depend on Logo's layout. */
 function FingerprintGlyph() {
-  const p = { fill: 'none', stroke: '#141410', strokeWidth: 1.7, strokeLinecap: 'round' };
+  const p = { fill: 'none', stroke: '#0f151d', strokeWidth: 1.7, strokeLinecap: 'round' };
   return (
     <svg width="21" height="21" viewBox="0 0 24 24" aria-hidden="true">
       <path d="M4.5 13.2A7.5 7.5 0 0 1 19 10.5" {...p} />
@@ -357,7 +355,7 @@ function FingerprintGlyph() {
       <path d="M7.2 15.8c.35 1.5.4 2.4.3 3.4" {...p} />
       <path d="M9.6 12a2.5 2.5 0 0 1 4.9.6c0 2.3-.3 4.6-1 6.8" {...p} />
       <path d="M10.7 19.9c.3-.9.5-1.7.7-2.6" {...p} />
-      <circle cx="12" cy="12.3" r="1.15" fill="#141410" />
+      <circle cx="12" cy="12.3" r="1.15" fill="#0f151d" />
     </svg>
   );
 }

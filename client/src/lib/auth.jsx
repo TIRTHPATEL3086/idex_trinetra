@@ -83,22 +83,76 @@ export const ROLE_UI = {
     label: 'Registry Administrator',
     short: 'Admin',
     blurb: 'Full custody — uploads, releases, investigations and the audit trail.',
-    badge: 'bg-night text-lime',
-    tint: 'bg-night',
+    badge: 'bg-noir text-accent',
+    tint: 'bg-noir',
     demo: { email: 'admin@example.gov', password: 'admin123' },
   },
   OFFICER: {
     label: 'Clearance Holder',
     short: 'Officer',
     blurb: 'Releases a watermarked copy to themselves. Cannot investigate.',
-    badge: 'bg-lime text-night',
-    tint: 'bg-lime',
+    badge: 'bg-accent text-noir',
+    tint: 'bg-accent',
     demo: { email: 'u017@example.gov', password: 'officer123' },
   },
   // INVESTIGATOR and AUDITOR demo roles removed per project requirements
 };
 
 export const ROLE_ORDER = ['ADMIN', 'OFFICER'];
+
+/**
+ * Demo accounts for one-click evaluation.
+ *
+ * Only the roles this deployment actually ships: INVESTIGATOR and AUDITOR were
+ * removed from ROLE_UI, so listing them here would hand the login page a role
+ * it cannot render.
+ */
+export const DEMO_ACCOUNTS = [
+  {
+    role: 'ADMIN',
+    short: 'Admin',
+    badge: 'bg-noir text-accent',
+    title: 'Registry Administrator',
+    name: 'Admin Desk',
+    dept: 'HQ',
+    email: 'admin@example.gov',
+    password: 'admin123',
+    desc: 'Full custody & management',
+  },
+  {
+    role: 'OFFICER',
+    short: 'Officer 1',
+    badge: 'bg-accent text-noir',
+    title: 'Clearance Holder',
+    name: 'Officer U-017',
+    dept: 'Ops Wing',
+    email: 'u017@example.gov',
+    password: 'officer123',
+    desc: 'Operations Wing clearance',
+  },
+  {
+    role: 'OFFICER',
+    short: 'Officer 2',
+    badge: 'bg-accent text-noir',
+    title: 'Clearance Holder',
+    name: 'Officer U-023',
+    dept: 'Signals',
+    email: 'u023@example.gov',
+    password: 'officer123',
+    desc: 'Signals Intelligence clearance',
+  },
+  {
+    role: 'OFFICER',
+    short: 'Officer 3',
+    badge: 'bg-accent text-noir',
+    title: 'Clearance Holder',
+    name: 'Officer U-041',
+    dept: 'Logistics',
+    email: 'u041@example.gov',
+    password: 'officer123',
+    desc: 'Defense Logistics clearance',
+  },
+];
 
 /** Initials for the avatar — "Officer U-017" -> "OU". */
 export function initialsOf(name = '') {

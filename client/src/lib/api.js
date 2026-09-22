@@ -85,19 +85,64 @@ export function uploadAsset({ file, title, classification, authorizedUserIds }) 
 
 export const getPqcPublicKey = (userId) => request(`/api/keys/public/${userId}`);
 export const getPqcKeyBundle = () => request('/api/keys/bundle');
-export const generatePqcKeys = (passphrase) =>
+export const generatePqcKeys = (passphrase, userId) =>
   request('/api/keys/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ passphrase }),
+    body: JSON.stringify(userId ? { passphrase, userId: Number(userId) } : { passphrase }),
   });
 
-export const decryptAsset = ({ assetId, userId, deviceLabel, passphrase }) =>
+/** Request a signing challenge nonce for client-side ML-DSA-65 non-repudiation. */
+export const requestDecryptChallenge = ({ assetId, userId }) =>
+  request('/api/decrypt/challenge', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ assetId, userId }),
+  });
+
+export const decryptAsset = ({
+  assetId,
+  userId,
+  deviceLabel,
+  passphrase,
+  clientSignature,
+  challengeId,
+}) =>
   request('/api/decrypt', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ assetId, userId, deviceLabel, passphrase }),
+    body: JSON.stringify({
+      assetId,
+      userId,
+      deviceLabel,
+      passphrase,
+      clientSignature,
+      challengeId,
+    }),
   });
+
+export const batchDecryptAsset = ({
+  assetId,
+  userIds,
+  passphraseMode,
+  commonPassphrase,
+  individualPassphrases,
+  deviceLabel,
+}) =>
+  request('/api/decrypt/batch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      assetId,
+      userIds,
+      passphraseMode,
+      commonPassphrase,
+      individualPassphrases,
+      deviceLabel,
+    }),
+  });
+
+export const getAllotments = (assetId) => request(`/api/decrypt/allotments/${assetId}`);
 
 export function traceFile(file) {
   const form = new FormData();
@@ -108,6 +153,9 @@ export function traceFile(file) {
 export const getInvestigations = () => request('/api/trace/investigations');
 
 export const getAudit = (assetId) => request(`/api/audit/${assetId}`);
+
+export const toggleUserActive = (userId) =>
+  request(`/api/users/${userId}/toggle-active`, { method: 'POST' });
 
 export const getMetrics = () => request('/api/metrics');
 
