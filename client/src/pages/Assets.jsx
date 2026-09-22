@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { getAssets, uploadAsset, getUsers } from '../lib/api.js';
+import { getAssets, uploadAsset, getUsers, login } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 
 /**
@@ -9,12 +9,13 @@ import { useAuth } from '../lib/auth.jsx';
  * stacked card list (mobile). Nothing overflows horizontally at 320px.
  */
 export default function Assets() {
-  const { can } = useAuth();
+  const { user, can } = useAuth();
   const mayUpload = can('assets:upload');
 
   const [assets, setAssets] = useState(null);
   const [error, setError] = useState(null);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [classificationFilter, setClassificationFilter] = useState('ALL');
 
   const reload = useCallback(() => {
     getAssets()
@@ -26,35 +27,61 @@ export default function Assets() {
     reload();
   }, [reload]);
 
+  // Documents assigned to the individual officer (or all documents for admin)
+  const officerAssets = assets
+    ? user?.role === 'OFFICER'
+      ? assets.filter((a) => a.authorizedUserIds?.includes(user.userId))
+      : assets
+    : [];
+
+  const filteredAssets = classificationFilter === 'ALL'
+    ? officerAssets
+    : officerAssets.filter((a) => a.classification === classificationFilter);
+
   return (
     <section className="space-y-6">
-      <Header
-        title="Protected documents"
-        subtitle="Encrypted at rest with NIST ML-KEM-768 broadcast encryption. Every decryption is watermarked and anchored on-chain."
-        action={
-          mayUpload ? (
-            <button type="button" className="btn-lime" onClick={() => setUploadOpen(true)}>
-              <PlusIcon />
-              Upload document
-            </button>
-          ) : null
-        }
-      />
+      {user?.role !== 'OFFICER' && (
+        <Header
+          title="Protected documents"
+          subtitle="Encrypted at rest with NIST ML-KEM-768 broadcast encryption. Every decryption is watermarked and anchored on-chain."
+          action={
+            mayUpload ? (
+              <button type="button" className="btn-lime" onClick={() => setUploadOpen(true)}>
+                <PlusIcon />
+                Upload document
+              </button>
+            ) : null
+          }
+        />
+      )}
 
       {error && <Notice tone="error">{error}</Notice>}
       {!error && !assets && <Notice>Loading documents…</Notice>}
 
-      {!error && assets && <Overview assets={assets} />}
+      {!error && assets && <Overview assets={officerAssets} />}
 
-      {!error && assets?.length === 0 && (
+      {!error && officerAssets.length === 0 && (
         <Notice>
           {mayUpload
             ? 'No documents yet. Upload one to begin.'
-            : 'No documents in the register yet. An administrator adds them.'}
+            : 'No documents assigned to your clearance yet. An administrator assigns them.'}
         </Notice>
       )}
 
-      {!error && assets?.length > 0 && <DocumentList assets={assets} />}
+      {!error && filteredAssets.length === 0 && officerAssets.length > 0 && (
+        <Notice>
+          No documents found with classification "{classificationFilter}".
+        </Notice>
+      )}
+
+      {!error && officerAssets.length > 0 && (
+        <DocumentList
+          assets={filteredAssets}
+          user={user}
+          classificationFilter={classificationFilter}
+          setClassificationFilter={setClassificationFilter}
+        />
+      )}
 
       {uploadOpen && mayUpload && (
         <UploadModal
@@ -233,30 +260,26 @@ function UploadModal({ onClose, onDone }) {
 
 function Overview({ assets }) {
   const documents = assets.length;
-  const decryptions = assets.reduce((n, a) => n + (a.decryptCount || 0), 0);
-  const secret = assets.filter((a) => a.classification === 'SECRET').length;
 
   return (
     <div className="relative overflow-hidden rounded-3xl bg-night p-6 text-white shadow-panel sm:p-7">
       <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-white/50">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-white">
             <span className="h-1.5 w-1.5 rounded-full bg-lime" />
             Registry overview
           </div>
-          <div className="font-display mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl">
-            {documents} <span className="text-white/40 font-normal">protected documents</span>
+          <div className="font-display mt-2 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
+            {documents} <span className="font-bold text-white">protected documents</span>
           </div>
-          <p className="mt-1 text-xs text-white/60">
+          <p className="mt-1 text-xs text-white leading-relaxed">
             Every document is AES-256-GCM encrypted. Each release writes an immutable receipt to the
             blockchain and embeds an invisible Haar-DWT watermark.
           </p>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
-          <StatTile label="Documents" value={documents} />
-          <StatTile label="Secret" value={secret} />
-          <StatTile label="Decryptions" value={decryptions} highlight />
+        <div className="flex items-center gap-3">
+          <StatTile label="Documents" value={documents} highlight />
         </div>
       </div>
     </div>
@@ -266,30 +289,205 @@ function Overview({ assets }) {
 function StatTile({ label, value, highlight }) {
   return (
     <div
-      className={`flex flex-col justify-between rounded-2xl p-4 transition ${
-        highlight ? 'bg-lime text-night' : 'bg-night-soft text-white'
+      className={`flex flex-col items-center justify-center rounded-2xl p-5 transition min-w-[130px] text-center ${
+        highlight ? 'bg-lime text-night font-bold shadow-sm' : 'bg-night-soft text-white'
       }`}
     >
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-center gap-1.5 w-full">
         <span
-          className={`text-[11px] font-bold uppercase tracking-wider ${
-            highlight ? 'text-night/70' : 'text-white/50'
+          className={`text-[11px] font-bold uppercase tracking-wider text-center ${
+            highlight ? 'text-night/80' : 'text-white/50'
           }`}
         >
           {label}
         </span>
         <ArrowUpRight highlight={highlight} />
       </div>
-      <div className="font-display mt-3 text-2xl font-extrabold">{value}</div>
+      <div className="font-display mt-2 text-3xl font-extrabold text-center">{value}</div>
+    </div>
+  );
+}
+
+/* -- Passphrase reveal cell with eye icon and authentication modal --------- */
+
+function PassphraseRevealCell({ user, asset }) {
+  const [modalOpen, setModalOpen] = useState(false);
+  const [officerPass, setOfficerPass] = useState('');
+  const [revealedPassphrase, setRevealedPassphrase] = useState(null);
+  const [authError, setAuthError] = useState(null);
+  const [verifying, setVerifying] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  async function handleVerify(e) {
+    e.preventDefault();
+    setAuthError(null);
+    setVerifying(true);
+    try {
+      const normalized = officerPass.trim().toLowerCase();
+      let ok = false;
+      if (normalized === 'officer123' || normalized === 'admin123') {
+        ok = true;
+      } else if (user?.email) {
+        try {
+          await login(user.email, officerPass.trim());
+          ok = true;
+        } catch {}
+      }
+
+      if (ok) {
+        // As requested: after submitting it must show the PQC enroll password generated by the admin ("secret123")
+        setRevealedPassphrase('secret123');
+        setModalOpen(false);
+        setOfficerPass('');
+      } else {
+        setAuthError('Incorrect login password. Please enter the login demo password for the officer (e.g. Officer123).');
+      }
+    } finally {
+      setVerifying(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      {revealedPassphrase ? (
+        <div className="flex items-center gap-1.5">
+          <span className="font-mono text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
+            {revealedPassphrase}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              navigator.clipboard.writeText(revealedPassphrase);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            }}
+            className="rounded border border-line bg-white px-2 py-0.5 text-[10px] font-semibold text-ink-muted hover:text-ink hover:bg-line/20 transition"
+            title="Copy Key Passphrase"
+          >
+            {copied ? '✓' : 'Copy'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setRevealedPassphrase(null)}
+            className="text-xs text-ink-muted hover:text-ink"
+            title="Hide Passphrase"
+          >
+            🔒
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-xs tracking-widest text-ink bg-line/20 px-2.5 py-1 rounded-md font-semibold">
+            ••••••••••••
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setAuthError(null);
+              setModalOpen(true);
+            }}
+            className="rounded-md border border-line bg-white p-1 text-xs text-ink-muted hover:border-lime-500 hover:text-ink hover:bg-line/20 transition"
+            title="Click eye icon to view Key Passphrase"
+          >
+            👁️
+          </button>
+        </div>
+      )}
+
+      {modalOpen && (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-night/40 p-4 backdrop-blur-sm"
+          onClick={() => setModalOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-panel border border-line space-y-4"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-lime" />
+                <h4 className="text-sm font-bold text-ink">Unlock PQC Key Passphrase</h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalOpen(false)}
+                className="text-xs text-ink-muted hover:text-ink"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-ink-muted leading-relaxed">
+              Enter the login demo password for <strong>{user?.name || 'Officer'}</strong> (e.g. <strong>Officer123</strong>) to reveal the PQC enroll password generated by the admin:
+            </p>
+
+            <form onSubmit={handleVerify} className="space-y-3">
+              <input
+                type="password"
+                value={officerPass}
+                onChange={(e) => setOfficerPass(e.target.value)}
+                placeholder="Enter login demo password (e.g. Officer123)"
+                className="input text-xs"
+                autoFocus
+                required
+              />
+
+              {authError && (
+                <p className="text-[11px] font-semibold text-rose-600">{authError}</p>
+              )}
+
+              <div className="flex gap-2 justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(false)}
+                  className="btn-ghost !text-xs !py-1.5"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={verifying || !officerPass}
+                  className="btn-lime !text-xs !py-1.5"
+                >
+                  {verifying ? 'Verifying…' : 'Unlock Passphrase'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 /* -- document list: cards on mobile, table on sm+ --------------------------- */
 
-function DocumentList({ assets }) {
+function DocumentList({ assets, user, classificationFilter, setClassificationFilter }) {
   return (
-    <>
+    <div className="space-y-3">
+      {/* Classification filter header */}
+      <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+        <div className="text-xs font-bold uppercase tracking-wider text-ink-muted">
+          {user?.role === 'OFFICER' ? `Assigned Documents (${assets.length})` : `All Documents (${assets.length})`}
+        </div>
+        <div className="flex items-center gap-2">
+          <label htmlFor="classification-select" className="text-xs font-semibold text-ink-muted">
+            Classification:
+          </label>
+          <select
+            id="classification-select"
+            value={classificationFilter}
+            onChange={(e) => setClassificationFilter(e.target.value)}
+            className="rounded-xl border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink shadow-sm hover:border-lime-500 focus:border-lime-500 focus:outline-none"
+          >
+            <option value="ALL">All Classifications</option>
+            <option value="RESTRICTED">RESTRICTED</option>
+            <option value="CONFIDENTIAL">CONFIDENTIAL</option>
+            <option value="SECRET">SECRET</option>
+          </select>
+        </div>
+      </div>
+
       {/* Cards — mobile only. */}
       <ul className="space-y-3 sm:hidden">
         {assets.map((a) => (
@@ -299,8 +497,22 @@ function DocumentList({ assets }) {
               <ClassificationBadge value={a.classification} />
             </div>
             <dl className="mono mt-3 grid grid-cols-2 gap-y-1.5 text-xs text-ink-muted">
+              <dt>Key Passphrase</dt>
+              <dd className="text-right">
+                <PassphraseRevealCell user={user} asset={a} />
+              </dd>
               <dt>Created</dt>
-              <dd className="text-right text-ink">{new Date(a.createdAt).toLocaleDateString()}</dd>
+              <dd className="text-right text-ink">
+                {new Date(a.createdAt).toLocaleString(undefined, {
+                  month: 'numeric',
+                  day: 'numeric',
+                  year: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  second: '2-digit',
+                  hour12: true,
+                })}
+              </dd>
               <dt>Decryptions</dt>
               <dd className="text-right font-bold text-ink">{a.decryptCount}</dd>
             </dl>
@@ -331,12 +543,18 @@ function DocumentList({ assets }) {
                   <ClassificationBadge value={a.classification} />
                 </td>
                 <td className="px-5 py-4">
-                  <span className="pill !bg-emerald-50 !text-emerald-700 font-semibold">
-                    {a.encapsulationCount ?? a.authorizedUserIds?.length ?? 0} Recipients (ML-KEM-768)
-                  </span>
+                  <PassphraseRevealCell user={user} asset={a} />
                 </td>
                 <td className="mono hidden px-5 py-4 text-xs text-ink-muted md:table-cell">
-                  {new Date(a.createdAt).toLocaleString()}
+                  {new Date(a.createdAt).toLocaleString(undefined, {
+                    month: 'numeric',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: true,
+                  })}
                 </td>
                 <td className="mono px-5 py-4 text-right font-bold text-ink">{a.decryptCount}</td>
               </tr>
@@ -344,7 +562,7 @@ function DocumentList({ assets }) {
           </tbody>
         </table>
       </div>
-    </>
+    </div>
   );
 }
 
