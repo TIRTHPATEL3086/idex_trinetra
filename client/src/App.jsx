@@ -75,10 +75,10 @@ function Shell() {
   }, [navOpen]);
 
   return (
-    <div className="h-screen overflow-hidden bg-olive p-1.5 [height:100dvh] sm:p-3 xl:p-4">
-      <div className="mx-auto flex h-full w-full max-w-[1440px] flex-col overflow-hidden rounded-2xl bg-white shadow-app sm:rounded-3xl">
+    <div className="h-screen overflow-hidden bg-olive p-1.5 [height:100dvh] sm:p-2.5 xl:p-3">
+      <div className="mx-auto flex h-full w-full max-w-[1480px] flex-col overflow-hidden rounded-2xl bg-white shadow-app sm:rounded-3xl">
         {/* ---- top bar (fixed) ---- */}
-        <header className="flex shrink-0 items-center gap-2.5 border-b border-line px-3.5 py-3 sm:px-6">
+        <header className="flex shrink-0 items-center gap-2.5 border-b border-line px-3.5 py-2.5 sm:px-6">
           <button
             type="button"
             aria-label="Open navigation"
@@ -117,7 +117,7 @@ function Shell() {
 
           <Sidebar health={health} open={navOpen} can={can} user={user} />
 
-          <main className="scroll-slim min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3.5 py-5 sm:px-6 sm:py-6 xl:px-8">
+          <main className="scroll-slim min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-6 sm:py-5 xl:px-7">
             <div className="mx-auto w-full max-w-6xl">
               <Routes>
                 {/* Land on the first screen this role can actually use. */}
@@ -203,7 +203,7 @@ function Sidebar({ health, open, can, user }) {
   });
   return (
     <aside
-      className={`scroll-slim fixed inset-y-0 left-0 z-40 flex w-64 max-w-[82vw] flex-col overflow-y-auto border-r border-line bg-white p-4 transition-transform duration-200 lg:static lg:z-auto lg:w-60 lg:max-w-none lg:translate-x-0 ${
+      className={`scroll-slim fixed inset-y-0 left-0 z-40 flex w-64 max-w-[82vw] flex-col overflow-y-auto border-r border-line bg-white p-3.5 transition-transform duration-200 lg:static lg:z-auto lg:w-56 lg:max-w-none lg:translate-x-0 ${
         open ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
       }`}
     >
@@ -220,7 +220,7 @@ function Sidebar({ health, open, can, user }) {
             key={to}
             to={to}
             className={({ isActive }) =>
-              `group flex items-center gap-3 rounded-full px-4 py-2.5 text-sm font-semibold transition ${
+              `group flex items-center gap-2.5 rounded-full px-3.5 py-2 text-xs sm:text-[13px] font-semibold transition ${
                 isActive ? 'bg-night text-white' : 'text-ink-muted hover:bg-line/60 hover:text-ink'
               }`
             }

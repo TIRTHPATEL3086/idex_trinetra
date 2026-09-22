@@ -578,12 +578,12 @@ function ClassificationBadge({ value }) {
 
 export function Header({ title, subtitle, action }) {
   return (
-    <div className="flex flex-col gap-3.5 sm:flex-row sm:items-start sm:justify-between">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div>
-        <h2 className="font-display text-2xl sm:text-[28px] font-extrabold tracking-tight text-ink">
+        <h2 className="font-display text-xl sm:text-2xl font-extrabold tracking-tight text-ink">
           {title}
         </h2>
-        {subtitle && <p className="mt-1 max-w-2xl text-xs sm:text-sm leading-relaxed text-ink-muted">{subtitle}</p>}
+        {subtitle && <p className="mt-1 max-w-2xl text-xs sm:text-[13px] leading-relaxed text-ink-muted">{subtitle}</p>}
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </div>

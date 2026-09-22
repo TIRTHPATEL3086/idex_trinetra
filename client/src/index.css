@@ -8,6 +8,19 @@
 
 html {
   overflow-x: hidden;
+  font-size: 14px;
+}
+
+@media (min-width: 1440px) {
+  html {
+    font-size: 14.5px;
+  }
+}
+
+@media (min-width: 1920px) {
+  html {
+    font-size: 15px;
+  }
 }
 
 body {
@@ -21,6 +34,7 @@ body {
   /* The dark olive canvas the white app card sits on. */
   background-color: #3a3d1a;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
 }
 
@@ -81,41 +95,41 @@ body {
 
   /* Primary action — lime with black text, pill-shaped like the reference. */
   .btn-lime {
-    @apply inline-flex items-center justify-center gap-2 rounded-full bg-lime px-5 py-2.5
-      text-sm font-bold text-night transition hover:bg-lime-deep
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-lime px-4 py-2
+      text-xs sm:text-sm font-bold text-night transition hover:bg-lime-deep
       focus:outline-none focus-visible:ring-4 focus-visible:ring-lime/40
       disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   /* Dark pill action (like "Broadcast" / "New"). */
   .btn-dark {
-    @apply inline-flex items-center justify-center gap-2 rounded-full bg-night px-5 py-2.5
-      text-sm font-semibold text-white transition hover:bg-night-soft
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-night px-4 py-2
+      text-xs sm:text-sm font-semibold text-white transition hover:bg-night-soft
       focus:outline-none focus-visible:ring-4 focus-visible:ring-night/30;
   }
 
   /* Outline / secondary action. */
   .btn-ghost {
     @apply inline-flex items-center justify-center gap-2 rounded-full border border-line
-      bg-white px-5 py-2.5 text-sm font-semibold text-ink transition
+      bg-white px-4 py-2 text-xs sm:text-sm font-semibold text-ink transition
       hover:border-ink-faint hover:bg-line/40 focus:outline-none
       focus-visible:ring-4 focus-visible:ring-lime/25;
   }
 
   /* Round icon button in a hairline circle. */
   .btn-icon {
-    @apply grid h-10 w-10 shrink-0 place-items-center rounded-full border border-line
+    @apply grid h-9 w-9 shrink-0 place-items-center rounded-full border border-line
       bg-white text-ink-muted transition hover:text-ink;
   }
 
   /* Small status / meta pill. */
   .pill {
-    @apply inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-bold;
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold;
   }
 
   /* Form control — selects and text inputs. */
   .input {
-    @apply w-full rounded-xl border border-line bg-white px-3.5 py-2.5 text-sm font-medium text-ink
+    @apply w-full rounded-xl border border-line bg-white px-3.5 py-2 text-xs sm:text-sm font-medium text-ink
       outline-none transition focus:border-lime-deep focus:ring-4 focus:ring-lime/25;
   }
 }
