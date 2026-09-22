@@ -46,7 +46,7 @@ const router = Router();
 
 const DecryptBody = z.object({
   assetId: z.coerce.number().int().positive(),
-  userId: z.coerce.number().int().positive(),
+  userId: z.coerce.number().int().positive().optional(),
   deviceLabel: z.string().trim().min(1).max(100).optional().default('UNKNOWN-DEVICE'),
   delta: z.coerce.number().int().min(2).max(48).optional(),
   passphrase: z.string().optional(),
@@ -100,336 +100,479 @@ router.post('/challenge', guard, async (req, res, next) => {
   }
 });
 
-router.post('/', guard, validate(DecryptBody), async (req, res, next) => {
+// --------------------------------- Core Decryption Pipeline -----------------
+export async function executeDecryption({
+  assetId,
+  userId,
+  deviceLabel = 'DESK-114',
+  delta = env.watermarkDelta,
+  passphrase,
+  clientSignature,
+  challengeId,
+  callerRole = 'OFFICER',
+}) {
   const startedAt = Date.now();
-  try {
-    const { assetId, userId, deviceLabel, passphrase } = req.valid;
-    const delta = req.valid.delta ?? env.watermarkDelta;
 
-    // An OFFICER holds `decrypt:self` only: they may release a copy in their
-    // own name and nobody else's. The receipt names whoever the mark will
-    // identify, so releasing one as another officer would put an innocent name
-    // on a copy they never touched — the one failure this system exists to
-    // prevent.
-    if (!can(req.user.role, 'decrypt:any') && userId !== req.user.id) {
+  // --- 1. Load Asset + User + Encapsulation --------------------------------
+  const [asset, user, encapsulation] = await Promise.all([
+    prisma.asset.findUnique({ where: { id: assetId } }),
+    prisma.user.findUnique({ where: { id: userId } }),
+    prisma.assetKeyEncapsulation.findUnique({
+      where: { assetId_userId: { assetId, userId } },
+    }),
+  ]);
+
+  if (!asset) throw notFound(`No asset ${assetId}`);
+  if (!user) throw notFound(`No user ${userId}`);
+  if (!user.active) {
+    throw forbidden(`Officer ${user.name} access has been REVOKED/FROZEN by Administrator under Zero-Trust policy.`);
+  }
+  if (!asset.cipherPath || !asset.iv || !asset.authTag) {
+    throw badInput(`Asset ${assetId} has no encrypted blob — re-upload it.`);
+  }
+
+  // --- 2. Mandatory Allotted Passphrase Enforcement for Officers -----------
+  // When an officer decrypts, they MUST supply their allotted clearance passphrase!
+  const isOfficer = callerRole === 'OFFICER';
+  const expectedPassphrase = (encapsulation?.allottedPassphrase || 'officer123').trim();
+
+  if (isOfficer) {
+    if (!passphrase || passphrase.trim() !== expectedPassphrase) {
       throw forbidden(
-        'You may only release a copy in your own name. Releasing one on behalf of another officer requires an administrator.',
-        { role: req.user.role, attemptedUserId: userId }
+        'Decryption failed: The provided passphrase does not match your allotted clearance key. You cannot access or download this watermarked document.',
+        { reason: 'INVALID_PASSPHRASE' }
       );
     }
+  }
 
-    // --- 2. Load Asset + User from Postgres --------------------------------
-    const [asset, user, encapsulation] = await Promise.all([
-      prisma.asset.findUnique({ where: { id: assetId } }),
-      prisma.user.findUnique({ where: { id: userId } }),
-      prisma.assetKeyEncapsulation.findUnique({
-        where: { assetId_userId: { assetId, userId } },
-      }),
-    ]);
-    if (!asset) throw notFound(`No asset ${assetId}`);
-    if (!user) throw notFound(`No user ${userId}`);
-    if (!user.active) {
-      throw forbidden(`Officer ${user.name} access has been REVOKED/FROZEN by Administrator under Zero-Trust policy.`);
+  // --- 3. Recover user's PQC keys if enrolled ------------------------------
+  let pqcKeys = null;
+  if (user.encryptedPqcKeys) {
+    const pw = (passphrase || expectedPassphrase).trim();
+    try {
+      pqcKeys = decryptKeyBundle(user.encryptedPqcKeys, pw);
+    } catch {}
+    if (!pqcKeys) {
+      try {
+        pqcKeys = decryptKeyBundle(user.encryptedPqcKeys, 'officer123');
+      } catch {}
     }
-    if (!asset.cipherPath || !asset.iv || !asset.authTag) {
-      throw badInput(`Asset ${assetId} has no encrypted blob — re-upload it.`);
-    }
+  }
 
-    // Recover user's PQC keys if enrolled
-    const candidatePassphrases = [
-      passphrase,
-      'officer123',
-      'admin123',
-      'analyst123',
-      'auditor123',
-      'secret123',
-      user.email?.split('@')[0],
-    ].filter(Boolean);
+  // --- 4. Decrypt content --------------------------------------------------
+  const ciphertext = await fs.readFile(asset.cipherPath);
+  let plaintext = null;
 
-    let pqcKeys = null;
-    if (user.encryptedPqcKeys) {
-      for (const pw of candidatePassphrases) {
-        try {
-          pqcKeys = decryptKeyBundle(user.encryptedPqcKeys, pw);
-          if (pqcKeys) break;
-        } catch {}
-      }
-    }
+  if (encapsulation) {
+    let contentKey = null;
 
-    // --- 3. Decrypt (PQC ML-KEM-768 or AES-256-GCM master key) ------------
-    const ciphertext = await fs.readFile(asset.cipherPath);
-    let plaintext = null;
-
-    if (encapsulation) {
-      let contentKey = null;
-
-      // Attempt 1: Decapsulate with user's own KEM private key
-      if (pqcKeys?.kemSecretKey) {
-        try {
-          const sharedSecret = decapsulateKey(encapsulation.kemCiphertext, pqcKeys.kemSecretKey);
-          contentKey = aesDecrypt(
-            encapsulation.encryptedKey,
-            sharedSecret,
-            Buffer.from(encapsulation.iv),
-            Buffer.from(encapsulation.authTag)
-          );
-        } catch {
-          // Key may have been regenerated/re-enrolled after this asset was encapsulated
-        }
-      }
-
-      // Attempt 2: If user key decapsulation failed or bundle wasn't unlocked,
-      // recover contentKey from sibling recipient encapsulations (or admin)
-      if (!contentKey) {
-        const siblingEncs = await prisma.assetKeyEncapsulation.findMany({
-          where: { assetId, userId: { not: userId } },
-        });
-
-        for (const sib of siblingEncs) {
-          const sibUser = await prisma.user.findUnique({ where: { id: sib.userId } });
-          if (!sibUser?.encryptedPqcKeys) continue;
-          for (const pw of [
-            'officer123',
-            'admin123',
-            'analyst123',
-            'auditor123',
-            'secret123',
-            sibUser.email?.split('@')[0],
-          ].filter(Boolean)) {
-            try {
-              const k = decryptKeyBundle(sibUser.encryptedPqcKeys, pw);
-              if (k?.kemSecretKey) {
-                const ss = decapsulateKey(sib.kemCiphertext, k.kemSecretKey);
-                contentKey = aesDecrypt(
-                  sib.encryptedKey,
-                  ss,
-                  Buffer.from(sib.iv),
-                  Buffer.from(sib.authTag)
-                );
-                break;
-              }
-            } catch {}
-          }
-          if (contentKey) break;
-        }
-      }
-
-      // Attempt 3: Classical fallback with masterKey
-      if (!contentKey) {
-        try {
-          plaintext = aesDecrypt(
-            ciphertext,
-            masterKey(),
-            Buffer.from(asset.iv),
-            Buffer.from(asset.authTag)
-          );
-        } catch {}
-      }
-
-      if (!contentKey && !plaintext) {
-        throw badInput(
-          `Asset ${assetId} content key could not be recovered. Please ensure the recipient's PQC keys are enrolled.`
+    if (pqcKeys?.kemSecretKey) {
+      try {
+        const sharedSecret = decapsulateKey(encapsulation.kemCiphertext, pqcKeys.kemSecretKey);
+        contentKey = aesDecrypt(
+          encapsulation.encryptedKey,
+          sharedSecret,
+          Buffer.from(encapsulation.iv),
+          Buffer.from(encapsulation.authTag)
         );
-      }
+      } catch {}
+    }
 
-      // If contentKey recovered and user has active KEM public key, heal this encapsulation
-      if (contentKey && user.kemPublicKey) {
-        try {
-          const { sharedSecret: newSs, ciphertext: newKemCt } = encapsulateKey(user.kemPublicKey);
-          const { ciphertext: newEncKey, iv: newIv, authTag: newTag } = aesEncrypt(contentKey, newSs);
-          await prisma.assetKeyEncapsulation.update({
-            where: { assetId_userId: { assetId, userId } },
-            data: {
-              kemCiphertext: Buffer.from(newKemCt),
-              encryptedKey: newEncKey,
-              iv: newIv,
-              authTag: newTag,
-            },
-          });
-        } catch {}
-      }
+    if (!contentKey) {
+      const siblingEncs = await prisma.assetKeyEncapsulation.findMany({
+        where: { assetId, userId: { not: userId } },
+      });
 
-      if (!plaintext) {
+      for (const sib of siblingEncs) {
+        const sibUser = await prisma.user.findUnique({ where: { id: sib.userId } });
+        if (!sibUser?.encryptedPqcKeys) continue;
+        for (const pw of [
+          sib.allottedPassphrase,
+          'officer123',
+          'admin123',
+          'analyst123',
+          sibUser.email?.split('@')[0],
+        ].filter(Boolean)) {
+          try {
+            const k = decryptKeyBundle(sibUser.encryptedPqcKeys, pw);
+            if (k?.kemSecretKey) {
+              const ss = decapsulateKey(sib.kemCiphertext, k.kemSecretKey);
+              contentKey = aesDecrypt(
+                sib.encryptedKey,
+                ss,
+                Buffer.from(sib.iv),
+                Buffer.from(sib.authTag)
+              );
+              break;
+            }
+          } catch {}
+        }
+        if (contentKey) break;
+      }
+    }
+
+    if (!contentKey) {
+      try {
         plaintext = aesDecrypt(
           ciphertext,
-          contentKey,
+          masterKey(),
           Buffer.from(asset.iv),
           Buffer.from(asset.authTag)
         );
-      }
-    } else {
-      // Classical fallback
+      } catch {}
+    }
+
+    if (!contentKey && !plaintext) {
+      throw badInput(
+        `Asset ${assetId} content key could not be recovered. Recipient's PQC keys could not be decapsulated.`
+      );
+    }
+
+    if (contentKey && user.kemPublicKey) {
+      try {
+        const { sharedSecret: newSs, ciphertext: newKemCt } = encapsulateKey(user.kemPublicKey);
+        const { ciphertext: newEncKey, iv: newIv, authTag: newTag } = aesEncrypt(contentKey, newSs);
+        await prisma.assetKeyEncapsulation.update({
+          where: { assetId_userId: { assetId, userId } },
+          data: {
+            kemCiphertext: Buffer.from(newKemCt),
+            encryptedKey: newEncKey,
+            iv: newIv,
+            authTag: newTag,
+          },
+        });
+      } catch {}
+    }
+
+    if (!plaintext) {
       plaintext = aesDecrypt(
         ciphertext,
-        masterKey(),
+        contentKey,
         Buffer.from(asset.iv),
         Buffer.from(asset.authTag)
       );
     }
+  } else {
+    plaintext = aesDecrypt(
+      ciphertext,
+      masterKey(),
+      Buffer.from(asset.iv),
+      Buffer.from(asset.authTag)
+    );
+  }
 
-    // --- 4. contentSha over the exact bytes being released ------------------
-    const contentSha = sha256(plaintext);
+  // --- 5. contentSha & receiptId -------------------------------------------
+  const contentSha = sha256(plaintext);
+  const assetRefHex = makeAssetRef(asset.id);
+  const userRefHex = makeUserRef(user.id);
+  const receiptIdHex = buildReceiptId({
+    assetRef: assetRefHex,
+    userRef: userRefHex,
+    contentSha,
+  });
 
-    // --- 5. receiptId = keccak256(assetRef || userRef || contentSha || nonce)
-    const assetRefHex = makeAssetRef(asset.id);
-    const userRefHex = makeUserRef(user.id);
-    const receiptIdHex = buildReceiptId({
-      assetRef: assetRefHex,
-      userRef: userRefHex,
-      contentSha,
+  const payloadBits = buildPayload(receiptIdHex, 1);
+  const shortId = shortIdOf(receiptIdHex);
+  const payloadCommitHex = makePayloadCommit(payloadBits);
+
+  // --- 6. Non-repudiation Digital Signature (NIST ML-DSA-65) ---------------
+  let decryptionSignature = null;
+  let sigCommitHex = null;
+
+  const receiptDigest = sha256(
+    Buffer.concat([
+      hexToBuffer(receiptIdHex),
+      hexToBuffer(userRefHex),
+    ])
+  );
+
+  if (clientSignature && user.dsaPublicKey) {
+    try {
+      const clientSig = Buffer.from(clientSignature.replace(/^0x/, ''), 'hex');
+      let sigMessage = receiptDigest;
+      if (challengeId) {
+        const challenge = _challenges.get(challengeId);
+        if (
+          challenge &&
+          challenge.expiresAt > Date.now() &&
+          challenge.userId === userId &&
+          challenge.assetId === assetId
+        ) {
+          sigMessage = challenge.message;
+          _challenges.delete(challengeId);
+        }
+      }
+      if (verifyDecryptionSignature(clientSig, sigMessage, user.dsaPublicKey)) {
+        decryptionSignature = clientSig;
+        sigCommitHex = makeSignatureCommit(decryptionSignature);
+        console.info(`[pqc] Client ML-DSA-65 signature VERIFIED for user ${user.id}`);
+      }
+    } catch {}
+  }
+
+  if (!decryptionSignature && pqcKeys?.dsaSecretKey) {
+    decryptionSignature = signDecryptionReceipt(receiptDigest, pqcKeys.dsaSecretKey);
+    sigCommitHex = makeSignatureCommit(decryptionSignature);
+  }
+
+  // --- 7. ON CHAIN ---------------------------------------------------------
+  const anchor = await chain.logDecryption({
+    receiptId: receiptIdHex,
+    assetRef: assetRefHex,
+    userRef: userRefHex,
+    contentSha: toBytes32(contentSha),
+    payloadCommit: payloadCommitHex,
+    signatureCommit: sigCommitHex,
+  });
+
+  // --- 8. Embed the invisible mark -----------------------------------------
+  const isDocPdf = asset.mimeType === 'application/pdf' || isPdf(plaintext);
+  const marked = isDocPdf
+    ? await embedPdf(plaintext, payloadBits, receiptIdHex)
+    : await embed(plaintext, payloadBits, delta);
+
+  // --- 9. Perceptual hashes ------------------------------------------------
+  let h;
+  if (isDocPdf) {
+    const pdfHash = BigInt('0x' + sha256(marked.buffer).toString('hex').slice(0, 16));
+    h = {
+      pHash: toSigned64(pdfHash),
+      dHash: toSigned64(pdfHash),
+      aHash: toSigned64(pdfHash),
+    };
+  } else {
+    const raw = await hashes(marked.buffer);
+    h = {
+      pHash: toSigned64(raw.pHash),
+      dHash: raw.dHash == null ? null : toSigned64(raw.dHash),
+      aHash: raw.aHash == null ? null : toSigned64(raw.aHash),
+    };
+  }
+
+  // Persist released copy
+  await fs.mkdir(env.markedDir, { recursive: true });
+  const shortHexId = receiptIdHex.replace(/^0x/, '').slice(0, 16);
+  const markedPath = path.join(env.markedDir, `${shortHexId}${extFor(asset.mimeType)}`);
+  await fs.writeFile(markedPath, marked.buffer);
+
+  // --- 10. INSERT DecryptionEvent ------------------------------------------
+  const event = await prisma.decryptionEvent.create({
+    data: {
+      receiptId: hexToBuffer(receiptIdHex),
+      shortId,
+      assetId: asset.id,
+      userId: user.id,
+      deviceRef: hexToBuffer(makeDeviceRef(deviceLabel)),
+      deviceLabel,
+      contentSha: sha256(marked.buffer),
+      md5Digest: md5(marked.buffer),
+      decryptionSignature: decryptionSignature ? Buffer.from(decryptionSignature) : null,
+      signatureCommit: sigCommitHex ? hexToBuffer(sigCommitHex) : null,
+      signatureAlgorithm: decryptionSignature ? 'ML-DSA-65' : null,
+      pHash: h.pHash,
+      dHash: h.dHash,
+      aHash: h.aHash,
+      payloadBits,
+      markedPath,
+      txHash: hexToBuffer(anchor.txHash),
+      blockNumber: anchor.blockNumber !== null ? BigInt(anchor.blockNumber) : null,
+      chainMode: anchor.chainMode,
+      deltaUsed: marked.deltaUsed ?? delta,
+      psnrDb: Number.isFinite(marked.psnrDb) ? marked.psnrDb : 0,
+    },
+  });
+
+  // --- 11. BK-Tree index ---------------------------------------------------
+  bktree.insert({ id: event.id, pHash: h.pHash, dHash: h.dHash, aHash: h.aHash });
+
+  return {
+    receiptId: receiptIdHex,
+    txHash: anchor.txHash,
+    blockNumber: anchor.blockNumber,
+    etherscanUrl: anchor.etherscanUrl,
+    payloadBits,
+    psnrDb: Number.isFinite(marked.psnrDb) ? marked.psnrDb : null,
+    deltaUsed: marked.deltaUsed ?? delta,
+    downloadUrl: `/api/files/marked/${shortHexId}`,
+    pqc: {
+      kemAlgorithm: encapsulation ? 'ML-KEM-768' : 'CLASSICAL-AES-GCM',
+      dsaAlgorithm: decryptionSignature ? 'ML-DSA-65' : null,
+      signatureCommit: sigCommitHex,
+      signatureHex: decryptionSignature
+        ? Buffer.from(decryptionSignature).toString('hex').slice(0, 64) + '…'
+        : null,
+      nonRepudiation: Boolean(decryptionSignature),
+    },
+    chainMode: anchor.chainMode,
+    chainSkipped: anchor.skipped,
+    elapsedMs: Date.now() - startedAt,
+  };
+}
+
+// ──────────────────────────────── POST /api/decrypt ────────────────────────
+router.post('/', guard, validate(DecryptBody), async (req, res, next) => {
+  try {
+    const { assetId, deviceLabel, delta, passphrase, clientSignature, challengeId } = req.valid;
+    const targetUserId = req.valid.userId ?? req.user.id;
+
+    if (!can(req.user.role, 'decrypt:any') && targetUserId !== req.user.id) {
+      throw forbidden(
+        'You may only release a copy in your own name. Releasing one on behalf of another officer requires an administrator.',
+        { role: req.user.role, attemptedUserId: targetUserId }
+      );
+    }
+
+    const result = await executeDecryption({
+      assetId,
+      userId: targetUserId,
+      deviceLabel,
+      delta: delta ?? env.watermarkDelta,
+      passphrase,
+      clientSignature,
+      challengeId,
+      callerRole: req.user.role,
     });
 
-    // --- 6. payloadBits: 36-bit shortId + CRC-8 + 4-bit version -------------
-    const payloadBits = buildPayload(receiptIdHex, 1);
-    const shortId = shortIdOf(receiptIdHex);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
 
-    // --- 7. payloadCommit — proves the mark predates any leak ---------------
-    const payloadCommitHex = makePayloadCommit(payloadBits);
+// ──────────────────────────── POST /api/decrypt/batch ──────────────────────
+/**
+ * Admin-only: Batch dispatch a document to multiple recipient officers.
+ * Supports:
+ * - Common Passphrase for all recipients
+ * - Individual Passphrase per officer
+ */
+const BatchDecryptBody = z.object({
+  assetId: z.coerce.number().int().positive(),
+  userIds: z.array(z.coerce.number().int().positive()).min(1),
+  passphraseMode: z.enum(['common', 'individual']).optional().default('common'),
+  commonPassphrase: z.string().optional().default('officer123'),
+  individualPassphrases: z.record(z.string(), z.string()).optional(),
+  deviceLabel: z.string().trim().min(1).max(100).optional().default('ADMIN-DISPATCH-01'),
+  delta: z.coerce.number().int().min(2).max(48).optional(),
+});
 
-    // --- 7.5 Non-repudiation Digital Signature (NIST ML-DSA-65) -------------
-    let decryptionSignature = null;
-    let sigCommitHex = null;
+router.post('/batch', requireAnyCap('decrypt:any'), validate(BatchDecryptBody), async (req, res, next) => {
+  try {
+    const {
+      assetId,
+      userIds,
+      passphraseMode,
+      commonPassphrase,
+      individualPassphrases,
+      deviceLabel,
+      delta,
+    } = req.valid;
 
-    const receiptDigest = sha256(
-      Buffer.concat([
-        hexToBuffer(receiptIdHex),
-        hexToBuffer(userRefHex),
-      ])
-    );
+    const asset = await prisma.asset.findUnique({ where: { id: assetId } });
+    if (!asset) throw notFound(`No asset ${assetId}`);
 
-    if (req.valid.clientSignature && user.dsaPublicKey) {
+    const dispatches = [];
+
+    for (const uid of userIds) {
+      const targetUser = await prisma.user.findUnique({ where: { id: uid } });
+      if (!targetUser || !targetUser.active) continue;
+
+      const targetPassphrase = (
+        passphraseMode === 'individual'
+          ? (individualPassphrases?.[String(uid)] || commonPassphrase || 'officer123')
+          : (commonPassphrase || 'officer123')
+      ).trim();
+
+      // Upsert AssetKeyEncapsulation with the allotted passphrase
+      const existingEncap = await prisma.assetKeyEncapsulation.findUnique({
+        where: { assetId_userId: { assetId, userId: uid } },
+      });
+
+      if (existingEncap) {
+        await prisma.assetKeyEncapsulation.update({
+          where: { assetId_userId: { assetId, userId: uid } },
+          data: { allottedPassphrase: targetPassphrase },
+        });
+      } else {
+        await prisma.assetKeyEncapsulation.create({
+          data: {
+            assetId,
+            userId: uid,
+            kemCiphertext: Buffer.alloc(1088),
+            encryptedKey: Buffer.alloc(32),
+            iv: Buffer.alloc(12),
+            authTag: Buffer.alloc(16),
+            allottedPassphrase: targetPassphrase,
+          },
+        });
+      }
+
+      // Execute release for this officer
       try {
-        const clientSig = Buffer.from(req.valid.clientSignature.replace(/^0x/, ''), 'hex');
+        const decResult = await executeDecryption({
+          assetId,
+          userId: uid,
+          deviceLabel,
+          delta: delta ?? env.watermarkDelta,
+          passphrase: targetPassphrase,
+          callerRole: 'ADMIN',
+        });
 
-        // Determine what message was signed:
-        // - If a challengeId is provided, verify against the stored challenge bytes.
-        // - Otherwise fall back to verifying against the receiptDigest.
-        let sigMessage = receiptDigest;
-        if (req.valid.challengeId) {
-          const challenge = _challenges.get(req.valid.challengeId);
-          if (
-            challenge &&
-            challenge.expiresAt > Date.now() &&
-            challenge.userId === userId &&
-            challenge.assetId === assetId
-          ) {
-            sigMessage = challenge.message;
-            _challenges.delete(req.valid.challengeId); // One-time use
-          } else {
-            console.warn('[pqc] Challenge not found or expired — falling back to receiptDigest');
-          }
-        }
-
-        if (verifyDecryptionSignature(clientSig, sigMessage, user.dsaPublicKey)) {
-          decryptionSignature = clientSig;
-          sigCommitHex = makeSignatureCommit(decryptionSignature);
-          console.info(`[pqc] Client ML-DSA-65 signature VERIFIED for user ${user.id}`);
-        } else {
-          console.warn(`[pqc] Client signature verification FAILED for user ${user.id}`);
-        }
-      } catch (clientSigErr) {
-        console.warn('Client signature verification failed, falling back:', clientSigErr.message);
+        dispatches.push({
+          userId: targetUser.id,
+          userName: targetUser.name,
+          department: targetUser.dept,
+          role: targetUser.role,
+          allottedPassphrase: targetPassphrase,
+          receiptId: decResult.receiptId,
+          txHash: decResult.txHash,
+          etherscanUrl: decResult.etherscanUrl,
+          downloadUrl: decResult.downloadUrl,
+          psnrDb: decResult.psnrDb,
+          success: true,
+        });
+      } catch (err) {
+        dispatches.push({
+          userId: targetUser.id,
+          userName: targetUser.name,
+          department: targetUser.dept,
+          role: targetUser.role,
+          allottedPassphrase: targetPassphrase,
+          success: false,
+          error: err.message,
+        });
       }
     }
 
-    if (!decryptionSignature && pqcKeys?.dsaSecretKey) {
-      decryptionSignature = signDecryptionReceipt(receiptDigest, pqcKeys.dsaSecretKey);
-      sigCommitHex = makeSignatureCommit(decryptionSignature);
-    }
-
-    // --- 8. ON CHAIN. Before the watermark. Non-negotiable. -----------------
-    const anchor = await chain.logDecryption({
-      receiptId: receiptIdHex,
-      assetRef: assetRefHex,
-      userRef: userRefHex,
-      contentSha: toBytes32(contentSha),
-      payloadCommit: payloadCommitHex,
-      signatureCommit: sigCommitHex,
-    });
-
-    // --- 9. Embed the invisible mark ---------------------------------------
-    const isDocPdf = asset.mimeType === 'application/pdf' || isPdf(plaintext);
-    const marked = isDocPdf
-      ? await embedPdf(plaintext, payloadBits, receiptIdHex)
-      : await embed(plaintext, payloadBits, delta);
-
-    // --- 10. Perceptual hashes of the RELEASED bytes ------------------------
-    let h;
-    if (isDocPdf) {
-      const pdfHash = BigInt('0x' + sha256(marked.buffer).toString('hex').slice(0, 16));
-      h = {
-        pHash: toSigned64(pdfHash),
-        dHash: toSigned64(pdfHash),
-        aHash: toSigned64(pdfHash),
-      };
-    } else {
-      const raw = await hashes(marked.buffer);
-      h = {
-        pHash: toSigned64(raw.pHash),
-        dHash: raw.dHash == null ? null : toSigned64(raw.dHash),
-        aHash: raw.aHash == null ? null : toSigned64(raw.aHash),
-      };
-    }
-
-    // Persist the released copy so /api/files/marked/:receiptId can serve it.
-    await fs.mkdir(env.markedDir, { recursive: true });
-    const shortHexId = receiptIdHex.replace(/^0x/, '').slice(0, 16);
-    const markedPath = path.join(env.markedDir, `${shortHexId}${extFor(asset.mimeType)}`);
-    await fs.writeFile(markedPath, marked.buffer);
-
-    // --- 11. INSERT DecryptionEvent ----------------------------------------
-    const event = await prisma.decryptionEvent.create({
-      data: {
-        receiptId: hexToBuffer(receiptIdHex),
-        shortId,
-        assetId: asset.id,
-        userId: user.id,
-        deviceRef: hexToBuffer(makeDeviceRef(deviceLabel)),
-        deviceLabel,
-        contentSha: sha256(marked.buffer), // digest of what was actually released
-        md5Digest: md5(marked.buffer), // registry fingerprint (PS requirement)
-        decryptionSignature: decryptionSignature ? Buffer.from(decryptionSignature) : null,
-        signatureCommit: sigCommitHex ? hexToBuffer(sigCommitHex) : null,
-        signatureAlgorithm: decryptionSignature ? 'ML-DSA-65' : null,
-        pHash: h.pHash,
-        dHash: h.dHash,
-        aHash: h.aHash,
-        payloadBits,
-        markedPath,
-        txHash: hexToBuffer(anchor.txHash),
-        blockNumber: anchor.blockNumber !== null ? BigInt(anchor.blockNumber) : null,
-        chainMode: anchor.chainMode,
-        deltaUsed: marked.deltaUsed ?? delta,
-        psnrDb: Number.isFinite(marked.psnrDb) ? marked.psnrDb : 0,
-      },
-    });
-
-    // --- 12. Keep the search index hot -------------------------------------
-    bktree.insert({ id: event.id, pHash: h.pHash, dHash: h.dHash, aHash: h.aHash });
-
-    // --- 13. Respond -------------------------------------------------------
     res.json({
-      receiptId: receiptIdHex,
-      txHash: anchor.txHash,
-      blockNumber: anchor.blockNumber,
-      etherscanUrl: anchor.etherscanUrl,
-      payloadBits,
-      psnrDb: Number.isFinite(marked.psnrDb) ? marked.psnrDb : null,
-      deltaUsed: marked.deltaUsed ?? delta,
-      downloadUrl: `/api/files/marked/${shortHexId}`,
-      pqc: {
-        kemAlgorithm: encapsulation ? 'ML-KEM-768' : 'CLASSICAL-AES-GCM',
-        dsaAlgorithm: decryptionSignature ? 'ML-DSA-65' : null,
-        signatureCommit: sigCommitHex,
-        signatureHex: decryptionSignature
-          ? Buffer.from(decryptionSignature).toString('hex').slice(0, 64) + '…'
-          : null,
-        nonRepudiation: Boolean(decryptionSignature),
-      },
-      // Diagnostics — additive, safe for a client to ignore.
-      chainMode: anchor.chainMode,
-      chainSkipped: anchor.skipped,
-      elapsedMs: Date.now() - startedAt,
+      ok: true,
+      assetTitle: asset.title,
+      totalDispatched: dispatches.filter((d) => d.success).length,
+      dispatches,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ──────────────────────── GET /api/decrypt/allotments/:assetId ──────────────
+router.get('/allotments/:assetId', guard, async (req, res, next) => {
+  try {
+    const assetId = Number(req.params.assetId);
+    const encaps = await prisma.assetKeyEncapsulation.findMany({
+      where: { assetId },
+      include: { user: { select: { id: true, name: true, email: true, dept: true, role: true } } },
+    });
+    res.json({
+      assetId,
+      allotments: encaps.map((e) => ({
+        userId: e.userId,
+        name: e.user?.name,
+        email: e.user?.email,
+        dept: e.user?.dept,
+        role: e.user?.role,
+        allottedPassphrase: e.allottedPassphrase || 'officer123',
+      })),
     });
   } catch (err) {
     next(err);

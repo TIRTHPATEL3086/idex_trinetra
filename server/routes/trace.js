@@ -308,9 +308,7 @@ router.get('/:investigationId/dossier', requireCap('trace:run'), async (req, res
         where: { receiptId: investigation.topReceiptId },
         include: { user: true, asset: true },
       });
-    }
-
-    if (!event) {
+    } else if (investigation.verdict === 'ATTRIBUTED' || investigation.verdict === 'PROBABLE') {
       event = await prisma.decryptionEvent.findFirst({
         orderBy: { createdAt: 'desc' },
         include: { user: true, asset: true },

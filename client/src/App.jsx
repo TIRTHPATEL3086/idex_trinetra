@@ -87,6 +87,10 @@ function Shell() {
       <div className="mx-auto flex h-full w-full max-w-[1440px] flex-col overflow-hidden rounded-panel border border-line bg-white shadow-app lg:rounded-[3.125rem]">
         {/* ---- top bar (fixed) ---- */}
         <header className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-3.5 sm:px-7 lg:px-8">
+    <div className="h-screen overflow-hidden bg-olive p-1.5 [height:100dvh] sm:p-3 xl:p-4">
+      <div className="mx-auto flex h-full w-full max-w-[1440px] flex-col overflow-hidden rounded-2xl bg-white shadow-app sm:rounded-3xl">
+        {/* ---- top bar (fixed) ---- */}
+        <header className="flex shrink-0 items-center gap-2.5 border-b border-line px-3.5 py-3 sm:px-6">
           <button
             type="button"
             aria-label="Open navigation"
@@ -106,7 +110,7 @@ function Shell() {
             <Logo size="sm" />
           </span>
 
-          <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+          <div className="ml-auto flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             {user?.role !== 'OFFICER' && (
               <>
                 <HealthChip health={health} />
@@ -132,6 +136,7 @@ function Shell() {
           <Sidebar health={health} open={navOpen} can={can} user={user} />
 
           <main className="scroll-slim min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-6 sm:px-6 sm:py-8 lg:px-9 lg:py-10">
+          <main className="scroll-slim min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3.5 py-5 sm:px-6 sm:py-6 xl:px-8">
             <div className="mx-auto w-full max-w-6xl">
               <Routes>
                 {/* Land on the first screen this role can actually use. */}
@@ -144,7 +149,11 @@ function Shell() {
                   path="/assets"
                   element={
                     <RequireCap capability="assets:read">
-                      <Assets />
+                      {user?.role === 'OFFICER' ? (
+                        <Navigate to="/decrypt" replace />
+                      ) : (
+                        <Assets />
+                      )}
                     </RequireCap>
                   }
                 />
@@ -213,7 +222,10 @@ function Shell() {
  * a 2.8:1 contrast and these labels are 14px.
  */
 function Sidebar({ health, open, can, user }) {
-  const items = NAV.filter((n) => can(n.cap));
+  const items = NAV.filter((n) => {
+    if (n.to === '/assets' && user?.role === 'OFFICER') return false;
+    return can(n.cap);
+  });
   return (
     <aside
       className={`scroll-slim scroll-dark fixed inset-y-0 left-0 z-40 flex w-64 max-w-[82vw] flex-col overflow-y-auto bg-noir-deep p-4 text-white transition-transform duration-200 lg:static lg:z-auto lg:my-3 lg:ml-3 lg:w-64 lg:max-w-none lg:translate-x-0 lg:rounded-3xl ${
@@ -254,16 +266,20 @@ function Sidebar({ health, open, can, user }) {
         {can('trace:run') && (
           <NavLink to="/trace" className="btn-accent w-full">
             <SearchIcon />
+      {can('trace:run') && (
+        <div className="mt-auto pt-6">
+          <NavLink to="/trace" className="btn-dark w-full">
+            <SearchIcon light />
             Trace a leak
           </NavLink>
-        )}
-        {user?.role !== 'OFFICER' && (
-          <>
-            <RoleCard user={user} />
-            <HealthBadge health={health} />
-          </>
-        )}
-      </div>
+        </div>
+      )}
+      {user?.role !== 'OFFICER' && (
+        <div className="mt-4 space-y-3">
+          <RoleCard user={user} />
+          <HealthBadge health={health} />
+        </div>
+      )}
     </aside>
   );
 }
@@ -387,6 +403,7 @@ function AccountMenu({ user }) {
   const { signOut } = useAuth();
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
   const meta = ROLE_UI[user?.role] ?? {};
 
   if (!user) return null;
@@ -398,14 +415,23 @@ function AccountMenu({ user }) {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  function handleClose() {
+    setOpen(false);
+    setConfirmSignOut(false);
+  }
+
   return (
-    <div className="relative">
+    <>
+      {/* Top Header Pill Trigger */}
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-label="Account"
         aria-expanded={open}
         className="group flex items-center gap-2.5 rounded-full border border-line/80 bg-white/90 px-2 py-1.5 shadow-sm backdrop-blur-md transition-all duration-200 hover:border-accent-deep hover:shadow-md sm:pr-3"
+        onClick={() => setOpen(true)}
+        aria-label="Account details and session"
+        className="group flex items-center gap-2.5 rounded-full border border-line/80 bg-white/90 px-2 py-1.5 shadow-sm backdrop-blur-md transition-all duration-200 hover:border-lime-deep hover:shadow-md sm:pr-3 cursor-pointer"
       >
         <div className="relative">
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-tr from-noir to-[#1b232e] text-xs font-extrabold text-accent ring-2 ring-accent/30 transition group-hover:ring-accent">
@@ -424,6 +450,7 @@ function AccountMenu({ user }) {
         </span>
       </button>
 
+      {/* ── Centered Modal Popup with Partial Background Blur ── */}
       {open && (
         <>
           <button
@@ -445,10 +472,55 @@ function AccountMenu({ user }) {
                 <div className="flex items-center gap-1.5">
                   <span className="truncate text-sm font-bold text-ink">{user.name}</span>
                   <span className="rounded bg-accent/20 px-1.5 py-0.2 text-[10px] font-bold text-accent-deep">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-night/50 backdrop-blur-md transition-all duration-200 animate-in fade-in"
+          onClick={handleClose}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-md overflow-hidden rounded-3xl border border-line/90 bg-white/95 p-6 sm:p-7 shadow-2xl backdrop-blur-xl transition-all duration-200 animate-in zoom-in-95 space-y-5"
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-line/70 pb-4">
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                <h3 className="text-sm font-extrabold tracking-wide uppercase text-ink-muted">
+                  Account & Clearance Profile
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={handleClose}
+                className="grid h-8 w-8 place-items-center rounded-full text-ink-muted hover:bg-night/5 hover:text-ink transition font-bold"
+                aria-label="Close popup"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* User Profile Overview */}
+            <div className="flex items-center gap-4 rounded-2xl bg-gradient-to-br from-[#fcfcf9] to-slate-50 p-4 border border-line/80 shadow-xs">
+              <div className="relative shrink-0">
+                <span className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-tr from-night to-[#282b15] text-base font-extrabold text-lime shadow-md ring-2 ring-lime/40">
+                  {initialsOf(user.name)}
+                </span>
+                <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-white bg-emerald-500" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-base font-extrabold text-ink truncate">{user.name}</h4>
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
                     ACTIVE
                   </span>
                 </div>
-                <div className="truncate text-xs text-ink-muted">{user.email}</div>
+                <div className="text-xs text-ink-muted truncate mt-0.5">{user.email}</div>
+                <div className="mt-1.5 flex items-center gap-2 flex-wrap text-[11px]">
+                  <span className="font-bold text-ink">Dept: {user.dept}</span>
+                  <span className="text-ink-faint">·</span>
+                  <span className={`pill !text-[10px] !py-0.5 ${meta.badge ?? 'bg-line text-ink'}`}>
+                    🛡️ {meta.short || user.role}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -520,10 +592,100 @@ function AccountMenu({ user }) {
               <span>Sign out</span>
               <SignOutIcon size={14} />
             </button>
+            {/* Clearance & Role Capability Blurb */}
+            {meta.blurb && (
+              <p className="rounded-2xl bg-slate-50 p-3 text-xs leading-relaxed text-ink-muted border border-line/60">
+                {meta.blurb}
+              </p>
+            )}
+
+            {/* On-Chain Sepolia Identity Card */}
+            <div className="rounded-2xl border border-line/70 bg-gradient-to-br from-[#fbfbf7] to-slate-50 p-4 space-y-2 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  On-Chain Cryptographic Identity
+                </span>
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full">
+                  Sepolia Zero-PII
+                </span>
+              </div>
+              <p className="text-[11px] text-ink-muted">
+                Keccak-256 handle verified across Ethereum smart contract logs:
+              </p>
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-line/80 bg-white px-3 py-2 shadow-inner">
+                <span className="mono text-xs font-bold text-ink truncate">
+                  {user.userRef ? shortHash(user.userRef, 10, 8) : 'Not enrolled'}
+                </span>
+                <button
+                  type="button"
+                  onClick={copyHandle}
+                  className="shrink-0 flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-ink-muted transition hover:bg-lime hover:text-night"
+                  title="Copy full 32-byte on-chain userRef"
+                >
+                  {copied ? (
+                    <span className="text-emerald-700 font-extrabold">✓ Copied</span>
+                  ) : (
+                    <span>Copy ⧉</span>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Logout / Sign Out Action Box */}
+            <div className="pt-2 border-t border-line/80 space-y-2.5">
+              {!confirmSignOut ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmSignOut(true)}
+                    className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 py-3 text-xs font-extrabold text-rose-700 hover:bg-rose-100 hover:border-rose-300 transition shadow-xs cursor-pointer"
+                  >
+                    <span>Sign out of session</span>
+                    <span className="text-sm">↳</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleClose}
+                    className="rounded-2xl border border-line bg-white px-4 py-3 text-xs font-bold text-ink-muted hover:bg-night/5 hover:text-ink transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-rose-300 bg-rose-50/90 p-4 space-y-3 animate-in fade-in">
+                  <div className="text-xs font-bold text-rose-900">
+                    Are you sure you want to end your security session?
+                  </div>
+                  <p className="text-[11px] text-rose-700">
+                    Signing out terminates your authenticated enclave session. You will need to re-enter your clearance credentials to access protected documents.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleClose();
+                        signOut();
+                      }}
+                      className="flex-1 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold py-2.5 text-xs shadow-md transition hover:scale-[1.01] cursor-pointer"
+                    >
+                      Confirm Sign Out
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmSignOut(false)}
+                      className="rounded-xl border border-line bg-white px-4 py-2.5 text-xs font-bold text-ink hover:bg-night/5 transition cursor-pointer"
+                    >
+                      Stay Signed In
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-        </>
+        </div>
       )}
-    </div>
+    </>
   );
 }
 

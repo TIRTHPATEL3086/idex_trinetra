@@ -94,31 +94,34 @@ export default function Timeline() {
               <div className="card flex-1 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-ink">{e.userName}</span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm sm:text-base font-bold text-ink">{e.userName}</span>
                       {e.riskLevel === 'CRITICAL' && (
                         <span className="rounded-full bg-danger-tint px-2 py-0.5 text-[10px] font-bold text-danger-deep">
+                        <span className="rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-bold text-rose-700">
                           CRITICAL ANOMALY
                         </span>
                       )}
                       {e.riskLevel === 'ELEVATED' && (
                         <span className="rounded-full bg-probable-tint px-2 py-0.5 text-[10px] font-bold text-probable-deep">
+                        <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-700">
                           ELEVATED RISK
                         </span>
                       )}
                       {e.userActive === false && (
                         <span className="rounded-full bg-danger-deep px-2 py-0.5 text-[10px] font-bold text-white">
+                        <span className="rounded-full bg-red-600 px-2.5 py-0.5 text-xs font-bold text-white">
                           FROZEN / REVOKED
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-ink-muted mt-0.5">
-                      {e.department} · Endpoint: <span className="font-mono">{e.device}</span>
+                    <div className="text-xs sm:text-sm text-ink-muted mt-0.5">
+                      {e.department} · Endpoint: <span className="font-mono text-xs">{e.device}</span>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <div className="text-right text-xs text-ink-muted">
+                    <div className="text-right text-xs text-ink-muted font-mono">
                       {new Date(e.at).toLocaleString()}
                     </div>
                     {e.userId && (
@@ -150,6 +153,7 @@ export default function Timeline() {
                       <span
                         key={i}
                         className="rounded-md bg-probable-tint border border-probable-bright/70 px-2 py-0.5 text-[11px] font-medium text-probable-deep flex items-center gap-1"
+                        className="rounded-md bg-amber-50 border border-amber-200/70 px-2.5 py-0.5 text-xs font-medium text-amber-800 flex items-center gap-1"
                       >
                         <WarningIcon size={12} /> {a}
                       </span>
@@ -157,7 +161,7 @@ export default function Timeline() {
                   </div>
                 )}
 
-                <div className="mono mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-ink-faint">
+                <div className="mono mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-muted">
                   <span>receipt {shortHash(e.receiptId, 8, 4)}</span>
                   {e.psnrDb != null && <span>PSNR {e.psnrDb.toFixed(1)} dB</span>}
                   {e.userRef && <span>on-chain {shortHash(e.userRef, 6, 4)}</span>}

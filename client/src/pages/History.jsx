@@ -148,8 +148,8 @@ export default function History() {
 
       {data && data.events.length > 0 && (
         <>
-          <div className="card overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="card overflow-x-auto scroll-slim shadow-sm">
+            <table className="w-full min-w-[880px] text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-xs text-ink-faint uppercase tracking-wide">
                   {[
@@ -166,33 +166,38 @@ export default function History() {
                     <th key={h} className="px-4 py-3 font-semibold">
                       {h}
                     </th>
+                <tr className="border-b border-line bg-night/[0.02] text-left text-xs font-bold uppercase tracking-wider text-ink-muted">
+                  {['When', 'Officer', 'Dept', 'Document', 'Device', 'Receipt', 'Tx Hash', 'PSNR', 'Sig'].map((h) => (
+                    <th key={h} className="px-4 py-3.5">{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-line/60">
                 {data.events.map((e) => (
                   <tr
                     key={e.id}
                     className="border-b border-line/50 hover:bg-surface/60 transition-colors"
                   >
                     <td className="px-4 py-3 mono text-[11px] text-ink-muted whitespace-nowrap">
+                  <tr key={e.id} className="hover:bg-line/25 transition-colors">
+                    <td className="px-4 py-3.5 mono text-xs text-ink-muted whitespace-nowrap">
                       {new Date(e.at).toLocaleString()}
                     </td>
-                    <td className="px-4 py-3 font-semibold text-ink">{e.userName}</td>
-                    <td className="px-4 py-3 text-ink-muted text-xs">{e.department}</td>
-                    <td className="px-4 py-3 text-ink max-w-[160px] truncate" title={e.assetTitle}>
+                    <td className="px-4 py-3.5 font-bold text-ink text-sm">{e.userName}</td>
+                    <td className="px-4 py-3.5 text-ink-muted text-xs font-medium">{e.department}</td>
+                    <td className="px-4 py-3.5 text-ink text-sm font-medium max-w-[180px] truncate" title={e.assetTitle}>
                       {e.assetTitle}
                       {e.assetClassification && (
-                        <span className="ml-1.5 rounded bg-surface px-1.5 py-0.5 text-[10px] text-ink-faint">
+                        <span className="ml-1.5 rounded bg-surface px-1.5 py-0.5 text-[10px] font-bold text-ink-muted">
                           {e.assetClassification}
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 mono text-[11px] text-ink-muted">{e.device}</td>
-                    <td className="px-4 py-3 mono text-[11px] text-ink-faint">
+                    <td className="px-4 py-3.5 mono text-xs text-ink-muted">{e.device}</td>
+                    <td className="px-4 py-3.5 mono text-xs text-ink-muted">
                       {shortHash(e.receiptId, 6, 4)}
                     </td>
-                    <td className="px-4 py-3 mono text-[11px]">
+                    <td className="px-4 py-3.5 mono text-xs">
                       {e.etherscanUrl ? (
                         <a
                           href={e.etherscanUrl}
@@ -204,21 +209,26 @@ export default function History() {
                             {shortHash(e.txHash, 6, 4)}
                             <ExternalLinkIcon size={11} />
                           </span>
+                        <a href={e.etherscanUrl} target="_blank" rel="noreferrer"
+                          className="font-semibold text-attributed hover:underline">
+                          {shortHash(e.txHash, 6, 4)} ↗
                         </a>
                       ) : (
-                        <span className="text-ink-faint">{shortHash(e.txHash, 6, 4)}</span>
+                        <span className="text-ink-muted">{shortHash(e.txHash, 6, 4)}</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 mono text-[11px] text-ink-muted">
+                    <td className="px-4 py-3.5 mono text-xs font-semibold text-ink">
                       {e.psnrDb != null ? `${Number(e.psnrDb).toFixed(1)} dB` : '—'}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3.5">
                       {e.signatureAlgorithm ? (
                         <span className="rounded-full bg-attributed-tint px-2 py-0.5 text-[10px] font-bold text-attributed-deep">
                           <CheckIcon size={11} /> PQC
+                        <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700">
+                          ✓ PQC
                         </span>
                       ) : (
-                        <span className="text-[10px] text-ink-faint">—</span>
+                        <span className="text-xs text-ink-faint">—</span>
                       )}
                     </td>
                   </tr>

@@ -78,6 +78,7 @@ model AssetKeyEncapsulation {
   encryptedKey  Bytes    // AES-256-GCM encrypted content key (32 bytes)
   iv            Bytes    // 12 bytes
   authTag       Bytes    // 16 bytes
+  allottedPassphrase String? // Passphrase allotted by Admin for this officer & document
   createdAt     DateTime @default(now())
 
   @@unique([assetId, userId])

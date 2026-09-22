@@ -114,7 +114,69 @@ export const ROLE_UI = {
   },
 };
 
-export const ROLE_ORDER = ['ADMIN', 'OFFICER', 'INVESTIGATOR', 'AUDITOR'];
+export const ROLE_ORDER = ['ADMIN', 'OFFICER', 'INVESTIGATOR'];
+
+/**
+ * Demo accounts for 1-click evaluation.
+ * Auditor removed as requested. Total 3 active clearance officers included.
+ */
+export const DEMO_ACCOUNTS = [
+  {
+    role: 'ADMIN',
+    short: 'Admin',
+    badge: 'bg-night text-lime',
+    title: 'Registry Administrator',
+    name: 'Admin Desk',
+    dept: 'HQ',
+    email: 'admin@example.gov',
+    password: 'admin123',
+    desc: 'Full custody & management',
+  },
+  {
+    role: 'OFFICER',
+    short: 'Officer 1',
+    badge: 'bg-lime text-night',
+    title: 'Clearance Holder',
+    name: 'Officer U-017',
+    dept: 'Ops Wing',
+    email: 'u017@example.gov',
+    password: 'officer123',
+    desc: 'Operations Wing clearance',
+  },
+  {
+    role: 'OFFICER',
+    short: 'Officer 2',
+    badge: 'bg-lime text-night',
+    title: 'Clearance Holder',
+    name: 'Officer U-023',
+    dept: 'Signals',
+    email: 'u023@example.gov',
+    password: 'officer123',
+    desc: 'Signals Intelligence clearance',
+  },
+  {
+    role: 'OFFICER',
+    short: 'Officer 3',
+    badge: 'bg-lime text-night',
+    title: 'Clearance Holder',
+    name: 'Officer U-041',
+    dept: 'Logistics',
+    email: 'u041@example.gov',
+    password: 'officer123',
+    desc: 'Defense Logistics clearance',
+  },
+  {
+    role: 'INVESTIGATOR',
+    short: 'Investigator',
+    badge: 'bg-attributed/15 text-attributed',
+    title: 'Forensic Analyst',
+    name: 'Analyst A-004',
+    dept: 'Intel Cell',
+    email: 'a004@example.gov',
+    password: 'analyst123',
+    desc: 'Forensic leak attribution',
+  },
+];
 
 /** Initials for the avatar — "Officer U-017" -> "OU". */
 export function initialsOf(name = '') {

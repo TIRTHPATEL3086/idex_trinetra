@@ -164,6 +164,9 @@ export default function PqcEnroll() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-line/60 bg-muted text-xs font-semibold uppercase tracking-wider text-ink-muted">
+          <div className="overflow-x-auto scroll-slim">
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead className="border-b border-edge/60 bg-night/20 text-xs font-bold uppercase tracking-wider text-ink-muted">
                 <tr>
                   <th className="px-6 py-3.5">Officer / Role</th>
                   <th className="px-6 py-3.5">Department</th>
@@ -181,16 +184,17 @@ export default function PqcEnroll() {
                   return (
                     <tr key={u.userId} className="transition-colors hover:bg-muted">
                       <td className="px-6 py-4">
-                        <div className="font-medium text-ink">{u.name}</div>
-                        <div className="flex items-center gap-2 text-xs text-ink-muted">
-                          <span>{u.roleLabel || u.role}</span>
+                        <div className="font-bold text-ink text-sm">{u.name}</div>
+                        <div className="flex items-center gap-2 text-xs text-ink-muted mt-0.5">
+                          <span className="font-semibold">{u.roleLabel || u.role}</span>
                           <span>•</span>
                           <span className="font-mono text-[11px] text-ink-muted/80">
                             {u.userRef}
                           </span>
+                          <span className="font-mono text-xs text-ink-muted/90">{u.userRef}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-ink-muted">{u.dept}</td>
+                      <td className="px-6 py-4 text-xs sm:text-sm text-ink-muted font-medium">{u.dept}</td>
                       <td className="px-6 py-4">
                         {isEnrolled ? (
                           <span className="inline-flex items-center gap-1.5 rounded-full bg-attributed/10 px-2.5 py-1 text-xs font-medium text-attributed-deep ring-1 ring-attributed/20">
@@ -200,13 +204,20 @@ export default function PqcEnroll() {
                         ) : (
                           <span className="inline-flex items-center gap-1.5 rounded-full bg-probable/10 px-2.5 py-1 text-xs font-medium text-probable-deep ring-1 ring-probable/20">
                             <span className="h-1.5 w-1.5 rounded-full bg-probable-bright" />
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-bold text-emerald-600 ring-1 ring-emerald-500/20">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            Enrolled
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-bold text-amber-600 ring-1 ring-amber-500/20">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
                             Pending
                           </span>
                         )}
                       </td>
                       <td className="px-6 py-4 font-mono text-xs text-ink-muted">
                         {status?.kemPublicKey ? (
-                          <span title={status.kemPublicKey}>
+                          <span title={status.kemPublicKey} className="font-semibold">
                             {shortHash(status.kemPublicKey, 6, 6)}
                           </span>
                         ) : (
@@ -215,7 +226,7 @@ export default function PqcEnroll() {
                       </td>
                       <td className="px-6 py-4 font-mono text-xs text-ink-muted">
                         {status?.dsaPublicKey ? (
-                          <span title={status.dsaPublicKey}>
+                          <span title={status.dsaPublicKey} className="font-semibold">
                             {shortHash(status.dsaPublicKey, 6, 6)}
                           </span>
                         ) : (
@@ -227,6 +238,7 @@ export default function PqcEnroll() {
                           type="button"
                           onClick={() => openEnrollModal(u)}
                           className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink transition hover:border-accent/60 hover:text-accent"
+                          className="rounded-xl border border-line bg-white px-3.5 py-1.5 text-xs font-bold text-ink shadow-xs transition hover:border-lime-deep hover:bg-lime/20"
                         >
                           {isEnrolled ? 'Re-enroll' : 'Enroll PQC'}
                         </button>

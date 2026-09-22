@@ -48,9 +48,12 @@ export default function Robustness() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
           <div className="rounded-xl border border-line bg-card/60 p-5 backdrop-blur-sm">
             <div className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
+          <div className="card p-5 shadow-xs">
+            <div className="text-xs font-bold uppercase tracking-wider text-ink-muted">
               Live Decryptions
             </div>
-            <div className="mt-2 text-3xl font-bold tracking-tight text-ink">
+            <div className="mt-2 text-2xl sm:text-3xl font-extrabold tracking-tight text-ink">
               {live.totalDecryptions ?? 0}
             </div>
             <p className="mt-1 text-xs text-ink-muted">Anchored & watermarked</p>
@@ -58,9 +61,11 @@ export default function Robustness() {
 
           <div className="rounded-xl border border-line bg-card/60 p-5 backdrop-blur-sm">
             <div className="text-xs font-semibold uppercase tracking-wider text-accent">
+          <div className="card p-5 shadow-xs">
+            <div className="text-xs font-bold uppercase tracking-wider text-lime-600">
               Mean PSNR
             </div>
-            <div className="mt-2 text-3xl font-bold tracking-tight text-ink">
+            <div className="mt-2 text-2xl sm:text-3xl font-extrabold tracking-tight text-ink">
               {live.avgPsnr > 0 ? `${live.avgPsnr} dB` : '—'}
             </div>
             <p className="mt-1 text-xs text-ink-muted">&gt;40 dB threshold: Imperceptible</p>
@@ -68,9 +73,11 @@ export default function Robustness() {
 
           <div className="rounded-xl border border-line bg-card/60 p-5 backdrop-blur-sm">
             <div className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+          <div className="card p-5 shadow-xs">
+            <div className="text-xs font-bold uppercase tracking-wider text-ink-muted">
               PSNR Range
             </div>
-            <div className="mt-2 text-3xl font-bold tracking-tight text-ink">
+            <div className="mt-2 text-2xl sm:text-3xl font-extrabold tracking-tight text-ink">
               {live.minPsnr !== null ? `${live.minPsnr} – ${live.maxPsnr} dB` : '—'}
             </div>
             <p className="mt-1 text-xs text-ink-muted">Min / Max observed</p>
@@ -81,6 +88,13 @@ export default function Robustness() {
               QIM Delta (Δ)
             </div>
             <div className="mt-2 text-3xl font-bold tracking-tight text-ink">16 – 24</div>
+          <div className="card p-5 shadow-xs">
+            <div className="text-xs font-bold uppercase tracking-wider text-ink-muted">
+              QIM Delta (Δ)
+            </div>
+            <div className="mt-2 text-2xl sm:text-3xl font-extrabold tracking-tight text-ink">
+              16 – 24
+            </div>
             <p className="mt-1 text-xs text-ink-muted">Adaptive DWT-DCT quantization</p>
           </div>
         </div>
@@ -89,6 +103,7 @@ export default function Robustness() {
       {/* Live Decryption PSNR History (if records exist) */}
       {live?.history?.length > 0 && (
         <div className="rounded-xl border border-line bg-card p-5">
+        <div className="card p-5 shadow-sm">
           <div className="flex items-center justify-between pb-3">
             <div>
               <h3 className="text-sm font-bold text-ink">
@@ -101,6 +116,8 @@ export default function Robustness() {
             </div>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent ring-1 ring-accent/20">
               <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-lime-500/15 px-2.5 py-1 text-xs font-bold text-night ring-1 ring-lime-500/30">
+              <span className="h-1.5 w-1.5 rounded-full bg-lime-600 animate-pulse" />
               Live DB Telemetry
             </span>
           </div>
@@ -148,7 +165,7 @@ export default function Robustness() {
 
       {/* Attack Suite Benchmark Charts */}
       {metrics && !notRun ? (
-        <div className="grid gap-5 lg:grid-cols-2">
+        <div className="grid gap-5 grid-cols-1 xl:grid-cols-2">
           <div className="card p-5">
             <h3 className="text-sm font-bold text-ink">Attack Survival (Empirical)</h3>
             <p className="mb-4 text-xs text-ink-muted">
