@@ -30,8 +30,8 @@ export function RequireCap({ capability, children }) {
 
 function BootSplash() {
   return (
-    <div className="grid min-h-[100dvh] place-items-center bg-olive px-6">
-      <div className="mono animate-pulse text-sm text-lime/70">Restoring session…</div>
+    <div className="grid min-h-[100dvh] place-items-center bg-canvas px-6">
+      <div className="mono animate-pulse text-sm text-accent/70">Restoring session…</div>
     </div>
   );
 }
@@ -69,7 +69,7 @@ function NotPermitted({ role, capability }) {
 
 function LockIcon() {
   const s = {
-    stroke: '#6f7268',
+    stroke: '#737373',
     strokeWidth: 1.8,
     strokeLinecap: 'round',
     strokeLinejoin: 'round',
@@ -79,7 +79,7 @@ function LockIcon() {
     <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
       <rect x="4.5" y="10.5" width="15" height="9.5" rx="2.5" {...s} />
       <path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" {...s} />
-      <circle cx="12" cy="15.2" r="1.15" fill="#6f7268" />
+      <circle cx="12" cy="15.2" r="1.15" fill="#737373" />
     </svg>
   );
 }

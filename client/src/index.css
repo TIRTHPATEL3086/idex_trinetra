@@ -12,16 +12,23 @@ html {
 
 body {
   font-family:
-    'Plus Jakarta Sans',
+    Inter,
     ui-sans-serif,
     system-ui,
     -apple-system,
     sans-serif;
-  color: #16160f;
-  /* The dark olive canvas the white app card sits on. */
-  background-color: #3a3d1a;
+  color: #0f151d;
+  /* Warm cream canvas the app panel sits on (reference: --background). */
+  background-color: #fff9f6;
   -webkit-font-smoothing: antialiased;
   -webkit-text-size-adjust: 100%;
+}
+
+/* The reference sets headings tight and slightly negative-tracked. */
+h1,
+h2,
+h3 {
+  letter-spacing: -0.025em;
 }
 
 .mono {
@@ -31,18 +38,18 @@ body {
 }
 
 .font-display {
-  font-family: 'Baloo 2', ui-rounded, sans-serif;
+  font-family: 'Bricolage Grotesque', Inter, ui-sans-serif, sans-serif;
+  letter-spacing: -0.025em;
 }
 
-/* Stylish scroll area — a slim rounded lime thumb that grows and brightens
-   while you scroll or hover, and slims back down when idle. */
+/* Slim coral scroll thumb that grows and warms while you scroll or hover. */
 .scroll-slim {
   scrollbar-width: thin; /* Firefox */
-  scrollbar-color: #dcefa6 transparent;
+  scrollbar-color: #ffc8b7 transparent;
   scroll-behavior: smooth;
 }
 .scroll-slim:hover {
-  scrollbar-color: #c9f24d transparent; /* Firefox: brighten on hover */
+  scrollbar-color: #ff7448 transparent; /* Firefox: warm up on hover */
 }
 .scroll-slim::-webkit-scrollbar {
   width: 12px;
@@ -53,7 +60,7 @@ body {
   margin: 6px 0;
 }
 .scroll-slim::-webkit-scrollbar-thumb {
-  background-color: #dcefa6; /* muted lime, slim */
+  background-color: #ffc8b7; /* soft coral, slim */
   border: 4px solid transparent; /* padding -> a thin pill */
   border-radius: 999px;
   background-clip: content-box;
@@ -62,60 +69,81 @@ body {
     background-color 0.2s ease,
     border-width 0.15s ease;
 }
-/* Grow + brighten while the area is scrolled/hovered/dragged. */
 .scroll-slim:hover::-webkit-scrollbar-thumb {
-  background-color: #c9f24d;
+  background-color: #ff8d69;
   border-width: 3px;
 }
 .scroll-slim::-webkit-scrollbar-thumb:hover,
 .scroll-slim::-webkit-scrollbar-thumb:active {
-  background-color: #b4e02c;
+  background-color: #ff7448;
   border-width: 2px; /* widest while dragging */
 }
 
+/* Dark surfaces invert the thumb so it stays visible on navy. */
+.scroll-dark {
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+.scroll-dark::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.22);
+}
+.scroll-dark:hover::-webkit-scrollbar-thumb,
+.scroll-dark::-webkit-scrollbar-thumb:hover {
+  background-color: #ff7448;
+}
+
 @layer components {
-  /* White content card — the primary frame. */
+  /* White content card — the primary frame. Large radius, hairline border. */
   .card {
-    @apply rounded-2xl border border-line bg-white shadow-card;
+    @apply rounded-3xl border border-line bg-white shadow-card;
   }
 
-  /* Primary action — lime with black text, pill-shaped like the reference. */
-  .btn-lime {
-    @apply inline-flex items-center justify-center gap-2 rounded-full bg-lime px-5 py-2.5
-      text-sm font-bold text-night transition hover:bg-lime-deep
-      focus:outline-none focus-visible:ring-4 focus-visible:ring-lime/40
+  /* Primary action — coral, fully pill-shaped.
+     The reference pairs coral with near-white, but that is only 2.8:1 and
+     these labels are 14px, so ours carries dark ink instead (7.4:1). */
+  .btn-accent {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-accent px-5 py-2.5
+      text-sm font-semibold text-noir transition hover:bg-accent-deep
+      focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/35
       disabled:cursor-not-allowed disabled:opacity-60;
   }
 
-  /* Dark pill action (like "Broadcast" / "New"). */
+  /* Solid dark pill — the quieter of the two solid actions. */
   .btn-dark {
-    @apply inline-flex items-center justify-center gap-2 rounded-full bg-night px-5 py-2.5
-      text-sm font-semibold text-white transition hover:bg-night-soft
-      focus:outline-none focus-visible:ring-4 focus-visible:ring-night/30;
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-noir px-5 py-2.5
+      text-sm font-semibold text-white transition hover:bg-noir-soft
+      focus:outline-none focus-visible:ring-4 focus-visible:ring-noir/25
+      disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   /* Outline / secondary action. */
   .btn-ghost {
     @apply inline-flex items-center justify-center gap-2 rounded-full border border-line
       bg-white px-5 py-2.5 text-sm font-semibold text-ink transition
-      hover:border-ink-faint hover:bg-line/40 focus:outline-none
-      focus-visible:ring-4 focus-visible:ring-lime/25;
+      hover:border-ink-faint hover:bg-muted focus:outline-none
+      focus-visible:ring-4 focus-visible:ring-accent/25
+      disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   /* Round icon button in a hairline circle. */
   .btn-icon {
     @apply grid h-10 w-10 shrink-0 place-items-center rounded-full border border-line
-      bg-white text-ink-muted transition hover:text-ink;
+      bg-white text-ink-muted transition hover:border-ink-faint hover:text-ink;
   }
 
   /* Small status / meta pill. */
   .pill {
-    @apply inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-bold;
+    @apply inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-semibold;
   }
 
   /* Form control — selects and text inputs. */
   .input {
-    @apply w-full rounded-xl border border-line bg-white px-3.5 py-2.5 text-sm font-medium text-ink
-      outline-none transition focus:border-lime-deep focus:ring-4 focus:ring-lime/25;
+    @apply w-full rounded-2xl border border-line bg-white px-3.5 py-2.5 text-sm font-medium text-ink
+      outline-none transition placeholder:text-ink-faint
+      focus:border-accent focus:ring-4 focus:ring-accent/20;
+  }
+
+  /* Section eyebrow — the small uppercase label above a heading. */
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-wider text-ink-faint;
   }
 }

@@ -5,6 +5,12 @@ import { getHealth, shortHash } from './lib/api.js';
 import { useAuth, ROLE_UI, initialsOf } from './lib/auth.jsx';
 import { RequireAuth, RequireCap } from './components/RequireAuth.jsx';
 import Logo from './components/Logo.jsx';
+import {
+  CheckIcon,
+  CopyIcon,
+  ShieldIcon as ShieldGlyph,
+  SignOutIcon,
+} from './components/icons.jsx';
 import Login from './pages/Login.jsx';
 import Assets from './pages/Assets.jsx';
 import Decrypt from './pages/Decrypt.jsx';
@@ -15,8 +21,8 @@ import History from './pages/History.jsx';
 import PqcEnroll from './pages/PqcEnroll.jsx';
 
 /**
- * Application shell — a white, rounded app card sitting on a dark olive canvas,
- * with a lime accent and a chunky rounded logo, matching the reference design.
+ * Application shell — a white, large-radius app panel on a warm cream canvas,
+ * with a coral accent and a dark navigation rail, following the nomu reference.
  *
  * Responsive contract (holds from 320px up):
  *   - below lg the sidebar is an off-canvas drawer opened from the top bar;
@@ -32,13 +38,13 @@ import PqcEnroll from './pages/PqcEnroll.jsx';
  * a hidden link and a refused route can never disagree.
  */
 const NAV = [
-  { to: '/assets',   label: 'Documents',  icon: DocIcon,        cap: 'assets:read' },
-  { to: '/decrypt',  label: 'Decrypt',     icon: KeyIcon,        cap: 'decrypt:self' },
-  { to: '/trace',    label: 'Trace',       icon: SearchIcon,     cap: 'trace:run' },
-  { to: '/timeline', label: 'Timeline',    icon: ClockIcon,      cap: 'audit:own' },
-  { to: '/history',  label: 'History',     icon: HistoryIcon,    cap: 'audit:read' },
-  { to: '/enroll',   label: 'PQC Enroll',  icon: ShieldIcon,     cap: 'assets:upload' },
-  { to: '/robustness', label: 'Robustness', icon: ChartIcon,    cap: 'metrics:read' },
+  { to: '/assets', label: 'Documents', icon: DocIcon, cap: 'assets:read' },
+  { to: '/decrypt', label: 'Decrypt', icon: KeyIcon, cap: 'decrypt:self' },
+  { to: '/trace', label: 'Trace', icon: SearchIcon, cap: 'trace:run' },
+  { to: '/timeline', label: 'Timeline', icon: ClockIcon, cap: 'audit:own' },
+  { to: '/history', label: 'History', icon: HistoryIcon, cap: 'audit:read' },
+  { to: '/enroll', label: 'PQC Enroll', icon: ShieldIcon, cap: 'assets:upload' },
+  { to: '/robustness', label: 'Robustness', icon: ChartIcon, cap: 'metrics:read' },
 ];
 
 export default function App() {
@@ -75,10 +81,12 @@ function Shell() {
   }, [navOpen]);
 
   return (
-    <div className="h-screen overflow-hidden bg-olive p-2 [height:100dvh] sm:p-4 lg:p-6">
-      <div className="mx-auto flex h-full w-full max-w-[1440px] flex-col overflow-hidden rounded-2xl bg-white shadow-app sm:rounded-3xl">
+    <div className="overflow-hidden bg-canvas p-2 [height:100dvh] sm:p-4 lg:p-6">
+      {/* The app panel. The reference's radius is 1.5rem on mobile and 3.125rem
+          from the large breakpoint up — we follow it exactly. */}
+      <div className="mx-auto flex h-full w-full max-w-[1440px] flex-col overflow-hidden rounded-panel border border-line bg-white shadow-app lg:rounded-[3.125rem]">
         {/* ---- top bar (fixed) ---- */}
-        <header className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-3.5 sm:px-6">
+        <header className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-3.5 sm:px-7 lg:px-8">
           <button
             type="button"
             aria-label="Open navigation"
@@ -117,13 +125,13 @@ function Shell() {
               type="button"
               aria-label="Close navigation"
               onClick={() => setNavOpen(false)}
-              className="fixed inset-0 z-30 bg-night/40 backdrop-blur-sm lg:hidden"
+              className="fixed inset-0 z-30 bg-noir/40 backdrop-blur-sm lg:hidden"
             />
           )}
 
           <Sidebar health={health} open={navOpen} can={can} user={user} />
 
-          <main className="scroll-slim min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-6 sm:px-6 sm:py-7 lg:px-8">
+          <main className="scroll-slim min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-6 sm:px-6 sm:py-8 lg:px-9 lg:py-10">
             <div className="mx-auto w-full max-w-6xl">
               <Routes>
                 {/* Land on the first screen this role can actually use. */}
@@ -198,19 +206,25 @@ function Shell() {
   );
 }
 
+/**
+ * Navigation rail — an inset, large-radius dark block, the way the reference
+ * drops a dark section into its cream page. The active item is a coral pill;
+ * coral carries dark ink rather than white, because white on #ff7448 is only
+ * a 2.8:1 contrast and these labels are 14px.
+ */
 function Sidebar({ health, open, can, user }) {
   const items = NAV.filter((n) => can(n.cap));
   return (
     <aside
-      className={`scroll-slim fixed inset-y-0 left-0 z-40 flex w-64 max-w-[82vw] flex-col overflow-y-auto border-r border-line bg-white p-4 transition-transform duration-200 lg:static lg:z-auto lg:w-60 lg:max-w-none lg:translate-x-0 ${
+      className={`scroll-slim scroll-dark fixed inset-y-0 left-0 z-40 flex w-64 max-w-[82vw] flex-col overflow-y-auto bg-noir-deep p-4 text-white transition-transform duration-200 lg:static lg:z-auto lg:my-3 lg:ml-3 lg:w-64 lg:max-w-none lg:translate-x-0 lg:rounded-3xl ${
         open ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
       }`}
     >
       <div className="mb-4 flex items-center justify-between lg:hidden">
-        <Logo size="sm" />
+        <Logo size="sm" onDark />
       </div>
 
-      <div className="mb-2 px-2 text-[10px] font-bold uppercase tracking-widest text-ink-faint">
+      <div className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-widest text-white/40">
         Menu
       </div>
       <nav className="space-y-1">
@@ -220,7 +234,9 @@ function Sidebar({ health, open, can, user }) {
             to={to}
             className={({ isActive }) =>
               `group flex items-center gap-3 rounded-full px-4 py-2.5 text-sm font-semibold transition ${
-                isActive ? 'bg-night text-white' : 'text-ink-muted hover:bg-line/60 hover:text-ink'
+                isActive
+                  ? 'bg-accent text-noir shadow-[0_8px_20px_-10px_rgba(255,116,72,0.95)]'
+                  : 'text-white/65 hover:bg-white/10 hover:text-white'
               }`
             }
           >
@@ -236,8 +252,8 @@ function Sidebar({ health, open, can, user }) {
 
       <div className="mt-auto space-y-3 pt-6">
         {can('trace:run') && (
-          <NavLink to="/trace" className="btn-dark w-full">
-            <SearchIcon light />
+          <NavLink to="/trace" className="btn-accent w-full">
+            <SearchIcon />
             Trace a leak
           </NavLink>
         )}
@@ -270,12 +286,34 @@ function useHealth() {
   return health;
 }
 
+/**
+ * The same status is shown twice — as a chip on the white top bar and inside
+ * the badge on the dark rail — so each state carries both cuts. `toneDark` is
+ * not decoration: #007956 on navy is unreadable.
+ */
 function healthTone(health) {
-  if (!health) return { dot: 'bg-ink-faint', label: '…', tone: 'text-ink-faint' };
-  if (!health.ok) return { dot: 'bg-inconclusive', label: 'API down', tone: 'text-inconclusive' };
+  if (!health)
+    return { dot: 'bg-ink-faint', label: '…', tone: 'text-ink-faint', toneDark: 'text-white/50' };
+  if (!health.ok)
+    return {
+      dot: 'bg-inconclusive',
+      label: 'API down',
+      tone: 'text-inconclusive',
+      toneDark: 'text-inconclusive-bright',
+    };
   if (health.warnings?.length)
-    return { dot: 'bg-probable', label: 'Degraded', tone: 'text-probable' };
-  return { dot: 'bg-attributed', label: 'All systems go', tone: 'text-attributed' };
+    return {
+      dot: 'bg-probable',
+      label: 'Degraded',
+      tone: 'text-probable',
+      toneDark: 'text-probable-bright',
+    };
+  return {
+    dot: 'bg-attributed',
+    label: 'All systems go',
+    tone: 'text-attributed-deep',
+    toneDark: 'text-attributed-bright',
+  };
 }
 
 function HealthChip({ health }) {
@@ -290,20 +328,20 @@ function HealthChip({ health }) {
 
 function HealthBadge({ health }) {
   if (!health) return null;
-  const { dot, label, tone } = healthTone(health);
+  const { dot, label, toneDark } = healthTone(health);
   return (
-    <div className="rounded-2xl border border-line/80 bg-white p-3.5 shadow-sm">
+    <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-3.5">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs font-bold">
+        <div className="flex items-center gap-2 text-xs font-semibold">
           <span className={`h-2.5 w-2.5 rounded-full ${dot} animate-pulse`} />
-          <span className={tone}>{label}</span>
+          <span className={toneDark}>{label}</span>
         </div>
-        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-mono font-bold text-ink-muted uppercase">
+        <span className="mono rounded bg-white/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-white/50">
           NODE TELEMETRY
         </span>
       </div>
       {health.ok && (
-        <dl className="mono mt-2.5 space-y-1.5 divide-y divide-line/40 text-[11px] text-ink-muted">
+        <dl className="mono mt-2.5 space-y-1.5 divide-y divide-white/10 text-[11px] text-white/60">
           <div className="pt-1">
             <Row k="DATABASE" v={health.db?.toUpperCase() || 'UP'} good={health.db === 'up'} />
           </div>
@@ -315,11 +353,11 @@ function HealthBadge({ health }) {
             />
           </div>
           <div className="pt-1 flex items-center justify-between">
-            <dt className="text-ink-faint">PQC ALGO</dt>
-            <dd className="text-emerald-700 font-semibold">ML-KEM / DSA</dd>
+            <dt className="text-white/45">PQC ALGO</dt>
+            <dd className="font-semibold text-attributed-bright">ML-KEM / DSA</dd>
           </div>
           {health.warnings?.length > 0 && (
-            <div className="pt-1 text-[10px] text-probable font-medium">
+            <div className="pt-1 text-[10px] font-medium text-probable-bright">
               {health.warnings.length} warning(s) flagged
             </div>
           )}
@@ -332,8 +370,10 @@ function HealthBadge({ health }) {
 function Row({ k, v, good }) {
   return (
     <div className="flex items-center justify-between">
-      <dt className="text-ink-faint">{k}</dt>
-      <dd className={good ? 'font-semibold text-attributed' : 'font-semibold text-inconclusive'}>{v}</dd>
+      <dt className="text-white/45">{k}</dt>
+      <dd className={good ? 'font-semibold text-attributed-bright' : 'font-semibold text-white/50'}>
+        {v}
+      </dd>
     </div>
   );
 }
@@ -365,20 +405,20 @@ function AccountMenu({ user }) {
         onClick={() => setOpen((o) => !o)}
         aria-label="Account"
         aria-expanded={open}
-        className="group flex items-center gap-2.5 rounded-full border border-line/80 bg-white/90 px-2 py-1.5 shadow-sm backdrop-blur-md transition-all duration-200 hover:border-lime-deep hover:shadow-md sm:pr-3"
+        className="group flex items-center gap-2.5 rounded-full border border-line/80 bg-white/90 px-2 py-1.5 shadow-sm backdrop-blur-md transition-all duration-200 hover:border-accent-deep hover:shadow-md sm:pr-3"
       >
         <div className="relative">
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-tr from-night to-[#2c3017] text-xs font-extrabold text-lime ring-2 ring-lime/30 transition group-hover:ring-lime">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-tr from-noir to-[#1b232e] text-xs font-extrabold text-accent ring-2 ring-accent/30 transition group-hover:ring-accent">
             {initialsOf(user.name)}
           </span>
-          <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" />
+          <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-attributed" />
         </div>
         <span className="hidden text-left sm:block">
           <span className="block text-xs font-bold leading-tight text-ink group-hover:text-black">
             {user.name}
           </span>
           <span className="flex items-center gap-1 text-[10px] font-semibold text-ink-muted">
-            <span className="h-1.5 w-1.5 rounded-full bg-lime-deep" />
+            <span className="h-1.5 w-1.5 rounded-full bg-accent-deep" />
             {meta.short || user.role}
           </span>
         </span>
@@ -396,15 +436,15 @@ function AccountMenu({ user }) {
             {/* Header / Avatar */}
             <div className="flex items-center gap-3.5 border-b border-line/60 pb-3.5">
               <div className="relative">
-                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-tr from-night to-[#282b15] text-sm font-extrabold text-lime shadow-md ring-2 ring-lime/20">
+                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-tr from-noir to-[#1b232e] text-sm font-extrabold text-accent shadow-md ring-2 ring-accent/20">
                   {initialsOf(user.name)}
                 </span>
-                <span className="absolute -bottom-1 -right-1 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500" />
+                <span className="absolute -bottom-1 -right-1 h-3.5 w-3.5 rounded-full border-2 border-white bg-attributed" />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
                   <span className="truncate text-sm font-bold text-ink">{user.name}</span>
-                  <span className="rounded bg-lime/20 px-1.5 py-0.2 text-[10px] font-bold text-lime-deep">
+                  <span className="rounded bg-accent/20 px-1.5 py-0.2 text-[10px] font-bold text-accent-deep">
                     ACTIVE
                   </span>
                 </div>
@@ -412,69 +452,58 @@ function AccountMenu({ user }) {
               </div>
             </div>
 
+            {/* Role & duty, and the hashed handle — the only identity that
+                reaches the chain, kept deliberately apart from the name above. */}
             {user?.role !== 'OFFICER' && (
-              <div className="space-y-2 border-t border-line pt-3">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">
-                    Role
-                  </span>
-                  <span className={`pill ${meta.badge ?? 'bg-line text-ink'}`}>{meta.short}</span>
-                </div>
-                <p className="text-[11px] leading-relaxed text-ink-muted">{meta.blurb}</p>
-
-                {/* The hashed handle — the only identity that reaches the chain.
-                    Shown here, deliberately apart from the name above it. */}
-                <div className="rounded-xl bg-[#fbfbf7] px-3 py-2">
-                  <div className="text-[10px] font-bold uppercase tracking-wide text-ink-faint">
-                    On-chain handle
-                  </div>
-                  <div className="mono mt-0.5 break-all text-[10px] text-ink-muted">
-                    {user.userRef}
-                  </div>
-            {/* Role & Duty Details */}
-            <div className="mt-3.5 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-ink-faint">
-                  Security Clearance
-                </span>
-                <span className={`pill ${meta.badge ?? 'bg-line text-ink'}`}>
-                  🛡️ {meta.short || user.role}
-                </span>
-              </div>
-              <p className="rounded-xl bg-slate-50 p-2.5 text-[11px] leading-relaxed text-ink-muted">
-                {meta.blurb}
-              </p>
-
-              {/* On-Chain Privacy Identity (The Cryptographic Highlight) */}
-              <div className="rounded-2xl border border-line/70 bg-gradient-to-br from-[#fbfbf7] to-slate-50 p-3 shadow-sm">
+              <div className="mt-3.5 space-y-2.5 border-t border-line pt-3">
                 <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    On-Chain Identity (Sepolia)
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-ink-faint">
+                    Security Clearance
                   </span>
-                  <span className="text-[9px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
-                    Zero-PII
+                  <span className={`pill ${meta.badge ?? 'bg-line text-ink'}`}>
+                    <ShieldGlyph size={12} />
+                    {meta.short || user.role}
                   </span>
                 </div>
-                <p className="mt-1 text-[10px] text-ink-muted">
-                  Cryptographic Keccak-256 handle committed to Ethereum ledger:
+                <p className="rounded-xl bg-muted p-2.5 text-[11px] leading-relaxed text-ink-muted">
+                  {meta.blurb}
                 </p>
-                <div className="mt-2 flex items-center justify-between gap-2 rounded-xl border border-line/80 bg-white px-2.5 py-1.5 shadow-inner">
-                  <span className="mono text-xs font-semibold text-ink">
-                    {shortHash(user.userRef, 8, 6)}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={copyHandle}
-                    className="flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-[10px] font-bold text-ink-muted transition hover:bg-lime hover:text-night"
-                    title="Copy full 32-byte on-chain userRef"
-                  >
-                    {copied ? (
-                      <span className="text-emerald-600 font-extrabold">✓ Copied</span>
-                    ) : (
-                      <span>Copy ⧉</span>
-                    )}
-                  </button>
+
+                {/* On-Chain Privacy Identity (The Cryptographic Highlight) */}
+                <div className="rounded-2xl border border-line/70 bg-gradient-to-br from-[#faf8f5] to-muted p-3 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
+                      <span className="h-1.5 w-1.5 rounded-full bg-attributed animate-pulse" />
+                      On-Chain Identity (Sepolia)
+                    </span>
+                    <span className="text-[9px] font-semibold text-attributed-deep bg-attributed-tint px-1.5 py-0.5 rounded">
+                      Zero-PII
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[10px] text-ink-muted">
+                    Cryptographic Keccak-256 handle committed to Ethereum ledger:
+                  </p>
+                  <div className="mt-2 flex items-center justify-between gap-2 rounded-xl border border-line/80 bg-white px-2.5 py-1.5 shadow-inner">
+                    <span className="mono text-xs font-semibold text-ink">
+                      {shortHash(user.userRef, 8, 6)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={copyHandle}
+                      className="flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-[10px] font-bold text-ink-muted transition hover:bg-accent hover:text-noir"
+                      title="Copy full 32-byte on-chain userRef"
+                    >
+                      {copied ? (
+                        <span className="flex items-center gap-1 font-bold text-attributed-deep">
+                          <CheckIcon size={12} /> Copied
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1">
+                          <CopyIcon size={12} /> Copy
+                        </span>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -486,10 +515,10 @@ function AccountMenu({ user }) {
                 setOpen(false);
                 signOut();
               }}
-              className="mt-3.5 flex w-full items-center justify-center gap-2 rounded-xl border border-line bg-slate-50/80 py-2.5 text-xs font-bold text-ink transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
+              className="mt-3.5 flex w-full items-center justify-center gap-2 rounded-xl border border-line bg-muted/80 py-2.5 text-xs font-bold text-ink transition hover:border-danger-bright hover:bg-danger-tint hover:text-danger-deep"
             >
               <span>Sign out</span>
-              <span>↳</span>
+              <SignOutIcon size={14} />
             </button>
           </div>
         </>
@@ -503,13 +532,13 @@ function RoleCard({ user }) {
   if (!user) return null;
   const meta = ROLE_UI[user.role] ?? {};
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#1b1d14] via-[#14150e] to-night p-3.5 text-white shadow-md border border-white/10">
+    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.06] p-3.5 text-white">
       <div className="flex items-center justify-between gap-2">
-        <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-lime/90">
-          <span className="h-1.5 w-1.5 rounded-full bg-lime animate-pulse" />
+        <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-accent/90">
+          <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
           Enclave Session
         </span>
-        <span className="rounded-full bg-lime/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-lime">
+        <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent">
           {meta.short || user.role}
         </span>
       </div>
@@ -654,7 +683,7 @@ function WalletButton({ health }) {
             }`}
           />
           <span className="mono">{short(account)}</span>
-          <span className="hidden md:inline-block text-[10px] text-ink-muted bg-night/5 px-2 py-0.5 rounded-full font-medium">
+          <span className="hidden md:inline-block text-[10px] text-ink-muted bg-noir/5 px-2 py-0.5 rounded-full font-medium">
             {chainLabel}
           </span>
         </button>
@@ -690,7 +719,7 @@ function WalletButton({ health }) {
                   <div className="text-[10px] font-bold uppercase tracking-wider text-ink-faint">
                     Wallet Account
                   </div>
-                  <div className="mt-1 flex items-center justify-between gap-1 rounded-xl bg-night/5 p-2 font-mono text-[11px] text-ink">
+                  <div className="mt-1 flex items-center justify-between gap-1 rounded-xl bg-noir/5 p-2 font-mono text-[11px] text-ink">
                     <span className="truncate">{account}</span>
                     <button
                       type="button"
@@ -699,9 +728,9 @@ function WalletButton({ health }) {
                         setCopied(true);
                         setTimeout(() => setCopied(false), 2000);
                       }}
-                      className="shrink-0 rounded px-1.5 py-0.5 text-[10px] bg-white border border-line font-sans font-semibold hover:bg-night/10"
+                      className="shrink-0 rounded px-1.5 py-0.5 text-[10px] bg-white border border-line font-sans font-semibold hover:bg-noir/10"
                     >
-                      {copied ? '✓' : 'Copy'}
+                      {copied ? <CheckIcon size={12} /> : 'Copy'}
                     </button>
                   </div>
                 </div>
@@ -750,8 +779,8 @@ function WalletButton({ health }) {
                       }
                       className={`flex-1 rounded-xl py-1.5 text-xs font-semibold border transition ${
                         isLocalChain
-                          ? 'border-lime-500 bg-lime-500/10 text-ink'
-                          : 'border-line bg-white hover:bg-night/5 text-ink'
+                          ? 'border-accent bg-accent/10 text-ink'
+                          : 'border-line bg-white hover:bg-noir/5 text-ink'
                       }`}
                     >
                       Localhost (31337)
@@ -763,8 +792,8 @@ function WalletButton({ health }) {
                       }
                       className={`flex-1 rounded-xl py-1.5 text-xs font-semibold border transition ${
                         isSepolia
-                          ? 'border-lime-500 bg-lime-500/10 text-ink'
-                          : 'border-line bg-white hover:bg-night/5 text-ink'
+                          ? 'border-accent bg-accent/10 text-ink'
+                          : 'border-line bg-white hover:bg-noir/5 text-ink'
                       }`}
                     >
                       Sepolia (11155111)
@@ -856,14 +885,16 @@ const S = {
   strokeLinejoin: 'round',
 };
 
-function NavIcon({ children, active, light }) {
+/** Icons inherit their colour from the nav item, so one rule covers the
+    light top bar, the dark rail, and the coral active pill. */
+function NavIcon({ children }) {
   return (
     <svg
       width="18"
       height="18"
       viewBox="0 0 24 24"
       fill="none"
-      className={light || active ? 'text-current' : 'text-ink-faint group-hover:text-ink-muted'}
+      className="text-current"
       aria-hidden="true"
     >
       {children}
@@ -944,12 +975,12 @@ function WalletIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
         d="M3 7h15a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"
-        stroke="#fff"
+        stroke="currentColor"
         strokeWidth="1.8"
       />
       <path
         d="M3 7V6a2 2 0 0 1 2-2h11M16 13h2"
-        stroke="#fff"
+        stroke="currentColor"
         strokeWidth="1.8"
         strokeLinecap="round"
       />

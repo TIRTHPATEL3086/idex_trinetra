@@ -74,7 +74,8 @@ export function useAuth() {
 }
 
 /**
- * Presentation for each role — the badge in the header, and the account cards
+ * Presentation for each role — the badge in the header, the dot on the login
+ * panel (`tint`, which must read on navy), and the account cards
  * on the login screen. Kept beside the session rather than in the page so the
  * badge and the login card can never describe a role differently.
  */
@@ -83,32 +84,32 @@ export const ROLE_UI = {
     label: 'Registry Administrator',
     short: 'Admin',
     blurb: 'Full custody — uploads, releases, investigations and the audit trail.',
-    badge: 'bg-night text-lime',
-    tint: 'bg-night',
+    badge: 'bg-noir text-accent',
+    tint: 'bg-white',
     demo: { email: 'admin@example.gov', password: 'admin123' },
   },
   OFFICER: {
     label: 'Clearance Holder',
     short: 'Officer',
     blurb: 'Releases a watermarked copy to themselves. Cannot investigate.',
-    badge: 'bg-lime text-night',
-    tint: 'bg-lime',
+    badge: 'bg-accent text-noir',
+    tint: 'bg-accent',
     demo: { email: 'u017@example.gov', password: 'officer123' },
   },
   INVESTIGATOR: {
     label: 'Forensic Analyst',
     short: 'Investigator',
     blurb: 'Traces leaked files. Cannot decrypt, so cannot manufacture evidence.',
-    badge: 'bg-attributed/15 text-attributed',
-    tint: 'bg-attributed',
+    badge: 'bg-attributed-tint text-attributed-deep',
+    tint: 'bg-attributed-bright',
     demo: { email: 'a004@example.gov', password: 'analyst123' },
   },
   AUDITOR: {
     label: 'Oversight',
     short: 'Auditor',
     blurb: 'Read-only witness. Neither decrypts nor traces.',
-    badge: 'bg-probable/15 text-probable',
-    tint: 'bg-probable',
+    badge: 'bg-probable-tint text-probable-deep',
+    tint: 'bg-probable-bright',
     demo: { email: 'audit@example.gov', password: 'auditor123' },
   },
 };
