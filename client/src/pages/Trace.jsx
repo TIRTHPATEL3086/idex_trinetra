@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { traceFile, getInvestigations, shortHash } from '../lib/api.js';
 import { Header, Notice } from './Assets.jsx';
 
@@ -12,8 +12,12 @@ export default function Trace() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [fileName, setFileName] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
   const [investigations, setInvestigations] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
+  const [timeRange, setTimeRange] = useState('all'); // 'all' | '7d' | '30d' | '1y'
+  const [sortBy, setSortBy] = useState('newest'); // 'newest' | 'oldest' | 'confidence-desc' | 'confidence-asc' | 'verdict'
+  const [searchQuery, setSearchQuery] = useState('');
   const inputRef = useRef(null);
 
   const loadHistory = useCallback(async () => {
@@ -30,6 +34,46 @@ export default function Trace() {
   useEffect(() => {
     loadHistory();
   }, [loadHistory]);
+
+  const filteredAndSorted = useMemo(() => {
+    let list = [...investigations];
+
+    // Time filter
+    const now = Date.now();
+    if (timeRange === '7d') {
+      const cut = now - 7 * 24 * 60 * 60 * 1000;
+      list = list.filter((x) => new Date(x.createdAt).getTime() >= cut);
+    } else if (timeRange === '30d') {
+      const cut = now - 30 * 24 * 60 * 60 * 1000;
+      list = list.filter((x) => new Date(x.createdAt).getTime() >= cut);
+    } else if (timeRange === '1y') {
+      const cut = now - 365 * 24 * 60 * 60 * 1000;
+      list = list.filter((x) => new Date(x.createdAt).getTime() >= cut);
+    }
+
+    // Search query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter((x) => {
+        const idStr = `INV-${String(x.investigationId).padStart(5, '0')}`.toLowerCase();
+        const vStr = (x.verdict || '').toLowerCase();
+        const dateStr = new Date(x.createdAt).toLocaleString().toLowerCase();
+        return idStr.includes(q) || vStr.includes(q) || dateStr.includes(q);
+      });
+    }
+
+    // Sorting
+    list.sort((a, b) => {
+      if (sortBy === 'newest') return new Date(b.createdAt) - new Date(a.createdAt);
+      if (sortBy === 'oldest') return new Date(a.createdAt) - new Date(b.createdAt);
+      if (sortBy === 'confidence-desc') return (b.confidence || 0) - (a.confidence || 0);
+      if (sortBy === 'confidence-asc') return (a.confidence || 0) - (b.confidence || 0);
+      if (sortBy === 'verdict') return (a.verdict || '').localeCompare(b.verdict || '');
+      return 0;
+    });
+
+    return list;
+  }, [investigations, timeRange, sortBy, searchQuery]);
 
   async function run(file) {
     if (!file) return;
@@ -55,15 +99,35 @@ export default function Trace() {
         subtitle="The watermark says which receipt; the perceptual hashes say which file; the chain confirms both. Court-admissible forensic dossiers can be exported for any inquiry."
       />
 
-      {/* dropzone */}
+      {/* dropzone with smooth drag & drop feedback */}
       <div
-        onDragOver={(e) => e.preventDefault()}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsDragging(true);
+        }}
+        onDragEnter={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsDragging(true);
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsDragging(false);
+        }}
         onDrop={(e) => {
           e.preventDefault();
+          e.stopPropagation();
+          setIsDragging(false);
           run(e.dataTransfer.files?.[0]);
         }}
         onClick={() => inputRef.current?.click()}
-        className="card grid cursor-pointer place-items-center border-2 border-dashed border-line px-6 py-10 text-center transition hover:border-lime-deep"
+        className={`card grid cursor-pointer place-items-center border-2 border-dashed px-6 py-10 text-center transition-all duration-200 ${
+          isDragging
+            ? 'border-lime-deep bg-lime/15 scale-[1.01] shadow-lg ring-4 ring-lime/30'
+            : 'border-line hover:border-lime-deep hover:bg-lime/5'
+        }`}
       >
         <input
           ref={inputRef}
@@ -72,11 +136,19 @@ export default function Trace() {
           className="hidden"
           onChange={(e) => run(e.target.files?.[0])}
         />
-        <div className="grid h-12 w-12 place-items-center rounded-full bg-lime">
+        <div
+          className={`grid h-12 w-12 place-items-center rounded-full bg-lime text-night transition-transform duration-200 shadow-sm ${
+            isDragging ? 'scale-125' : ''
+          }`}
+        >
           <UploadGlyph />
         </div>
         <div className="mt-3 font-bold text-ink">
-          {fileName ? fileName : 'Drop a suspected leaked image or PDF, or click to browse'}
+          {isDragging
+            ? 'Release to begin deep cryptographic trace!'
+            : fileName
+            ? fileName
+            : 'Drop a suspected leaked image or PDF, or click to browse'}
         </div>
         <div className="mt-1 text-xs text-ink-muted">
           It will be hashed, matched, and the watermark extracted — nothing is stored as plaintext.
@@ -84,9 +156,10 @@ export default function Trace() {
       </div>
 
       {status === 'working' && (
-        <div className="card grid place-items-center p-8 text-center">
+        <div className="card grid place-items-center p-8 text-center space-y-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-lime border-t-transparent" />
           <div className="mono animate-pulse text-sm text-ink-muted">
-            Hashing → searching the register → extracting the watermark → cross-checking the chain…
+            Hashing → searching perceptual register → extracting watermark → cross-checking blockchain…
           </div>
         </div>
       )}
@@ -94,17 +167,91 @@ export default function Trace() {
       {status === 'done' && result && <Verdict result={result} />}
 
       {/* Past Investigations and Dossier Archive */}
-      <div className="card overflow-hidden p-0">
-        <div className="border-b border-line px-6 py-4 flex items-center justify-between">
+      <div className="card overflow-hidden p-0 shadow-sm">
+        {/* Top Header */}
+        <div className="border-b border-line px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-gradient-to-r from-white to-[#fbfbf7]">
           <div>
             <h3 className="text-sm font-bold text-ink">Forensic Investigation Dossiers</h3>
             <p className="text-xs text-ink-muted">
               Official cryptographic evidence dossiers generated for recent leak inquiries.
             </p>
           </div>
-          <span className="text-xs font-mono text-ink-muted bg-night/5 px-2.5 py-1 rounded-full">
-            {investigations.length} Record(s)
+          <span className="text-xs font-mono text-ink-muted bg-night/5 px-2.5 py-1 rounded-full self-start md:self-auto font-bold">
+            Showing {filteredAndSorted.length} of {investigations.length} Record(s)
           </span>
+        </div>
+
+        {/* Filters and Sorting Toolbar */}
+        <div className="border-b border-line bg-slate-50/70 p-4 flex flex-wrap items-center justify-between gap-3 text-xs">
+          {/* Timeframe Filter Buttons (7 Days / 1 Month / 1 Year / All) */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-ink-faint mr-1">
+              Timeframe:
+            </span>
+            {[
+              { id: 'all', label: 'All Time' },
+              { id: '7d', label: 'Last 7 Days' },
+              { id: '30d', label: 'Last 1 Month' },
+              { id: '1y', label: 'Last 1 Year' },
+            ].map((t) => {
+              const active = timeRange === t.id;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTimeRange(t.id)}
+                  className={`rounded-full px-3 py-1 font-bold text-[11px] transition shadow-xs ${
+                    active
+                      ? 'bg-night text-lime shadow-sm ring-1 ring-lime/40'
+                      : 'bg-white text-ink-muted border border-line hover:border-lime-deep hover:text-ink'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Sort & Search Controls */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-bold text-ink-faint">Sort:</span>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="input !h-8 !py-1 !text-xs font-semibold bg-white border-line shadow-xs rounded-xl"
+              >
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="confidence-desc">Highest Confidence</option>
+                <option value="confidence-asc">Lowest Confidence</option>
+                <option value="verdict">By Verdict</option>
+              </select>
+            </div>
+
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search dossiers…"
+              className="input !h-8 !py-1 !text-xs w-36 sm:w-44 bg-white border-line rounded-xl"
+            />
+
+            {(timeRange !== 'all' || searchQuery || sortBy !== 'newest') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setTimeRange('all');
+                  setSortBy('newest');
+                  setSearchQuery('');
+                }}
+                className="rounded-xl px-2.5 py-1 text-[11px] font-bold text-ink-muted hover:text-rose-600 hover:bg-rose-50 border border-line transition"
+                title="Reset all filters"
+              >
+                Reset
+              </button>
+            )}
+          </div>
         </div>
 
         {loadingHistory ? (
@@ -113,44 +260,62 @@ export default function Trace() {
           <div className="p-8 text-center text-xs text-ink-muted">
             No forensic investigations run yet. Upload a leaked document above to generate the first dossier.
           </div>
+        ) : filteredAndSorted.length === 0 ? (
+          <div className="p-10 text-center space-y-2">
+            <div className="text-sm font-bold text-ink">No dossiers match the selected filters</div>
+            <p className="text-xs text-ink-muted">
+              Try choosing a broader timeframe or resetting your search query.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setTimeRange('all');
+                setSearchQuery('');
+                setSortBy('newest');
+              }}
+              className="btn-ghost !text-xs !py-1.5 !px-3 font-bold"
+            >
+              Show All Records
+            </button>
+          </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-line bg-night/5 font-semibold text-ink-muted">
+          <div className="overflow-x-auto scroll-slim">
+            <table className="w-full min-w-[720px] text-left text-xs sm:text-sm">
+              <thead className="border-b border-line bg-night/[0.02] text-xs font-bold uppercase tracking-wider text-ink-muted">
                 <tr>
-                  <th className="px-6 py-3">Inquiry ID</th>
-                  <th className="px-6 py-3">Date / Timestamp</th>
-                  <th className="px-6 py-3">Verdict</th>
-                  <th className="px-6 py-3">Confidence</th>
-                  <th className="px-6 py-3">Candidates Checked</th>
-                  <th className="px-6 py-3 text-right">Evidence Dossier</th>
+                  <th className="px-5 py-3.5">Inquiry ID</th>
+                  <th className="px-5 py-3.5">Date / Timestamp</th>
+                  <th className="px-5 py-3.5">Verdict</th>
+                  <th className="px-5 py-3.5">Confidence</th>
+                  <th className="px-5 py-3.5">Candidates Checked</th>
+                  <th className="px-5 py-3.5 text-right">Evidence Dossier</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line/60">
-                {investigations.map((inv) => {
+                {filteredAndSorted.map((inv) => {
                   const band = BAND[inv.verdict] || BAND.INCONCLUSIVE;
                   const pct = Math.round((inv.confidence || 0) * 100);
 
                   return (
                     <tr key={inv.investigationId} className="hover:bg-night/5 transition-colors">
-                      <td className="px-6 py-3.5 font-mono font-bold text-ink">
+                      <td className="px-5 py-3.5 font-mono font-bold text-ink whitespace-nowrap">
                         INV-{String(inv.investigationId).padStart(5, '0')}
                       </td>
-                      <td className="px-6 py-3.5 text-ink-muted">
+                      <td className="px-5 py-3.5 text-xs text-ink-muted font-mono whitespace-nowrap">
                         {new Date(inv.createdAt).toLocaleString()}
                       </td>
-                      <td className="px-6 py-3.5">
-                        <span className={`pill text-[10px] font-bold ${band.chip}`}>
+                      <td className="px-5 py-3.5">
+                        <span className={`pill text-xs font-bold ${band.chip}`}>
                           {band.label}
                         </span>
                       </td>
-                      <td className="px-6 py-3.5 font-bold text-ink">
+                      <td className="px-5 py-3.5 font-extrabold text-ink text-sm">
                         {pct}%
                       </td>
-                      <td className="px-6 py-3.5 text-ink-muted font-mono">
+                      <td className="px-5 py-3.5 text-ink-muted font-mono text-xs">
                         {inv.candidatesChecked ?? '—'}
                       </td>
-                      <td className="px-6 py-3.5 text-right">
+                      <td className="px-5 py-3.5 text-right whitespace-nowrap">
                         <a
                           href={`/api/trace/${inv.investigationId}/dossier`}
                           download={`forensic-dossier-INV-${String(inv.investigationId).padStart(5, '0')}.pdf`}
@@ -223,14 +388,14 @@ function Verdict({ result }) {
             className={`grid h-32 w-32 place-items-center rounded-full ring-8 ${band.ring} ring-offset-4`}
           >
             <div>
-              <div className={`text-3xl font-extrabold ${band.text}`}>{pct}%</div>
-              <div className="text-[10px] font-bold uppercase tracking-wider text-ink-faint">
+              <div className={`text-3xl sm:text-4xl font-extrabold ${band.text}`}>{pct}%</div>
+              <div className="text-xs font-bold uppercase tracking-wider text-ink-muted mt-1">
                 confidence
               </div>
             </div>
           </div>
-          <div className={`pill mt-4 ${band.chip}`}>{band.label}</div>
-          <p className="mt-3 max-w-[15rem] text-xs text-ink-muted">{band.blurb}</p>
+          <div className={`pill text-xs font-bold mt-4 ${band.chip}`}>{band.label}</div>
+          <p className="mt-3 max-w-[16rem] text-xs sm:text-sm text-ink-muted leading-relaxed">{band.blurb}</p>
 
           {/* Export Dossier Button directly on Verdict Card */}
           {result.investigationId && (
