@@ -128,6 +128,9 @@ router.post('/', guard, validate(DecryptBody), async (req, res, next) => {
     ]);
     if (!asset) throw notFound(`No asset ${assetId}`);
     if (!user) throw notFound(`No user ${userId}`);
+    if (!user.active) {
+      throw forbidden(`Officer ${user.name} access has been REVOKED/FROZEN by Administrator under Zero-Trust policy.`);
+    }
     if (!asset.cipherPath || !asset.iv || !asset.authTag) {
       throw badInput(`Asset ${assetId} has no encrypted blob — re-upload it.`);
     }

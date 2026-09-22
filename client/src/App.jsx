@@ -1,7 +1,7 @@
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 
-import { getHealth } from './lib/api.js';
+import { getHealth, shortHash } from './lib/api.js';
 import { useAuth, ROLE_UI, initialsOf } from './lib/auth.jsx';
 import { RequireAuth, RequireCap } from './components/RequireAuth.jsx';
 import Logo from './components/Logo.jsx';
@@ -292,17 +292,36 @@ function HealthBadge({ health }) {
   if (!health) return null;
   const { dot, label, tone } = healthTone(health);
   return (
-    <div className="rounded-2xl border border-line bg-white p-3">
-      <div className="flex items-center gap-2 text-xs font-bold">
-        <span className={`h-2 w-2 rounded-full ${dot}`} />
-        <span className={tone}>{label}</span>
+    <div className="rounded-2xl border border-line/80 bg-white p-3.5 shadow-sm">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-xs font-bold">
+          <span className={`h-2.5 w-2.5 rounded-full ${dot} animate-pulse`} />
+          <span className={tone}>{label}</span>
+        </div>
+        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-mono font-bold text-ink-muted uppercase">
+          NODE TELEMETRY
+        </span>
       </div>
       {health.ok && (
-        <dl className="mono mt-2.5 space-y-1 text-[11px] text-ink-muted">
-          <Row k="database" v={health.db} good={health.db === 'up'} />
-          <Row k="chain" v={health.chainMode} good={health.chain?.connected} />
+        <dl className="mono mt-2.5 space-y-1.5 divide-y divide-line/40 text-[11px] text-ink-muted">
+          <div className="pt-1">
+            <Row k="DATABASE" v={health.db?.toUpperCase() || 'UP'} good={health.db === 'up'} />
+          </div>
+          <div className="pt-1">
+            <Row
+              k="LEDGER"
+              v={health.chainMode === 'sepolia' ? 'SEPOLIA (ETH)' : health.chainMode?.toUpperCase()}
+              good={health.chain?.connected}
+            />
+          </div>
+          <div className="pt-1 flex items-center justify-between">
+            <dt className="text-ink-faint">PQC ALGO</dt>
+            <dd className="text-emerald-700 font-semibold">ML-KEM / DSA</dd>
+          </div>
           {health.warnings?.length > 0 && (
-            <div className="pt-0.5 text-probable">{health.warnings.length} warning(s)</div>
+            <div className="pt-1 text-[10px] text-probable font-medium">
+              {health.warnings.length} warning(s) flagged
+            </div>
           )}
         </dl>
       )}
@@ -313,8 +332,8 @@ function HealthBadge({ health }) {
 function Row({ k, v, good }) {
   return (
     <div className="flex items-center justify-between">
-      <dt>{k}</dt>
-      <dd className={good ? 'text-attributed' : 'text-inconclusive'}>{v}</dd>
+      <dt className="text-ink-faint">{k}</dt>
+      <dd className={good ? 'font-semibold text-attributed' : 'font-semibold text-inconclusive'}>{v}</dd>
     </div>
   );
 }
@@ -322,17 +341,22 @@ function Row({ k, v, good }) {
 /* -------------------------------------------------------------- account --- */
 
 /**
- * The signed-in identity: avatar, role, sign out.
- *
- * Below `sm` only the avatar shows — the header already carries a menu button,
- * a bell and a wallet, and four labelled controls do not fit at 320px.
+ * The signed-in identity: avatar, role, on-chain privacy passport, sign out.
  */
 function AccountMenu({ user }) {
   const { signOut } = useAuth();
   const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const meta = ROLE_UI[user?.role] ?? {};
 
   if (!user) return null;
+
+  function copyHandle() {
+    if (!user.userRef) return;
+    navigator.clipboard.writeText(user.userRef);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
 
   return (
     <div className="relative">
@@ -341,14 +365,22 @@ function AccountMenu({ user }) {
         onClick={() => setOpen((o) => !o)}
         aria-label="Account"
         aria-expanded={open}
-        className="flex items-center gap-2 rounded-full border border-line bg-white py-1 pl-1 pr-1 transition hover:border-ink-faint sm:pr-3"
+        className="group flex items-center gap-2.5 rounded-full border border-line/80 bg-white/90 px-2 py-1.5 shadow-sm backdrop-blur-md transition-all duration-200 hover:border-lime-deep hover:shadow-md sm:pr-3"
       >
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-night text-[11px] font-bold text-lime">
-          {initialsOf(user.name)}
-        </span>
+        <div className="relative">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-tr from-night to-[#2c3017] text-xs font-extrabold text-lime ring-2 ring-lime/30 transition group-hover:ring-lime">
+            {initialsOf(user.name)}
+          </span>
+          <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" />
+        </div>
         <span className="hidden text-left sm:block">
-          <span className="block text-[11px] font-bold leading-tight text-ink">{user.name}</span>
-          <span className="block text-[10px] leading-tight text-ink-faint">{meta.short}</span>
+          <span className="block text-xs font-bold leading-tight text-ink group-hover:text-black">
+            {user.name}
+          </span>
+          <span className="flex items-center gap-1 text-[10px] font-semibold text-ink-muted">
+            <span className="h-1.5 w-1.5 rounded-full bg-lime-deep" />
+            {meta.short || user.role}
+          </span>
         </span>
       </button>
 
@@ -360,13 +392,22 @@ function AccountMenu({ user }) {
             className="fixed inset-0 z-40 cursor-default"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute right-0 z-50 mt-2 w-[17rem] max-w-[calc(100vw-2rem)] rounded-2xl border border-line bg-white p-3 shadow-panel">
-            <div className="flex items-center gap-3 px-1 pb-3">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-night text-xs font-bold text-lime">
-                {initialsOf(user.name)}
-              </span>
-              <div className="min-w-0">
-                <div className="truncate text-sm font-bold text-ink">{user.name}</div>
+          <div className="absolute right-0 z-50 mt-2.5 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-3xl border border-line/80 bg-white/95 p-4 shadow-2xl backdrop-blur-xl transition-all animate-in fade-in zoom-in-95">
+            {/* Header / Avatar */}
+            <div className="flex items-center gap-3.5 border-b border-line/60 pb-3.5">
+              <div className="relative">
+                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-tr from-night to-[#282b15] text-sm font-extrabold text-lime shadow-md ring-2 ring-lime/20">
+                  {initialsOf(user.name)}
+                </span>
+                <span className="absolute -bottom-1 -right-1 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="truncate text-sm font-bold text-ink">{user.name}</span>
+                  <span className="rounded bg-lime/20 px-1.5 py-0.2 text-[10px] font-bold text-lime-deep">
+                    ACTIVE
+                  </span>
+                </div>
                 <div className="truncate text-xs text-ink-muted">{user.email}</div>
               </div>
             </div>
@@ -390,19 +431,65 @@ function AccountMenu({ user }) {
                   <div className="mono mt-0.5 break-all text-[10px] text-ink-muted">
                     {user.userRef}
                   </div>
+            {/* Role & Duty Details */}
+            <div className="mt-3.5 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-ink-faint">
+                  Security Clearance
+                </span>
+                <span className={`pill ${meta.badge ?? 'bg-line text-ink'}`}>
+                  🛡️ {meta.short || user.role}
+                </span>
+              </div>
+              <p className="rounded-xl bg-slate-50 p-2.5 text-[11px] leading-relaxed text-ink-muted">
+                {meta.blurb}
+              </p>
+
+              {/* On-Chain Privacy Identity (The Cryptographic Highlight) */}
+              <div className="rounded-2xl border border-line/70 bg-gradient-to-br from-[#fbfbf7] to-slate-50 p-3 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    On-Chain Identity (Sepolia)
+                  </span>
+                  <span className="text-[9px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
+                    Zero-PII
+                  </span>
+                </div>
+                <p className="mt-1 text-[10px] text-ink-muted">
+                  Cryptographic Keccak-256 handle committed to Ethereum ledger:
+                </p>
+                <div className="mt-2 flex items-center justify-between gap-2 rounded-xl border border-line/80 bg-white px-2.5 py-1.5 shadow-inner">
+                  <span className="mono text-xs font-semibold text-ink">
+                    {shortHash(user.userRef, 8, 6)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={copyHandle}
+                    className="flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-[10px] font-bold text-ink-muted transition hover:bg-lime hover:text-night"
+                    title="Copy full 32-byte on-chain userRef"
+                  >
+                    {copied ? (
+                      <span className="text-emerald-600 font-extrabold">✓ Copied</span>
+                    ) : (
+                      <span>Copy ⧉</span>
+                    )}
+                  </button>
                 </div>
               </div>
             )}
 
+            {/* Sign Out Action */}
             <button
               type="button"
               onClick={() => {
                 setOpen(false);
                 signOut();
               }}
-              className="btn-ghost mt-3 w-full"
+              className="mt-3.5 flex w-full items-center justify-center gap-2 rounded-xl border border-line bg-slate-50/80 py-2.5 text-xs font-bold text-ink transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
             >
-              Sign out
+              <span>Sign out</span>
+              <span>↳</span>
             </button>
           </div>
         </>
@@ -416,15 +503,21 @@ function RoleCard({ user }) {
   if (!user) return null;
   const meta = ROLE_UI[user.role] ?? {};
   return (
-    <div className="rounded-2xl border border-line bg-[#fbfbf7] p-3">
+    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#1b1d14] via-[#14150e] to-night p-3.5 text-white shadow-md border border-white/10">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-ink-faint">
-          Signed in as
+        <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-lime/90">
+          <span className="h-1.5 w-1.5 rounded-full bg-lime animate-pulse" />
+          Enclave Session
         </span>
-        <span className={`pill ${meta.badge ?? 'bg-line text-ink'}`}>{meta.short}</span>
+        <span className="rounded-full bg-lime/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-lime">
+          {meta.short || user.role}
+        </span>
       </div>
-      <div className="mt-1.5 truncate text-xs font-bold text-ink">{user.name}</div>
-      <div className="truncate text-[11px] text-ink-muted">{user.dept}</div>
+      <div className="mt-2 truncate text-xs font-bold text-white tracking-wide">{user.name}</div>
+      <div className="flex items-center justify-between text-[11px] text-white/60 mt-0.5">
+        <span className="truncate">{user.dept || 'HQ Operations'}</span>
+        <span className="mono text-[10px] text-white/40 font-semibold">U-00{user.id}</span>
+      </div>
     </div>
   );
 }

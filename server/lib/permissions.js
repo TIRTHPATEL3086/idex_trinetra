@@ -33,6 +33,7 @@ export const CAPABILITIES = {
   'audit:own': ['ADMIN', 'OFFICER', 'INVESTIGATOR', 'AUDITOR'],
   'metrics:read': ['ADMIN', 'OFFICER', 'INVESTIGATOR', 'AUDITOR'],
   'users:read': ['ADMIN', 'INVESTIGATOR', 'AUDITOR'],
+  'users:write': ['ADMIN'],
 };
 
 /** Human labels, reused by the login screen and the role badge. */
