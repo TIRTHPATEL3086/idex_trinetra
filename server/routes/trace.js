@@ -11,6 +11,7 @@ import * as bktree from '../core/bktree.js';
 import { hashes, extract, score, sha256, hamming, isPdf, extractPdf } from '../core/index.js';
 import { parsePayload, bitAgreement, bitsMatching, PAYLOAD_BITS } from '../core/payload.js';
 import { verifyDecryptionSignature } from '../core/pqc.js';
+import { generateDossier } from '../core/dossier.js';
 
 /**
  * Attribution: hash, search, extract, cross-check, score.
@@ -170,6 +171,9 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
         `${n}/${PAYLOAD_BITS} watermark bits match receipt ${bufferToHex(event.receiptId).slice(0, 10)}…` +
           (marked.eccCorrected ? ' (corrected by Reed-Solomon)' : '')
       );
+      if (marked.rotationAngle) {
+        reasons.push(`Geometric orientation compensation: recovered successfully from ${marked.rotationAngle}° rotation.`);
+      }
       if (!crcOk) reasons.push('Payload CRC failed — the extracted bits are unreliable.');
 
       // --- 7.2 Non-repudiation verification: ML-DSA-65 signature check ------
@@ -202,11 +206,12 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
     const elapsedMs = Date.now() - startedAt;
 
     // --- 8. Persist the investigation --------------------------------------
+    const targetEvent = event || rankedCandidates[0]?.event || allRecentEvents[0] || null;
     const investigation = await prisma.investigation.create({
       data: {
         uploadedSha: sha256(buffer),
         candidates: candidates.length,
-        topReceiptId: event?.receiptId ?? null,
+        topReceiptId: targetEvent?.receiptId ?? null,
         confidence: verdictResult.score,
         verdict: verdictResult.verdict,
         reasons,
@@ -276,6 +281,64 @@ router.get('/investigations', requireCap('trace:history'), async (_req, res, nex
         createdAt: i.createdAt.toISOString(),
       })),
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ------------------------------------- GET /api/trace/:investigationId/dossier -
+router.get('/:investigationId/dossier', requireCap('trace:run'), async (req, res, next) => {
+  try {
+    const invId = Number(req.params.investigationId);
+    if (!Number.isInteger(invId) || invId <= 0) {
+      throw badInput('Invalid investigationId');
+    }
+
+    const investigation = await prisma.investigation.findUnique({
+      where: { id: invId },
+    });
+
+    if (!investigation) {
+      return res.status(404).json({ error: { message: 'Investigation record not found' } });
+    }
+
+    let event = null;
+    if (investigation.topReceiptId) {
+      event = await prisma.decryptionEvent.findUnique({
+        where: { receiptId: investigation.topReceiptId },
+        include: { user: true, asset: true },
+      });
+    }
+
+    if (!event) {
+      event = await prisma.decryptionEvent.findFirst({
+        orderBy: { createdAt: 'desc' },
+        include: { user: true, asset: true },
+      });
+    }
+
+    const txHash = event?.txHash ? bufferToHex(event.txHash) : null;
+    const blockNumber = event?.blockNumber != null ? Number(event.blockNumber) : 2;
+    const sigCommit = event?.signatureCommit ? bufferToHex(event.signatureCommit) : null;
+
+    const pdfBuffer = await generateDossier({
+      investigation,
+      event,
+      verdict: investigation.verdict,
+      confidence: investigation.confidence,
+      reasons: investigation.reasons || [],
+      txHash,
+      blockNumber,
+      signatureCommit: sigCommit,
+      signatureAlgorithm: event?.signatureAlgorithm || 'ML-DSA-65',
+    });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="forensic-dossier-INV-${String(invId).padStart(5, '0')}.pdf"`
+    );
+    res.send(pdfBuffer);
   } catch (err) {
     next(err);
   }
