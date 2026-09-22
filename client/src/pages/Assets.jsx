@@ -41,7 +41,7 @@ export default function Assets() {
     : officerAssets.filter((a) => a.classification === classificationFilter);
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-3.5">
       <Header
         title="Protected documents"
         subtitle="Encrypted at rest with NIST ML-KEM-768 broadcast encryption. Every decryption is watermarked and anchored on-chain."
@@ -88,23 +88,23 @@ export default function Assets() {
             setDroppedInitialFile(null);
             setUploadOpen(true);
           }}
-          className={`cursor-pointer rounded-3xl border-2 border-dashed p-5 text-center transition-all duration-200 ${
+          className={`cursor-pointer rounded-2xl border-2 border-dashed p-3 sm:p-3.5 text-center transition-all duration-200 ${
             pageDragging
               ? 'border-lime-deep bg-lime/20 scale-[1.01] shadow-lg ring-4 ring-lime/30'
               : 'border-line/80 bg-gradient-to-r from-[#fbfbf7] to-white hover:border-lime-deep hover:bg-lime/5'
           }`}
         >
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5">
-            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-lime text-night shadow-sm">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-lime text-night shadow-sm">
               <PlusIcon />
             </div>
             <div className="text-center sm:text-left">
-              <div className="text-sm sm:text-base font-bold text-ink">
+              <div className="text-xs sm:text-sm font-bold text-ink">
                 {pageDragging
                   ? 'Release to upload & protect document!'
                   : 'Drag & drop PDF or Image here to protect, or click to upload'}
               </div>
-              <div className="mt-0.5 text-xs text-ink-muted">
+              <div className="text-[11px] text-ink-muted">
                 Post-quantum NIST ML-KEM-768 broadcast encryption · Instant perceptual hashing
               </div>
             </div>
@@ -422,22 +422,22 @@ function Overview({ assets }) {
   const decryptions = assets.reduce((sum, a) => sum + (a.decryptCount || 0), 0);
 
   return (
-    <div className="relative overflow-hidden rounded-3xl bg-night p-6 text-white shadow-panel sm:p-7">
-      <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+    <div className="relative overflow-hidden rounded-3xl bg-night p-4 sm:p-5 text-white shadow-panel">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div>
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-lime-400">
             <span className="h-1.5 w-1.5 rounded-full bg-lime animate-pulse" />
             Registry overview
           </div>
-          <div className="font-display mt-1.5 text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight">
+          <div className="font-display mt-1 text-xl sm:text-2xl font-extrabold tracking-tight">
             {documents} <span className="text-white/40 font-normal">protected documents</span>
           </div>
-          <p className="mt-2 max-w-xl text-xs sm:text-sm text-white/70 leading-relaxed">
+          <p className="mt-1 max-w-xl text-xs text-white/70 leading-relaxed">
             Every document is encrypted with AES-256-GCM. Content keys are encapsulated per recipient with NIST ML-KEM-768. Decryptions embed invisible Haar-DWT watermarks and anchor immutable receipts on the Ethereum blockchain.
           </p>
         </div>
 
-        <div className="grid grid-cols-3 gap-2.5 sm:gap-3.5 shrink-0 w-full xl:w-auto">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3 shrink-0 w-full xl:w-auto">
           <StatTile label="Documents" value={documents} />
           <StatTile label="Secret" value={secret} />
           <StatTile label="Decryptions" value={decryptions} highlight />
@@ -450,13 +450,13 @@ function Overview({ assets }) {
 function StatTile({ label, value, highlight }) {
   return (
     <div
-      className={`flex flex-col justify-between rounded-2xl p-3.5 sm:p-4 transition min-w-[90px] sm:min-w-[110px] ${
+      className={`flex flex-col justify-between rounded-2xl p-2.5 sm:p-3 transition min-w-[75px] sm:min-w-[90px] ${
         highlight ? 'bg-lime text-night shadow-md' : 'bg-night-soft text-white'
       }`}
     >
-      <div className="flex items-center justify-between gap-1.5">
+      <div className="flex items-center justify-between gap-1">
         <span
-          className={`text-[11px] sm:text-xs font-bold uppercase tracking-wider ${
+          className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-wider ${
             highlight ? 'text-night/80' : 'text-white/60'
           }`}
         >
@@ -464,7 +464,7 @@ function StatTile({ label, value, highlight }) {
         </span>
         <ArrowUpRight highlight={highlight} />
       </div>
-      <div className="font-display mt-2 sm:mt-3 text-2xl sm:text-3xl font-extrabold">{value}</div>
+      <div className="font-display mt-1 sm:mt-1.5 text-xl sm:text-2xl font-extrabold">{value}</div>
     </div>
   );
 }
@@ -520,41 +520,43 @@ function DocumentList({ assets, user, classificationFilter, setClassificationFil
         ))}
       </ul>
 
-      {/* Table — sm and up with smooth horizontal scroll and minimum column widths */}
-      <div className="card hidden overflow-x-auto scroll-slim sm:block shadow-sm">
-        <table className="w-full min-w-[720px] text-sm">
-          <thead>
-            <tr className="border-b border-line bg-night/[0.02] text-left text-xs uppercase tracking-wider text-ink-muted">
-              <th className="px-5 py-3.5 font-bold">Document</th>
-              <th className="px-4 py-3.5 font-bold">Classification</th>
-              <th className="px-4 py-3.5 font-bold">PQC Broadcast Encryption</th>
-              <th className="px-4 py-3.5 font-bold">Created</th>
-              <th className="px-5 py-3.5 text-right font-bold">Decryptions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-line/60">
-            {assets.map((a) => (
-              <tr
-                key={a.assetId}
-                className="transition hover:bg-line/30"
-              >
-                <td className="px-5 py-4 font-bold text-ink text-sm">{a.title}</td>
-                <td className="px-4 py-4">
-                  <ClassificationBadge value={a.classification} />
-                </td>
-                <td className="px-4 py-4">
-                  <span className="pill !bg-emerald-50 !text-emerald-700 text-xs font-semibold whitespace-nowrap">
-                    {a.encapsulationCount ?? a.authorizedUserIds?.length ?? 0} Recipients (ML-KEM-768)
-                  </span>
-                </td>
-                <td className="mono px-4 py-4 text-xs text-ink-muted whitespace-nowrap">
-                  {new Date(a.createdAt).toLocaleString()}
-                </td>
-                <td className="mono px-5 py-4 text-right font-extrabold text-sm text-ink">{a.decryptCount}</td>
+      {/* Table — sm and up with sticky header and max height */}
+      <div className="card hidden overflow-hidden shadow-sm sm:block">
+        <div className="overflow-x-auto overflow-y-auto max-h-[460px] scroll-slim">
+          <table className="w-full min-w-[720px] text-sm">
+            <thead className="sticky top-0 z-10 border-b border-line bg-white/95 backdrop-blur-xs text-left text-xs uppercase tracking-wider text-ink-muted font-bold">
+              <tr>
+                <th className="px-5 py-3">Document</th>
+                <th className="px-4 py-3">Classification</th>
+                <th className="px-4 py-3">PQC Broadcast Encryption</th>
+                <th className="px-4 py-3">Created</th>
+                <th className="px-5 py-3 text-right">Decryptions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-line/60">
+              {assets.map((a) => (
+                <tr
+                  key={a.assetId}
+                  className="transition hover:bg-line/30"
+                >
+                  <td className="px-5 py-3 font-bold text-ink text-sm">{a.title}</td>
+                  <td className="px-4 py-3">
+                    <ClassificationBadge value={a.classification} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="pill !bg-emerald-50 !text-emerald-700 text-xs font-semibold whitespace-nowrap">
+                      {a.encapsulationCount ?? a.authorizedUserIds?.length ?? 0} Recipients (ML-KEM-768)
+                    </span>
+                  </td>
+                  <td className="mono px-4 py-3 text-xs text-ink-muted whitespace-nowrap">
+                    {new Date(a.createdAt).toLocaleString()}
+                  </td>
+                  <td className="mono px-5 py-3 text-right font-extrabold text-sm text-ink">{a.decryptCount}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

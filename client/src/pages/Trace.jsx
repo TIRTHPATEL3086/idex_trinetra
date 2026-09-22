@@ -93,7 +93,7 @@ export default function Trace() {
   }
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-3.5">
       <Header
         title="Trace a leaked file"
         subtitle="The watermark says which receipt; the perceptual hashes say which file; the chain confirms both. Court-admissible forensic dossiers can be exported for any inquiry."
@@ -123,7 +123,7 @@ export default function Trace() {
           run(e.dataTransfer.files?.[0]);
         }}
         onClick={() => inputRef.current?.click()}
-        className={`card grid cursor-pointer place-items-center border-2 border-dashed px-6 py-10 text-center transition-all duration-200 ${
+        className={`card grid cursor-pointer place-items-center border-2 border-dashed px-5 py-4 sm:py-5 text-center transition-all duration-200 ${
           isDragging
             ? 'border-lime-deep bg-lime/15 scale-[1.01] shadow-lg ring-4 ring-lime/30'
             : 'border-line hover:border-lime-deep hover:bg-lime/5'
@@ -137,28 +137,28 @@ export default function Trace() {
           onChange={(e) => run(e.target.files?.[0])}
         />
         <div
-          className={`grid h-12 w-12 place-items-center rounded-full bg-lime text-night transition-transform duration-200 shadow-sm ${
+          className={`grid h-10 w-10 place-items-center rounded-full bg-lime text-night transition-transform duration-200 shadow-sm ${
             isDragging ? 'scale-125' : ''
           }`}
         >
           <UploadGlyph />
         </div>
-        <div className="mt-3 font-bold text-ink">
+        <div className="mt-2 text-xs sm:text-sm font-bold text-ink">
           {isDragging
             ? 'Release to begin deep cryptographic trace!'
             : fileName
             ? fileName
             : 'Drop a suspected leaked image or PDF, or click to browse'}
         </div>
-        <div className="mt-1 text-xs text-ink-muted">
+        <div className="mt-0.5 text-[11px] text-ink-muted">
           It will be hashed, matched, and the watermark extracted — nothing is stored as plaintext.
         </div>
       </div>
 
       {status === 'working' && (
-        <div className="card grid place-items-center p-8 text-center space-y-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-lime border-t-transparent" />
-          <div className="mono animate-pulse text-sm text-ink-muted">
+        <div className="card grid place-items-center p-6 text-center space-y-2">
+          <div className="h-7 w-7 animate-spin rounded-full border-3 border-lime border-t-transparent" />
+          <div className="mono animate-pulse text-xs text-ink-muted">
             Hashing → searching perceptual register → extracting watermark → cross-checking blockchain…
           </div>
         </div>
@@ -169,23 +169,23 @@ export default function Trace() {
       {/* Past Investigations and Dossier Archive */}
       <div className="card overflow-hidden p-0 shadow-sm">
         {/* Top Header */}
-        <div className="border-b border-line px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-gradient-to-r from-white to-[#fbfbf7]">
+        <div className="border-b border-line px-5 py-3 sm:px-6 sm:py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-2.5 bg-gradient-to-r from-white to-[#fbfbf7]">
           <div>
             <h3 className="text-sm font-bold text-ink">Forensic Investigation Dossiers</h3>
-            <p className="text-xs text-ink-muted">
+            <p className="text-[11px] text-ink-muted">
               Official cryptographic evidence dossiers generated for recent leak inquiries.
             </p>
           </div>
-          <span className="text-xs font-mono text-ink-muted bg-night/5 px-2.5 py-1 rounded-full self-start md:self-auto font-bold">
+          <span className="text-[11px] font-mono text-ink-muted bg-night/5 px-2.5 py-0.5 rounded-full self-start md:self-auto font-bold">
             Showing {filteredAndSorted.length} of {investigations.length} Record(s)
           </span>
         </div>
 
         {/* Filters and Sorting Toolbar */}
-        <div className="border-b border-line bg-slate-50/70 p-4 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="border-b border-line bg-slate-50/70 p-2.5 sm:p-3 flex flex-wrap items-center justify-between gap-2.5 text-xs">
           {/* Timeframe Filter Buttons (7 Days / 1 Month / 1 Year / All) */}
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-ink-faint mr-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-ink-faint mr-0.5">
               Timeframe:
             </span>
             {[
@@ -200,7 +200,7 @@ export default function Trace() {
                   key={t.id}
                   type="button"
                   onClick={() => setTimeRange(t.id)}
-                  className={`rounded-full px-3 py-1 font-bold text-[11px] transition shadow-xs ${
+                  className={`rounded-full px-2.5 py-0.5 font-bold text-[10px] sm:text-[11px] transition shadow-xs ${
                     active
                       ? 'bg-night text-lime shadow-sm ring-1 ring-lime/40'
                       : 'bg-white text-ink-muted border border-line hover:border-lime-deep hover:text-ink'
@@ -215,11 +215,11 @@ export default function Trace() {
           {/* Sort & Search Controls */}
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-bold text-ink-faint">Sort:</span>
+              <span className="text-[10px] font-bold text-ink-faint">Sort:</span>
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="input !h-8 !py-1 !text-xs font-semibold bg-white border-line shadow-xs rounded-xl"
+                className="input !h-7 !py-0.5 !text-xs font-semibold bg-white border-line shadow-xs rounded-xl"
               >
                 <option value="newest">Newest First</option>
                 <option value="oldest">Oldest First</option>
@@ -234,7 +234,7 @@ export default function Trace() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search dossiers…"
-              className="input !h-8 !py-1 !text-xs w-36 sm:w-44 bg-white border-line rounded-xl"
+              className="input !h-7 !py-0.5 !text-xs w-36 sm:w-44 bg-white border-line rounded-xl"
             />
 
             {(timeRange !== 'all' || searchQuery || sortBy !== 'newest') && (
@@ -245,7 +245,7 @@ export default function Trace() {
                   setSortBy('newest');
                   setSearchQuery('');
                 }}
-                className="rounded-xl px-2.5 py-1 text-[11px] font-bold text-ink-muted hover:text-rose-600 hover:bg-rose-50 border border-line transition"
+                className="rounded-xl px-2 py-0.5 text-[10px] font-bold text-ink-muted hover:text-rose-600 hover:bg-rose-50 border border-line transition"
                 title="Reset all filters"
               >
                 Reset
@@ -255,15 +255,15 @@ export default function Trace() {
         </div>
 
         {loadingHistory ? (
-          <div className="p-8 text-center text-xs text-ink-muted">Loading forensic dossiers…</div>
+          <div className="p-6 text-center text-xs text-ink-muted">Loading forensic dossiers…</div>
         ) : investigations.length === 0 ? (
-          <div className="p-8 text-center text-xs text-ink-muted">
+          <div className="p-6 text-center text-xs text-ink-muted">
             No forensic investigations run yet. Upload a leaked document above to generate the first dossier.
           </div>
         ) : filteredAndSorted.length === 0 ? (
-          <div className="p-10 text-center space-y-2">
-            <div className="text-sm font-bold text-ink">No dossiers match the selected filters</div>
-            <p className="text-xs text-ink-muted">
+          <div className="p-8 text-center space-y-1.5">
+            <div className="text-xs sm:text-sm font-bold text-ink">No dossiers match the selected filters</div>
+            <p className="text-[11px] text-ink-muted">
               Try choosing a broader timeframe or resetting your search query.
             </p>
             <button
@@ -273,22 +273,22 @@ export default function Trace() {
                 setSearchQuery('');
                 setSortBy('newest');
               }}
-              className="btn-ghost !text-xs !py-1.5 !px-3 font-bold"
+              className="btn-ghost !text-xs !py-1 !px-3 font-bold"
             >
               Show All Records
             </button>
           </div>
         ) : (
-          <div className="overflow-x-auto scroll-slim">
+          <div className="overflow-x-auto overflow-y-auto max-h-[460px] scroll-slim">
             <table className="w-full min-w-[720px] text-left text-xs sm:text-sm">
-              <thead className="border-b border-line bg-night/[0.02] text-xs font-bold uppercase tracking-wider text-ink-muted">
+              <thead className="sticky top-0 z-10 border-b border-line bg-white/95 backdrop-blur-xs text-xs font-bold uppercase tracking-wider text-ink-muted">
                 <tr>
-                  <th className="px-5 py-3.5">Inquiry ID</th>
-                  <th className="px-5 py-3.5">Date / Timestamp</th>
-                  <th className="px-5 py-3.5">Verdict</th>
-                  <th className="px-5 py-3.5">Confidence</th>
-                  <th className="px-5 py-3.5">Candidates Checked</th>
-                  <th className="px-5 py-3.5 text-right">Evidence Dossier</th>
+                  <th className="px-4 py-2.5">Inquiry ID</th>
+                  <th className="px-4 py-2.5">Date / Timestamp</th>
+                  <th className="px-4 py-2.5">Verdict</th>
+                  <th className="px-4 py-2.5">Confidence</th>
+                  <th className="px-4 py-2.5">Candidates Checked</th>
+                  <th className="px-4 py-2.5 text-right">Evidence Dossier</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line/60">
@@ -298,30 +298,30 @@ export default function Trace() {
 
                   return (
                     <tr key={inv.investigationId} className="hover:bg-night/5 transition-colors">
-                      <td className="px-5 py-3.5 font-mono font-bold text-ink whitespace-nowrap">
+                      <td className="px-4 py-2.5 font-mono font-bold text-ink whitespace-nowrap">
                         INV-{String(inv.investigationId).padStart(5, '0')}
                       </td>
-                      <td className="px-5 py-3.5 text-xs text-ink-muted font-mono whitespace-nowrap">
+                      <td className="px-4 py-2.5 text-xs text-ink-muted font-mono whitespace-nowrap">
                         {new Date(inv.createdAt).toLocaleString()}
                       </td>
-                      <td className="px-5 py-3.5">
+                      <td className="px-4 py-2.5">
                         <span className={`pill text-xs font-bold ${band.chip}`}>
                           {band.label}
                         </span>
                       </td>
-                      <td className="px-5 py-3.5 font-extrabold text-ink text-sm">
+                      <td className="px-4 py-2.5 font-extrabold text-ink text-sm">
                         {pct}%
                       </td>
-                      <td className="px-5 py-3.5 text-ink-muted font-mono text-xs">
+                      <td className="px-4 py-2.5 text-ink-muted font-mono text-xs">
                         {inv.candidatesChecked ?? '—'}
                       </td>
-                      <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                      <td className="px-4 py-2.5 text-right whitespace-nowrap">
                         <a
                           href={`/api/trace/${inv.investigationId}/dossier`}
                           download={`forensic-dossier-INV-${String(inv.investigationId).padStart(5, '0')}.pdf`}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-bold text-ink hover:border-lime-deep hover:bg-lime/20 transition shadow-sm"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 py-1 text-xs font-bold text-ink hover:border-lime-deep hover:bg-lime/20 transition shadow-xs"
                         >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                             <polyline points="14 2 14 8 20 8" />
                             <line x1="12" y1="18" x2="12" y2="12" />

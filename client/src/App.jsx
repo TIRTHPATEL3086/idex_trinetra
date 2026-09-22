@@ -117,7 +117,7 @@ function Shell() {
 
           <Sidebar health={health} open={navOpen} can={can} user={user} />
 
-          <main className="scroll-slim min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-6 sm:py-5 xl:px-7">
+          <main className="scroll-slim min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3.5 py-3 sm:px-5 sm:py-3.5 xl:px-6">
             <div className="mx-auto w-full max-w-6xl">
               <Routes>
                 {/* Land on the first screen this role can actually use. */}

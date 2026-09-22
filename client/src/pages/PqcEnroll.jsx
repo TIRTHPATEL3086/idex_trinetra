@@ -20,13 +20,13 @@ function ArrowUpRight({ highlight }) {
 function StatTile({ label, value, highlight }) {
   return (
     <div
-      className={`flex flex-col justify-between rounded-2xl p-3.5 sm:p-4 transition min-w-[90px] sm:min-w-[110px] ${
+      className={`flex flex-col justify-between rounded-2xl p-2.5 sm:p-3 transition min-w-[75px] sm:min-w-[90px] ${
         highlight ? 'bg-lime text-night shadow-md' : 'bg-night-soft text-white'
       }`}
     >
-      <div className="flex items-center justify-between gap-1.5">
+      <div className="flex items-center justify-between gap-1">
         <span
-          className={`text-[11px] sm:text-xs font-bold uppercase tracking-wider ${
+          className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-wider ${
             highlight ? 'text-night/80' : 'text-white/60'
           }`}
         >
@@ -34,7 +34,7 @@ function StatTile({ label, value, highlight }) {
         </span>
         <ArrowUpRight highlight={highlight} />
       </div>
-      <div className="font-display mt-2 sm:mt-3 text-2xl sm:text-3xl font-extrabold">{value}</div>
+      <div className="font-display mt-1 sm:mt-1.5 text-xl sm:text-2xl font-extrabold">{value}</div>
     </div>
   );
 }
@@ -142,7 +142,7 @@ export default function PqcEnroll() {
   const pendingCount = totalUsers - enrolledCount;
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-3.5">
       <Header
         title="Post-Quantum Cryptography Enrollment"
         subtitle="Provision NIST FIPS 203 (ML-KEM-768) and FIPS 204 (ML-DSA-65) quantum-resistant identity keypairs for authorized officers."
@@ -151,23 +151,23 @@ export default function PqcEnroll() {
       {error && <Notice tone="error">{error}</Notice>}
 
       {/* ── Dark Overview Hero Panel (Provenance Signature Style) ──────── */}
-      <div className="relative overflow-hidden rounded-3xl bg-night p-6 text-white shadow-panel sm:p-7">
-        <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+      <div className="relative overflow-hidden rounded-3xl bg-night p-4 sm:p-5 text-white shadow-panel">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-lime-400">
               <span className="h-1.5 w-1.5 rounded-full bg-lime animate-pulse" />
               Quantum-Resistant PKI Infrastructure
             </div>
-            <div className="font-display mt-1.5 text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight">
+            <div className="font-display mt-1 text-xl sm:text-2xl font-extrabold tracking-tight">
               {enrolledCount} of {totalUsers}{' '}
               <span className="text-white/40 font-normal">officers enrolled</span>
             </div>
-            <p className="mt-2 max-w-xl text-xs sm:text-sm text-white/70 leading-relaxed">
+            <p className="mt-1 max-w-xl text-xs text-white/70 leading-relaxed">
               Every officer identity is provisioned with NIST ML-KEM-768 broadcast decapsulation keys and ML-DSA-65 non-repudiation signing keys. Private key bundles are sealed via scrypt + AES-256-GCM.
             </p>
           </div>
 
-          <div className="grid grid-cols-3 gap-2.5 sm:gap-3.5 shrink-0 w-full xl:w-auto">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 shrink-0 w-full xl:w-auto">
             <StatTile label="Officers" value={totalUsers} />
             <StatTile label="Enrolled" value={enrolledCount} highlight />
             <StatTile label="Pending" value={pendingCount} />
@@ -177,36 +177,36 @@ export default function PqcEnroll() {
 
       {/* ── Officer Cryptographic Roster Card ───────────────────────────── */}
       <div className="card overflow-hidden shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-line px-6 py-4 bg-night/[0.01]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-line px-5 py-3 sm:px-6 sm:py-3.5 bg-night/[0.01]">
           <div>
-            <h2 className="text-base font-extrabold text-ink">Officer Cryptographic Roster</h2>
-            <p className="text-xs text-ink-muted mt-0.5">
+            <h2 className="text-sm sm:text-base font-extrabold text-ink">Officer Cryptographic Roster</h2>
+            <p className="text-[11px] sm:text-xs text-ink-muted mt-0.5">
               Inspect public key parameters, verify algorithms, and provision post-quantum credentials.
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="pill !bg-lime/20 !text-ink text-xs font-bold">
+            <span className="pill !bg-lime/20 !text-ink text-[11px] font-bold">
               NIST FIPS 203 / 204
             </span>
           </div>
         </div>
 
         {loading ? (
-          <div className="p-12 text-center text-sm text-ink-muted">
-            <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-lime border-t-transparent" />
+          <div className="p-8 text-center text-xs sm:text-sm text-ink-muted">
+            <div className="mx-auto mb-2.5 h-7 w-7 animate-spin rounded-full border-2 border-lime border-t-transparent" />
             Loading officer cryptographic credentials…
           </div>
         ) : (
-          <div className="overflow-x-auto scroll-slim">
+          <div className="overflow-x-auto overflow-y-auto max-h-[460px] scroll-slim">
             <table className="w-full min-w-[760px] text-left text-sm">
-              <thead className="border-b border-line bg-night/[0.02] text-xs font-bold uppercase tracking-wider text-ink-muted">
+              <thead className="sticky top-0 z-10 border-b border-line bg-white/95 backdrop-blur-xs text-xs font-bold uppercase tracking-wider text-ink-muted">
                 <tr>
-                  <th className="px-6 py-3.5 font-bold">Officer / Role</th>
-                  <th className="px-6 py-3.5 font-bold">Department</th>
-                  <th className="px-6 py-3.5 font-bold">PQC Status</th>
-                  <th className="px-6 py-3.5 font-bold">ML-KEM-768 (KEM)</th>
-                  <th className="px-6 py-3.5 font-bold">ML-DSA-65 (Sig)</th>
-                  <th className="px-6 py-3.5 text-right font-bold">Action</th>
+                  <th className="px-5 py-3 font-bold">Officer / Role</th>
+                  <th className="px-5 py-3 font-bold">Department</th>
+                  <th className="px-5 py-3 font-bold">PQC Status</th>
+                  <th className="px-5 py-3 font-bold">ML-KEM-768 (KEM)</th>
+                  <th className="px-5 py-3 font-bold">ML-DSA-65 (Sig)</th>
+                  <th className="px-5 py-3 text-right font-bold">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line/60">
@@ -216,9 +216,9 @@ export default function PqcEnroll() {
 
                   return (
                     <tr key={u.userId} className="transition-colors hover:bg-line/25">
-                      <td className="px-6 py-4">
+                      <td className="px-5 py-3">
                         <div className="font-bold text-ink text-sm">{u.name}</div>
-                        <div className="flex items-center gap-2 text-xs text-ink-muted mt-1 flex-wrap">
+                        <div className="flex items-center gap-2 text-xs text-ink-muted mt-0.5 flex-wrap">
                           <span className="pill !text-[10px] !py-0.5 bg-line/60 text-ink font-semibold">
                             {u.roleLabel || u.role}
                           </span>
@@ -231,10 +231,10 @@ export default function PqcEnroll() {
                           </span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-xs sm:text-sm text-ink-muted font-semibold">
+                      <td className="px-5 py-3 text-xs sm:text-sm text-ink-muted font-semibold">
                         {u.dept}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-5 py-3">
                         {isEnrolled ? (
                           <span className="pill !bg-emerald-50 !text-emerald-700 text-xs font-bold border border-emerald-200/70 inline-flex items-center gap-1.5">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -247,7 +247,7 @@ export default function PqcEnroll() {
                           </span>
                         )}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-5 py-3">
                         {status?.kemPublicKey ? (
                           <span
                             title={status.kemPublicKey}
@@ -259,7 +259,7 @@ export default function PqcEnroll() {
                           <span className="mono text-xs text-ink-faint font-semibold">—</span>
                         )}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-5 py-3">
                         {status?.dsaPublicKey ? (
                           <span
                             title={status.dsaPublicKey}
@@ -271,14 +271,14 @@ export default function PqcEnroll() {
                           <span className="mono text-xs text-ink-faint font-semibold">—</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="px-5 py-3 text-right">
                         <button
                           type="button"
                           onClick={() => openEnrollModal(u)}
                           className={
                             isEnrolled
-                              ? 'btn-ghost !text-xs !py-1.5 !px-3.5'
-                              : 'btn-lime !text-xs !py-1.5 !px-3.5 shadow-xs'
+                              ? 'btn-ghost !text-xs !py-1 !px-3'
+                              : 'btn-lime !text-xs !py-1 !px-3 shadow-xs'
                           }
                         >
                           {isEnrolled ? 'Re-enroll' : 'Enroll PQC'}
