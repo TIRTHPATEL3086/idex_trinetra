@@ -107,6 +107,29 @@ export const decryptAsset = ({ assetId, userId, deviceLabel, passphrase, clientS
     body: JSON.stringify({ assetId, userId, deviceLabel, passphrase, clientSignature, challengeId }),
   });
 
+export const batchDecryptAsset = ({
+  assetId,
+  userIds,
+  passphraseMode,
+  commonPassphrase,
+  individualPassphrases,
+  deviceLabel,
+}) =>
+  request('/api/decrypt/batch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      assetId,
+      userIds,
+      passphraseMode,
+      commonPassphrase,
+      individualPassphrases,
+      deviceLabel,
+    }),
+  });
+
+export const getAllotments = (assetId) => request(`/api/decrypt/allotments/${assetId}`);
+
 export function traceFile(file) {
   const form = new FormData();
   form.append('file', file);

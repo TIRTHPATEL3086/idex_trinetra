@@ -183,6 +183,7 @@ router.get(
           blockNumber: e.blockNumber !== null ? Number(e.blockNumber) : null,
           psnrDb: e.psnrDb,
           deltaUsed: e.deltaUsed,
+          signatureAlgorithm: e.signatureAlgorithm,
           userRef: bufferToHex(e.user.userRef),
           isOffHours,
           isBurst,
@@ -197,23 +198,6 @@ router.get(
         assetTitle: asset.title,
         scope: ownOnly ? 'own' : 'all',
         timeline,
-        timeline: events.map((e) => {
-          const txHash = bufferToHex(e.txHash);
-          return {
-            receiptId:    bufferToHex(e.receiptId),
-            userName:     e.user.name,
-            department:   e.user.dept,
-            at:           e.createdAt.toISOString(),
-            device:       e.deviceLabel,
-            txHash,
-            etherscanUrl: chain.buildEtherscanUrl(txHash),
-            blockNumber:  e.blockNumber !== null ? Number(e.blockNumber) : null,
-            psnrDb:       e.psnrDb,
-            deltaUsed:    e.deltaUsed,
-            signatureAlgorithm: e.signatureAlgorithm,
-            userRef:      bufferToHex(e.user.userRef),
-          };
-        }),
       });
     } catch (err) {
       next(err);

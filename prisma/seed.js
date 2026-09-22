@@ -80,13 +80,6 @@ const USERS = [
     role: 'ADMIN',
     password: 'admin123',
   },
-  {
-    name: 'Oversight Cell',
-    dept: 'Vigilance',
-    email: 'audit@example.gov',
-    role: 'AUDITOR',
-    password: 'auditor123',
-  },
 ];
 
 const ASSETS = [
