@@ -249,12 +249,6 @@ function Sidebar({ health, open, can, user }) {
           </NavLink>
         </div>
       )}
-      {user?.role !== 'OFFICER' && (
-        <div className="mt-4 space-y-3">
-          <RoleCard user={user} />
-          <HealthBadge health={health} />
-        </div>
-      )}
     </aside>
   );
 }
