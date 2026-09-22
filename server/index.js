@@ -1,6 +1,11 @@
 import express from 'express';
 import cors from 'cors';
 
+// Enable clean JSON serialization for BigInt values across all Express routes
+BigInt.prototype.toJSON = function () {
+  return this.toString();
+};
+
 import { env, warnAboutConfig } from './lib/env.js';
 import { prisma, dbStatus } from './lib/prisma.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';

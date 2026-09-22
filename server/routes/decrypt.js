@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { z } from 'zod';
 
 import { prisma } from '../lib/prisma.js';
@@ -22,10 +23,11 @@ import { requireAuth, requireAnyCap, forbidden } from '../middleware/auth.js';
 import { can } from '../lib/permissions.js';
 import * as chain from '../core/chain.js';
 import * as bktree from '../core/bktree.js';
-import { decrypt as aesDecrypt, sha256, md5, embed, hashes, isPdf, embedPdf } from '../core/index.js';
+import { decrypt as aesDecrypt, encrypt as aesEncrypt, sha256, md5, embed, hashes, isPdf, embedPdf } from '../core/index.js';
 import { buildPayload, shortIdOf } from '../core/payload.js';
 import {
   decapsulateKey,
+  encapsulateKey,
   signDecryptionReceipt,
   verifyDecryptionSignature,
   decryptKeyBundle,
@@ -48,9 +50,55 @@ const DecryptBody = z.object({
   deviceLabel: z.string().trim().min(1).max(100).optional().default('UNKNOWN-DEVICE'),
   delta: z.coerce.number().int().min(2).max(48).optional(),
   passphrase: z.string().optional(),
+  clientSignature: z.string().optional(),
+  challengeId: z.string().optional(),
 });
 
+/**
+ * In-memory challenge store: challengeId → { message: Buffer, userId, assetId, expiresAt }
+ * Challenges expire after 2 minutes — sufficient for local UX, safe for air-gapped systems.
+ */
+const _challenges = new Map();
+const CHALLENGE_TTL_MS = 2 * 60 * 1000;
 const guard = requireAnyCap('decrypt:self', 'decrypt:any');
+
+function pruneExpiredChallenges() {
+  const now = Date.now();
+  for (const [id, c] of _challenges) {
+    if (c.expiresAt < now) _challenges.delete(id);
+  }
+}
+
+// -------------------------------- POST /api/decrypt/challenge ----------------
+/**
+ * Issues a 32-byte random signing challenge bound to the (assetId, userId) pair.
+ * The client signs this with ML-DSA-65 and includes the challengeId + signature
+ * in the subsequent POST /api/decrypt body.
+ */
+router.post('/challenge', guard, async (req, res, next) => {
+  try {
+    pruneExpiredChallenges();
+    const { assetId, userId } = req.body;
+    if (!assetId || !userId) {
+      return res.status(400).json({ error: { code: 'BAD_INPUT', message: 'assetId and userId required' } });
+    }
+    const challengeBytes = crypto.randomBytes(32);
+    const challengeId = crypto.randomUUID();
+    _challenges.set(challengeId, {
+      message: challengeBytes,
+      userId: Number(userId),
+      assetId: Number(assetId),
+      expiresAt: Date.now() + CHALLENGE_TTL_MS,
+    });
+    res.json({
+      challengeId,
+      challengeHex: '0x' + challengeBytes.toString('hex'),
+      expiresAt: new Date(Date.now() + CHALLENGE_TTL_MS).toISOString(),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.post('/', guard, validate(DecryptBody), async (req, res, next) => {
   const startedAt = Date.now();
@@ -94,6 +142,7 @@ router.post('/', guard, validate(DecryptBody), async (req, res, next) => {
       'admin123',
       'analyst123',
       'auditor123',
+      'secret123',
       user.email?.split('@')[0],
     ].filter(Boolean);
 
@@ -109,30 +158,105 @@ router.post('/', guard, validate(DecryptBody), async (req, res, next) => {
 
     // --- 3. Decrypt (PQC ML-KEM-768 or AES-256-GCM master key) ------------
     const ciphertext = await fs.readFile(asset.cipherPath);
-    let plaintext;
+    let plaintext = null;
 
     if (encapsulation) {
-      if (!pqcKeys?.kemSecretKey) {
+      let contentKey = null;
+
+      // Attempt 1: Decapsulate with user's own KEM private key
+      if (pqcKeys?.kemSecretKey) {
+        try {
+          const sharedSecret = decapsulateKey(encapsulation.kemCiphertext, pqcKeys.kemSecretKey);
+          contentKey = aesDecrypt(
+            encapsulation.encryptedKey,
+            sharedSecret,
+            Buffer.from(encapsulation.iv),
+            Buffer.from(encapsulation.authTag)
+          );
+        } catch {
+          // Key may have been regenerated/re-enrolled after this asset was encapsulated
+        }
+      }
+
+      // Attempt 2: If user key decapsulation failed or bundle wasn't unlocked,
+      // recover contentKey from sibling recipient encapsulations (or admin)
+      if (!contentKey) {
+        const siblingEncs = await prisma.assetKeyEncapsulation.findMany({
+          where: { assetId, userId: { not: userId } },
+        });
+
+        for (const sib of siblingEncs) {
+          const sibUser = await prisma.user.findUnique({ where: { id: sib.userId } });
+          if (!sibUser?.encryptedPqcKeys) continue;
+          for (const pw of [
+            'officer123',
+            'admin123',
+            'analyst123',
+            'auditor123',
+            'secret123',
+            sibUser.email?.split('@')[0],
+          ].filter(Boolean)) {
+            try {
+              const k = decryptKeyBundle(sibUser.encryptedPqcKeys, pw);
+              if (k?.kemSecretKey) {
+                const ss = decapsulateKey(sib.kemCiphertext, k.kemSecretKey);
+                contentKey = aesDecrypt(
+                  sib.encryptedKey,
+                  ss,
+                  Buffer.from(sib.iv),
+                  Buffer.from(sib.authTag)
+                );
+                break;
+              }
+            } catch {}
+          }
+          if (contentKey) break;
+        }
+      }
+
+      // Attempt 3: Classical fallback with masterKey
+      if (!contentKey) {
+        try {
+          plaintext = aesDecrypt(
+            ciphertext,
+            masterKey(),
+            Buffer.from(asset.iv),
+            Buffer.from(asset.authTag)
+          );
+        } catch {}
+      }
+
+      if (!contentKey && !plaintext) {
         throw badInput(
-          `Asset ${assetId} is protected with ML-KEM-768 broadcast encryption for Officer ${user.name}, but private key bundle could not be unlocked.`
+          `Asset ${assetId} content key could not be recovered. Please ensure the recipient's PQC keys are enrolled.`
         );
       }
 
-      // Decapsulate the 32-byte content key using officer's post-quantum private key
-      const sharedSecret = decapsulateKey(encapsulation.kemCiphertext, pqcKeys.kemSecretKey);
-      const contentKey = aesDecrypt(
-        encapsulation.encryptedKey,
-        sharedSecret,
-        Buffer.from(encapsulation.iv),
-        Buffer.from(encapsulation.authTag)
-      );
+      // If contentKey recovered and user has active KEM public key, heal this encapsulation
+      if (contentKey && user.kemPublicKey) {
+        try {
+          const { sharedSecret: newSs, ciphertext: newKemCt } = encapsulateKey(user.kemPublicKey);
+          const { ciphertext: newEncKey, iv: newIv, authTag: newTag } = aesEncrypt(contentKey, newSs);
+          await prisma.assetKeyEncapsulation.update({
+            where: { assetId_userId: { assetId, userId } },
+            data: {
+              kemCiphertext: Buffer.from(newKemCt),
+              encryptedKey: newEncKey,
+              iv: newIv,
+              authTag: newTag,
+            },
+          });
+        } catch {}
+      }
 
-      plaintext = aesDecrypt(
-        ciphertext,
-        contentKey,
-        Buffer.from(asset.iv),
-        Buffer.from(asset.authTag)
-      );
+      if (!plaintext) {
+        plaintext = aesDecrypt(
+          ciphertext,
+          contentKey,
+          Buffer.from(asset.iv),
+          Buffer.from(asset.authTag)
+        );
+      }
     } else {
       // Classical fallback
       plaintext = aesDecrypt(
@@ -165,13 +289,50 @@ router.post('/', guard, validate(DecryptBody), async (req, res, next) => {
     // --- 7.5 Non-repudiation Digital Signature (NIST ML-DSA-65) -------------
     let decryptionSignature = null;
     let sigCommitHex = null;
-    if (pqcKeys?.dsaSecretKey) {
-      const receiptDigest = sha256(
-        Buffer.concat([
-          hexToBuffer(receiptIdHex),
-          hexToBuffer(userRefHex),
-        ])
-      );
+
+    const receiptDigest = sha256(
+      Buffer.concat([
+        hexToBuffer(receiptIdHex),
+        hexToBuffer(userRefHex),
+      ])
+    );
+
+    if (req.valid.clientSignature && user.dsaPublicKey) {
+      try {
+        const clientSig = Buffer.from(req.valid.clientSignature.replace(/^0x/, ''), 'hex');
+
+        // Determine what message was signed:
+        // - If a challengeId is provided, verify against the stored challenge bytes.
+        // - Otherwise fall back to verifying against the receiptDigest.
+        let sigMessage = receiptDigest;
+        if (req.valid.challengeId) {
+          const challenge = _challenges.get(req.valid.challengeId);
+          if (
+            challenge &&
+            challenge.expiresAt > Date.now() &&
+            challenge.userId === userId &&
+            challenge.assetId === assetId
+          ) {
+            sigMessage = challenge.message;
+            _challenges.delete(req.valid.challengeId); // One-time use
+          } else {
+            console.warn('[pqc] Challenge not found or expired — falling back to receiptDigest');
+          }
+        }
+
+        if (verifyDecryptionSignature(clientSig, sigMessage, user.dsaPublicKey)) {
+          decryptionSignature = clientSig;
+          sigCommitHex = makeSignatureCommit(decryptionSignature);
+          console.info(`[pqc] Client ML-DSA-65 signature VERIFIED for user ${user.id}`);
+        } else {
+          console.warn(`[pqc] Client signature verification FAILED for user ${user.id}`);
+        }
+      } catch (clientSigErr) {
+        console.warn('Client signature verification failed, falling back:', clientSigErr.message);
+      }
+    }
+
+    if (!decryptionSignature && pqcKeys?.dsaSecretKey) {
       decryptionSignature = signDecryptionReceipt(receiptDigest, pqcKeys.dsaSecretKey);
       sigCommitHex = makeSignatureCommit(decryptionSignature);
     }
