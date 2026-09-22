@@ -11,6 +11,8 @@ import Decrypt from './pages/Decrypt.jsx';
 import Trace from './pages/Trace.jsx';
 import Timeline from './pages/Timeline.jsx';
 import Robustness from './pages/Robustness.jsx';
+import History from './pages/History.jsx';
+import PqcEnroll from './pages/PqcEnroll.jsx';
 
 /**
  * Application shell — a white, rounded app card sitting on a dark olive canvas,
@@ -30,11 +32,13 @@ import Robustness from './pages/Robustness.jsx';
  * a hidden link and a refused route can never disagree.
  */
 const NAV = [
-  { to: '/assets', label: 'Documents', icon: DocIcon, cap: 'assets:read' },
-  { to: '/decrypt', label: 'Decrypt', icon: KeyIcon, cap: 'decrypt:self' },
-  { to: '/trace', label: 'Trace', icon: SearchIcon, cap: 'trace:run' },
-  { to: '/timeline', label: 'Timeline', icon: ClockIcon, cap: 'audit:own' },
-  { to: '/robustness', label: 'Robustness', icon: ChartIcon, cap: 'metrics:read' },
+  { to: '/assets',   label: 'Documents',  icon: DocIcon,        cap: 'assets:read' },
+  { to: '/decrypt',  label: 'Decrypt',     icon: KeyIcon,        cap: 'decrypt:self' },
+  { to: '/trace',    label: 'Trace',       icon: SearchIcon,     cap: 'trace:run' },
+  { to: '/timeline', label: 'Timeline',    icon: ClockIcon,      cap: 'audit:own' },
+  { to: '/history',  label: 'History',     icon: HistoryIcon,    cap: 'audit:read' },
+  { to: '/enroll',   label: 'PQC Enroll',  icon: ShieldIcon,     cap: 'assets:upload' },
+  { to: '/robustness', label: 'Robustness', icon: ChartIcon,    cap: 'metrics:read' },
 ];
 
 export default function App() {
@@ -161,6 +165,22 @@ function Shell() {
                   element={
                     <RequireCap capability="metrics:read">
                       <Robustness />
+                    </RequireCap>
+                  }
+                />
+                <Route
+                  path="/history"
+                  element={
+                    <RequireCap capability="audit:read">
+                      <History />
+                    </RequireCap>
+                  }
+                />
+                <Route
+                  path="/enroll"
+                  element={
+                    <RequireCap capability="assets:upload">
+                      <PqcEnroll />
                     </RequireCap>
                   }
                 />
@@ -406,23 +426,28 @@ const short = (a) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '');
 /** Real MetaMask connect via window.ethereum. Degrades cleanly with no wallet. */
 function WalletButton({ health }) {
   const [account, setAccount] = useState(null);
+  const [chainId, setChainId] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const eth = window.ethereum;
     if (!eth) return;
-    // Reflect an already-authorised account without prompting.
+
     eth
       .request({ method: 'eth_accounts' })
       .then((a) => a?.[0] && setAccount(a[0]))
       .catch(() => {});
+
+    eth
+      .request({ method: 'eth_chainId' })
+      .then((cid) => cid && setChainId(cid))
+      .catch(() => {});
+
     const onAccountsChange = (a) => setAccount(a?.[0] ?? null);
-    const onChainChange = () => {
-      eth
-        .request({ method: 'eth_accounts' })
-        .then((a) => a?.[0] && setAccount(a[0]))
-        .catch(() => {});
-    };
+    const onChainChange = (cid) => setChainId(cid);
+
     eth.on?.('accountsChanged', onAccountsChange);
     eth.on?.('chainChanged', onChainChange);
     return () => {
@@ -441,6 +466,9 @@ function WalletButton({ health }) {
     try {
       const a = await eth.request({ method: 'eth_requestAccounts' });
       setAccount(a?.[0] ?? null);
+
+      const cid = await eth.request({ method: 'eth_chainId' });
+      setChainId(cid);
 
       // Prompt network switch for local Hardhat node if running in local mode
       if (health?.chainMode === 'local' || !health?.chainMode) {
@@ -472,17 +500,179 @@ function WalletButton({ health }) {
     }
   }
 
+  async function switchToChain(targetHex, name, rpc) {
+    const eth = window.ethereum;
+    if (!eth) return;
+    try {
+      await eth.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: targetHex }],
+      });
+    } catch (err) {
+      if (err.code === 4902 && rpc) {
+        await eth.request({
+          method: 'wallet_addEthereumChain',
+          params: [
+            {
+              chainId: targetHex,
+              chainName: name,
+              rpcUrls: [rpc],
+              nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+            },
+          ],
+        });
+      }
+    }
+  }
+
+  const isLocalChain = chainId === '0x7a69' || chainId === '0x7A69';
+  const isSepolia = chainId === '0xaa36a7' || chainId === '0xAA36A7';
+
+  const chainLabel = isLocalChain
+    ? 'Hardhat (31337)'
+    : isSepolia
+      ? 'Sepolia (11155111)'
+      : chainId
+        ? `Chain ${parseInt(chainId, 16) || chainId}`
+        : 'Chain';
+
   if (account) {
     return (
-      <button
-        type="button"
-        onClick={() => setAccount(null)}
-        title="Click to disconnect"
-        className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-3 py-2 text-xs font-bold text-ink"
-      >
-        <span className="h-2 w-2 rounded-full bg-attributed" />
-        <span className="mono">{short(account)}</span>
-      </button>
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setPanelOpen((o) => !o)}
+          title="MetaMask wallet details & chain settings"
+          className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-3 py-1.5 text-xs font-bold text-ink hover:border-ink-faint transition"
+        >
+          <span
+            className={`h-2 w-2 rounded-full ${
+              isLocalChain || isSepolia ? 'bg-attributed animate-pulse' : 'bg-probable'
+            }`}
+          />
+          <span className="mono">{short(account)}</span>
+          <span className="hidden md:inline-block text-[10px] text-ink-muted bg-night/5 px-2 py-0.5 rounded-full font-medium">
+            {chainLabel}
+          </span>
+        </button>
+
+        {panelOpen && (
+          <>
+            <button
+              type="button"
+              aria-label="Close wallet menu"
+              className="fixed inset-0 z-40 cursor-default"
+              onClick={() => setPanelOpen(false)}
+            />
+            <div className="absolute right-0 z-50 mt-2 w-[19rem] max-w-[calc(100vw-2rem)] rounded-2xl border border-line bg-white p-4 shadow-panel">
+              <div className="flex items-center justify-between pb-3 border-b border-line">
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-attributed" />
+                  <span className="text-xs font-bold text-ink">MetaMask Connected</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAccount(null);
+                    setPanelOpen(false);
+                  }}
+                  className="text-[11px] font-semibold text-ink-muted hover:text-ink"
+                >
+                  Disconnect
+                </button>
+              </div>
+
+              <div className="space-y-3 pt-3">
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-ink-faint">
+                    Wallet Account
+                  </div>
+                  <div className="mt-1 flex items-center justify-between gap-1 rounded-xl bg-night/5 p-2 font-mono text-[11px] text-ink">
+                    <span className="truncate">{account}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(account);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                      className="shrink-0 rounded px-1.5 py-0.5 text-[10px] bg-white border border-line font-sans font-semibold hover:bg-night/10"
+                    >
+                      {copied ? '✓' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-ink-muted">Active Network</span>
+                  <span className="font-semibold text-ink">{chainLabel}</span>
+                </div>
+
+                {health?.chain && (
+                  <>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-ink-muted">Chain Mode</span>
+                      <span className="font-mono text-[11px] font-semibold uppercase text-ink">
+                        {health.chain.mode}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-ink-muted">Registry Contract</span>
+                      <span className="font-mono text-[11px] text-ink" title={health.chain.address}>
+                        {short(health.chain.address)}
+                      </span>
+                    </div>
+
+                    {health.chain.blockNumber && (
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-ink-muted">Sync Block</span>
+                        <span className="font-mono text-[11px] text-ink">
+                          #{health.chain.blockNumber}
+                        </span>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                <div className="pt-2 border-t border-line space-y-1.5">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-ink-faint">
+                    Switch Network
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        switchToChain('0x7a69', 'Hardhat Localhost', 'http://127.0.0.1:8545')
+                      }
+                      className={`flex-1 rounded-xl py-1.5 text-xs font-semibold border transition ${
+                        isLocalChain
+                          ? 'border-lime-500 bg-lime-500/10 text-ink'
+                          : 'border-line bg-white hover:bg-night/5 text-ink'
+                      }`}
+                    >
+                      Localhost (31337)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        switchToChain('0xaa36a7', 'Sepolia Testnet', 'https://rpc.sepolia.org')
+                      }
+                      className={`flex-1 rounded-xl py-1.5 text-xs font-semibold border transition ${
+                        isSepolia
+                          ? 'border-lime-500 bg-lime-500/10 text-ink'
+                          : 'border-line bg-white hover:bg-night/5 text-ink'
+                      }`}
+                    >
+                      Sepolia (11155111)
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
     );
   }
 
@@ -613,6 +803,22 @@ function ChartIcon(p) {
   return (
     <NavIcon {...p}>
       <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" {...S} />
+    </NavIcon>
+  );
+}
+function HistoryIcon(p) {
+  return (
+    <NavIcon {...p}>
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" {...S} />
+      <path d="M3 3v5h5M12 7v5l4 2" {...S} />
+    </NavIcon>
+  );
+}
+function ShieldIcon(p) {
+  return (
+    <NavIcon {...p}>
+      <path d="M12 3 4 7v5c0 4.4 3.3 8.5 8 9.5 4.7-1 8-5.1 8-9.5V7l-8-4Z" {...S} />
+      <path d="m9 12 2 2 4-4" {...S} />
     </NavIcon>
   );
 }
