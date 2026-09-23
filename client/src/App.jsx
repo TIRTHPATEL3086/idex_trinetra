@@ -5,6 +5,14 @@ import { getHealth, shortHash } from './lib/api.js';
 import { useAuth, ROLE_UI, initialsOf } from './lib/auth.jsx';
 import { RequireAuth, RequireCap } from './components/RequireAuth.jsx';
 import Logo from './components/Logo.jsx';
+import {
+  CheckIcon,
+  CloseIcon,
+  CopyIcon,
+  ShieldIcon as ShieldGlyph,
+  SignOutIcon,
+} from './components/icons.jsx';
+import Landing from './pages/Landing.jsx';
 import Login from './pages/Login.jsx';
 import Assets from './pages/Assets.jsx';
 import Decrypt from './pages/Decrypt.jsx';
@@ -13,10 +21,11 @@ import Timeline from './pages/Timeline.jsx';
 import Robustness from './pages/Robustness.jsx';
 import History from './pages/History.jsx';
 import PqcEnroll from './pages/PqcEnroll.jsx';
+import Inspect from './pages/Inspect.jsx';
 
 /**
- * Application shell — a white, rounded app card sitting on a dark olive canvas,
- * with a lime accent and a chunky rounded logo, matching the reference design.
+ * Application shell — a white, large-radius app panel on a warm cream canvas,
+ * with a coral accent and a dark navigation rail, following the nomu reference.
  *
  * Responsive contract (holds from 320px up):
  *   - below lg the sidebar is an off-canvas drawer opened from the top bar;
@@ -32,18 +41,20 @@ import PqcEnroll from './pages/PqcEnroll.jsx';
  * a hidden link and a refused route can never disagree.
  */
 const NAV = [
-  { to: '/assets',   label: 'Documents',  icon: DocIcon,        cap: 'assets:read' },
-  { to: '/decrypt',  label: 'Decrypt',     icon: KeyIcon,        cap: 'decrypt:self' },
-  { to: '/trace',    label: 'Trace',       icon: SearchIcon,     cap: 'trace:run' },
-  { to: '/timeline', label: 'Timeline',    icon: ClockIcon,      cap: 'audit:own' },
-  { to: '/history',  label: 'History',     icon: HistoryIcon,    cap: 'audit:read' },
-  { to: '/enroll',   label: 'PQC Enroll',  icon: ShieldIcon,     cap: 'assets:upload' },
-  { to: '/robustness', label: 'Robustness', icon: ChartIcon,    cap: 'metrics:read' },
+  { to: '/assets', label: 'Documents', icon: DocIcon, cap: 'assets:read' },
+  { to: '/decrypt', label: 'Decrypt', icon: KeyIcon, cap: 'decrypt:self' },
+  { to: '/trace', label: 'Trace', icon: SearchIcon, cap: 'trace:run' },
+  { to: '/inspect', label: 'Watermark', icon: FingerprintIcon, cap: 'decrypt:any' },
+  { to: '/timeline', label: 'Timeline', icon: ClockIcon, cap: 'audit:own' },
+  { to: '/history', label: 'History', icon: HistoryIcon, cap: 'audit:read' },
+  { to: '/enroll', label: 'PQC Enroll', icon: ShieldIcon, cap: 'assets:upload' },
+  { to: '/robustness', label: 'Robustness', icon: ChartIcon, cap: 'metrics:read' },
 ];
 
 export default function App() {
   return (
     <Routes>
+      <Route path="/" element={<LandingGate />} />
       <Route path="/login" element={<Login />} />
       <Route
         path="/*"
@@ -55,6 +66,19 @@ export default function App() {
       />
     </Routes>
   );
+}
+
+/**
+ * `/` is public. Someone already signed in has no use for the pitch, so they go
+ * straight to whichever screen their role lands on — but only once the
+ * boot-time session check has answered, or a returning user would see the
+ * landing page flash before being bounced.
+ */
+function LandingGate() {
+  const { user, state } = useAuth();
+  if (state === 'checking') return null;
+  if (user) return <Navigate to={user.landing || '/assets'} replace />;
+  return <Landing />;
 }
 
 function Shell() {
@@ -75,8 +99,9 @@ function Shell() {
   }, [navOpen]);
 
   return (
-    <div className="h-screen overflow-hidden bg-olive p-1.5 [height:100dvh] sm:p-2.5 xl:p-3">
-      <div className="mx-auto flex h-full w-full max-w-[1480px] flex-col overflow-hidden rounded-2xl bg-white shadow-app sm:rounded-3xl">
+    <div className="overflow-hidden bg-canvas p-1.5 [height:100dvh] sm:p-3 xl:p-4">
+      {/* The reference's radius: 1.5rem on mobile, 3.125rem from lg up. */}
+      <div className="mx-auto flex h-full w-full max-w-[1440px] flex-col overflow-hidden rounded-panel border border-line bg-white shadow-app lg:rounded-[3.125rem]">
         {/* ---- top bar (fixed) ---- */}
         <header className="flex shrink-0 items-center gap-2.5 border-b border-line px-3.5 py-2.5 sm:px-6">
           <button
@@ -111,11 +136,11 @@ function Shell() {
               type="button"
               aria-label="Close navigation"
               onClick={() => setNavOpen(false)}
-              className="fixed inset-0 z-30 bg-night/40 backdrop-blur-sm lg:hidden"
+              className="fixed inset-0 z-30 bg-noir/40 backdrop-blur-sm lg:hidden"
             />
           )}
 
-          <Sidebar health={health} open={navOpen} can={can} user={user} />
+          <Sidebar open={navOpen} can={can} />
 
           <main className="scroll-slim min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3.5 py-3 sm:px-5 sm:py-3.5 xl:px-6">
             <div className="mx-auto w-full max-w-6xl">
@@ -130,11 +155,7 @@ function Shell() {
                   path="/assets"
                   element={
                     <RequireCap capability="assets:read">
-                      {user?.role === 'OFFICER' ? (
-                        <Navigate to="/decrypt" replace />
-                      ) : (
-                        <Assets />
-                      )}
+                      <Assets />
                     </RequireCap>
                   }
                 />
@@ -143,6 +164,14 @@ function Shell() {
                   element={
                     <RequireCap capability="decrypt:self">
                       <Decrypt />
+                    </RequireCap>
+                  }
+                />
+                <Route
+                  path="/inspect"
+                  element={
+                    <RequireCap capability="decrypt:any">
+                      <Inspect />
                     </RequireCap>
                   }
                 />
@@ -196,22 +225,22 @@ function Shell() {
   );
 }
 
-function Sidebar({ health, open, can, user }) {
-  const items = NAV.filter((n) => {
-    if (n.to === '/assets' && user?.role === 'OFFICER') return false;
-    return can(n.cap);
-  });
+function Sidebar({ open, can }) {
+  // Capability alone decides what appears here. A hard-coded role exception
+  // would put the menu and the router out of step with the server, which is
+  // the one thing this list exists to prevent.
+  const items = NAV.filter((n) => can(n.cap));
   return (
     <aside
-      className={`scroll-slim fixed inset-y-0 left-0 z-40 flex w-64 max-w-[82vw] flex-col overflow-y-auto border-r border-line bg-white p-3.5 transition-transform duration-200 lg:static lg:z-auto lg:w-56 lg:max-w-none lg:translate-x-0 ${
+      className={`scroll-slim scroll-dark fixed inset-y-0 left-0 z-40 flex w-64 max-w-[82vw] flex-col overflow-y-auto bg-noir-deep p-4 text-white transition-transform duration-200 lg:static lg:z-auto lg:my-3 lg:ml-3 lg:w-64 lg:max-w-none lg:translate-x-0 lg:rounded-3xl ${
         open ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
       }`}
     >
       <div className="mb-4 flex items-center justify-between lg:hidden">
-        <Logo size="sm" />
+        <Logo size="sm" onDark />
       </div>
 
-      <div className="mb-2 px-2 text-[10px] font-bold uppercase tracking-widest text-ink-faint">
+      <div className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-widest text-white/40">
         Menu
       </div>
       <nav className="space-y-1">
@@ -220,8 +249,10 @@ function Sidebar({ health, open, can, user }) {
             key={to}
             to={to}
             className={({ isActive }) =>
-              `group flex items-center gap-2.5 rounded-full px-3.5 py-2 text-xs sm:text-[13px] font-semibold transition ${
-                isActive ? 'bg-night text-white' : 'text-ink-muted hover:bg-line/60 hover:text-ink'
+              `group flex items-center gap-3 rounded-full px-4 py-2.5 text-sm font-semibold transition ${
+                isActive
+                  ? 'bg-accent text-noir shadow-[0_8px_22px_-10px_rgba(255,255,255,0.75)]'
+                  : 'text-white/65 hover:bg-white/10 hover:text-white'
               }`
             }
           >
@@ -237,8 +268,8 @@ function Sidebar({ health, open, can, user }) {
 
       {can('trace:run') && (
         <div className="mt-auto pt-6">
-          <NavLink to="/trace" className="btn-dark w-full">
-            <SearchIcon light />
+          <NavLink to="/trace" className="btn-accent w-full">
+            <SearchIcon />
             Trace a leak
           </NavLink>
         </div>
@@ -263,74 +294,6 @@ function useHealth() {
     };
   }, []);
   return health;
-}
-
-function healthTone(health) {
-  if (!health) return { dot: 'bg-ink-faint', label: '…', tone: 'text-ink-faint' };
-  if (!health.ok) return { dot: 'bg-inconclusive', label: 'API down', tone: 'text-inconclusive' };
-  if (health.warnings?.length)
-    return { dot: 'bg-probable', label: 'Degraded', tone: 'text-probable' };
-  return { dot: 'bg-attributed', label: 'All systems go', tone: 'text-attributed' };
-}
-
-function HealthChip({ health }) {
-  const { dot, label, tone } = healthTone(health);
-  return (
-    <span className="hidden items-center gap-2 rounded-full border border-line bg-white px-3 py-2 text-xs font-bold sm:inline-flex">
-      <span className={`h-2 w-2 rounded-full ${dot}`} />
-      <span className={tone}>{label}</span>
-    </span>
-  );
-}
-
-function HealthBadge({ health }) {
-  if (!health) return null;
-  const { dot, label, tone } = healthTone(health);
-  return (
-    <div className="rounded-2xl border border-line/80 bg-white p-3.5 shadow-sm">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs font-bold">
-          <span className={`h-2.5 w-2.5 rounded-full ${dot} animate-pulse`} />
-          <span className={tone}>{label}</span>
-        </div>
-        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-mono font-bold text-ink-muted uppercase">
-          NODE TELEMETRY
-        </span>
-      </div>
-      {health.ok && (
-        <dl className="mono mt-2.5 space-y-1.5 divide-y divide-line/40 text-[11px] text-ink-muted">
-          <div className="pt-1">
-            <Row k="DATABASE" v={health.db?.toUpperCase() || 'UP'} good={health.db === 'up'} />
-          </div>
-          <div className="pt-1">
-            <Row
-              k="LEDGER"
-              v={health.chainMode === 'sepolia' ? 'SEPOLIA (ETH)' : health.chainMode?.toUpperCase()}
-              good={health.chain?.connected}
-            />
-          </div>
-          <div className="pt-1 flex items-center justify-between">
-            <dt className="text-ink-faint">PQC ALGO</dt>
-            <dd className="text-emerald-700 font-semibold">ML-KEM / DSA</dd>
-          </div>
-          {health.warnings?.length > 0 && (
-            <div className="pt-1 text-[10px] text-probable font-medium">
-              {health.warnings.length} warning(s) flagged
-            </div>
-          )}
-        </dl>
-      )}
-    </div>
-  );
-}
-
-function Row({ k, v, good }) {
-  return (
-    <div className="flex items-center justify-between">
-      <dt className="text-ink-faint">{k}</dt>
-      <dd className={good ? 'font-semibold text-attributed' : 'font-semibold text-inconclusive'}>{v}</dd>
-    </div>
-  );
 }
 
 /* -------------------------------------------------------------- account --- */
@@ -366,20 +329,20 @@ function AccountMenu({ user }) {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Account details and session"
-        className="group flex items-center gap-2.5 rounded-full border border-line/80 bg-white/90 px-2 py-1.5 shadow-sm backdrop-blur-md transition-all duration-200 hover:border-lime-deep hover:shadow-md sm:pr-3 cursor-pointer"
+        className="group flex items-center gap-2.5 rounded-full border border-line/80 bg-white/90 px-2 py-1.5 shadow-sm backdrop-blur-md transition-all duration-200 hover:border-accent-deep hover:shadow-md sm:pr-3 cursor-pointer"
       >
         <div className="relative">
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-tr from-night to-[#2c3017] text-xs font-extrabold text-lime ring-2 ring-lime/30 transition group-hover:ring-lime">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-tr from-noir to-[#1b232e] text-xs font-extrabold text-accent ring-2 ring-accent/30 transition group-hover:ring-accent">
             {initialsOf(user.name)}
           </span>
-          <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" />
+          <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-attributed" />
         </div>
         <span className="hidden text-left sm:block">
           <span className="block text-xs font-bold leading-tight text-ink group-hover:text-black">
             {user.name}
           </span>
           <span className="flex items-center gap-1 text-[10px] font-semibold text-ink-muted">
-            <span className="h-1.5 w-1.5 rounded-full bg-lime-deep" />
+            <span className="h-1.5 w-1.5 rounded-full bg-accent-deep" />
             {meta.short || user.role}
           </span>
         </span>
@@ -388,7 +351,7 @@ function AccountMenu({ user }) {
       {/* ── Centered Modal Popup with Partial Background Blur ── */}
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-night/50 backdrop-blur-md transition-all duration-200 animate-in fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-noir/50 backdrop-blur-md transition-all duration-200 animate-in fade-in"
           onClick={handleClose}
         >
           <div
@@ -398,7 +361,7 @@ function AccountMenu({ user }) {
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-line/70 pb-4">
               <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="h-2 w-2 rounded-full bg-attributed animate-pulse" />
                 <h3 className="text-sm font-extrabold tracking-wide uppercase text-ink-muted">
                   Account & Clearance Profile
                 </h3>
@@ -406,25 +369,25 @@ function AccountMenu({ user }) {
               <button
                 type="button"
                 onClick={handleClose}
-                className="grid h-8 w-8 place-items-center rounded-full text-ink-muted hover:bg-night/5 hover:text-ink transition font-bold"
+                className="grid h-8 w-8 place-items-center rounded-full text-ink-muted hover:bg-noir/5 hover:text-ink transition font-bold"
                 aria-label="Close popup"
               >
-                ✕
+                <CloseIcon size={14} />
               </button>
             </div>
 
             {/* User Profile Overview */}
-            <div className="flex items-center gap-4 rounded-2xl bg-gradient-to-br from-[#fcfcf9] to-slate-50 p-4 border border-line/80 shadow-xs">
+            <div className="flex items-center gap-4 rounded-2xl bg-gradient-to-br from-[#fcfcf9] to-muted p-4 border border-line/80 shadow-xs">
               <div className="relative shrink-0">
-                <span className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-tr from-night to-[#282b15] text-base font-extrabold text-lime shadow-md ring-2 ring-lime/40">
+                <span className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-tr from-noir to-[#1b232e] text-base font-extrabold text-accent shadow-md ring-2 ring-accent/40">
                   {initialsOf(user.name)}
                 </span>
-                <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-white bg-emerald-500" />
+                <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-white bg-attributed" />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h4 className="text-base font-extrabold text-ink truncate">{user.name}</h4>
-                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                  <span className="rounded-full bg-attributed-tint px-2 py-0.5 text-[10px] font-bold text-attributed-deep">
                     ACTIVE
                   </span>
                 </div>
@@ -433,7 +396,8 @@ function AccountMenu({ user }) {
                   <span className="font-bold text-ink">Dept: {user.dept}</span>
                   <span className="text-ink-faint">·</span>
                   <span className={`pill !text-[10px] !py-0.5 ${meta.badge ?? 'bg-line text-ink'}`}>
-                    🛡️ {meta.short || user.role}
+                    <ShieldGlyph size={12} />
+                    {meta.short || user.role}
                   </span>
                 </div>
               </div>
@@ -441,19 +405,19 @@ function AccountMenu({ user }) {
 
             {/* Clearance & Role Capability Blurb */}
             {meta.blurb && (
-              <p className="rounded-2xl bg-slate-50 p-3 text-xs leading-relaxed text-ink-muted border border-line/60">
+              <p className="rounded-2xl bg-muted p-3 text-xs leading-relaxed text-ink-muted border border-line/60">
                 {meta.blurb}
               </p>
             )}
 
             {/* On-Chain Sepolia Identity Card */}
-            <div className="rounded-2xl border border-line/70 bg-gradient-to-br from-[#fbfbf7] to-slate-50 p-4 space-y-2 shadow-xs">
+            <div className="rounded-2xl border border-line/70 bg-gradient-to-br from-[#faf8f5] to-muted p-4 space-y-2 shadow-xs">
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-attributed" />
                   On-Chain Cryptographic Identity
                 </span>
-                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full">
+                <span className="text-[10px] font-bold text-attributed-deep bg-attributed-tint/70 px-2 py-0.5 rounded-full">
                   Sepolia Zero-PII
                 </span>
               </div>
@@ -467,13 +431,17 @@ function AccountMenu({ user }) {
                 <button
                   type="button"
                   onClick={copyHandle}
-                  className="shrink-0 flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-ink-muted transition hover:bg-lime hover:text-night"
+                  className="shrink-0 flex items-center gap-1 rounded-lg bg-muted px-2.5 py-1 text-[11px] font-bold text-ink-muted transition hover:bg-accent hover:text-noir"
                   title="Copy full 32-byte on-chain userRef"
                 >
                   {copied ? (
-                    <span className="text-emerald-700 font-extrabold">✓ Copied</span>
+                    <span className="flex items-center gap-1 font-bold text-attributed-deep">
+                      <CheckIcon size={12} /> Copied
+                    </span>
                   ) : (
-                    <span>Copy ⧉</span>
+                    <span className="flex items-center gap-1">
+                      <CopyIcon size={12} /> Copy
+                    </span>
                   )}
                 </button>
               </div>
@@ -486,26 +454,27 @@ function AccountMenu({ user }) {
                   <button
                     type="button"
                     onClick={() => setConfirmSignOut(true)}
-                    className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 py-3 text-xs font-extrabold text-rose-700 hover:bg-rose-100 hover:border-rose-300 transition shadow-xs cursor-pointer"
+                    className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-danger-bright bg-danger-tint py-3 text-xs font-extrabold text-danger-deep hover:bg-danger-tint hover:border-danger-bright transition shadow-xs cursor-pointer"
                   >
                     <span>Sign out of session</span>
-                    <span className="text-sm">↳</span>
+                    <SignOutIcon size={14} />
                   </button>
                   <button
                     type="button"
                     onClick={handleClose}
-                    className="rounded-2xl border border-line bg-white px-4 py-3 text-xs font-bold text-ink-muted hover:bg-night/5 hover:text-ink transition cursor-pointer"
+                    className="rounded-2xl border border-line bg-white px-4 py-3 text-xs font-bold text-ink-muted hover:bg-noir/5 hover:text-ink transition cursor-pointer"
                   >
                     Cancel
                   </button>
                 </div>
               ) : (
-                <div className="rounded-2xl border border-rose-300 bg-rose-50/90 p-4 space-y-3 animate-in fade-in">
-                  <div className="text-xs font-bold text-rose-900">
+                <div className="rounded-2xl border border-danger-bright bg-danger-tint/90 p-4 space-y-3 animate-in fade-in">
+                  <div className="text-xs font-bold text-danger-deep">
                     Are you sure you want to end your security session?
                   </div>
-                  <p className="text-[11px] text-rose-700">
-                    Signing out terminates your authenticated enclave session. You will need to re-enter your clearance credentials to access protected documents.
+                  <p className="text-[11px] text-danger-deep">
+                    Signing out terminates your authenticated enclave session. You will need to
+                    re-enter your clearance credentials to access protected documents.
                   </p>
                   <div className="flex items-center gap-2">
                     <button
@@ -514,14 +483,14 @@ function AccountMenu({ user }) {
                         handleClose();
                         signOut();
                       }}
-                      className="flex-1 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold py-2.5 text-xs shadow-md transition hover:scale-[1.01] cursor-pointer"
+                      className="flex-1 rounded-xl bg-danger-deep hover:bg-danger-deep text-white font-extrabold py-2.5 text-xs shadow-md transition hover:scale-[1.01] cursor-pointer"
                     >
                       Confirm Sign Out
                     </button>
                     <button
                       type="button"
                       onClick={() => setConfirmSignOut(false)}
-                      className="rounded-xl border border-line bg-white px-4 py-2.5 text-xs font-bold text-ink hover:bg-night/5 transition cursor-pointer"
+                      className="rounded-xl border border-line bg-white px-4 py-2.5 text-xs font-bold text-ink hover:bg-noir/5 transition cursor-pointer"
                     >
                       Stay Signed In
                     </button>
@@ -536,30 +505,6 @@ function AccountMenu({ user }) {
   );
 }
 
-/** The role reminder pinned above the health badge in the sidebar. */
-function RoleCard({ user }) {
-  if (!user) return null;
-  const meta = ROLE_UI[user.role] ?? {};
-  return (
-    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#1b1d14] via-[#14150e] to-night p-3.5 text-white shadow-md border border-white/10">
-      <div className="flex items-center justify-between gap-2">
-        <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-lime/90">
-          <span className="h-1.5 w-1.5 rounded-full bg-lime animate-pulse" />
-          Enclave Session
-        </span>
-        <span className="rounded-full bg-lime/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-lime">
-          {meta.short || user.role}
-        </span>
-      </div>
-      <div className="mt-2 truncate text-xs font-bold text-white tracking-wide">{user.name}</div>
-      <div className="flex items-center justify-between text-[11px] text-white/60 mt-0.5">
-        <span className="truncate">{user.dept || 'HQ Operations'}</span>
-        <span className="mono text-[10px] text-white/40 font-semibold">U-00{user.id}</span>
-      </div>
-    </div>
-  );
-}
-
 /* ------------------------------------------------------------- wallet ----- */
 
 const short = (a) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '');
@@ -571,6 +516,7 @@ function WalletButton({ health }) {
   const [busy, setBusy] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [switchError, setSwitchError] = useState(null);
 
   useEffect(() => {
     const eth = window.ethereum;
@@ -618,8 +564,8 @@ function WalletButton({ health }) {
             method: 'wallet_switchEthereumChain',
             params: [{ chainId: '0x7a69' }], // 31337 in hex
           });
-        } catch (switchError) {
-          if (switchError.code === 4902) {
+        } catch (err) {
+          if (err?.code === 4902) {
             await eth.request({
               method: 'wallet_addEthereumChain',
               params: [
@@ -641,28 +587,53 @@ function WalletButton({ health }) {
     }
   }
 
+  /**
+   * Ask the wallet to change network.
+   *
+   * Three things this has to get right. It must not ask to switch to the
+   * chain the wallet is already on — that is a no-op the extension can choke
+   * on. It must only offer to *add* a chain the wallet genuinely does not
+   * know: Sepolia ships with MetaMask, and adding a built-in network is
+   * refused. And it must not swallow the result, or a refusal looks
+   * identical to success.
+   */
   async function switchToChain(targetHex, name, rpc) {
     const eth = window.ethereum;
     if (!eth) return;
+    setSwitchError(null);
+
+    if (chainId && chainId.toLowerCase() === targetHex.toLowerCase()) return;
+
     try {
       await eth.request({
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: targetHex }],
       });
     } catch (err) {
-      if (err.code === 4902 && rpc) {
-        await eth.request({
-          method: 'wallet_addEthereumChain',
-          params: [
-            {
-              chainId: targetHex,
-              chainName: name,
-              rpcUrls: [rpc],
-              nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
-            },
-          ],
-        });
+      // 4902 means the wallet has never heard of this chain, which for us
+      // only ever happens with a local dev node.
+      if (err?.code === 4902 && rpc) {
+        try {
+          await eth.request({
+            method: 'wallet_addEthereumChain',
+            params: [
+              {
+                chainId: targetHex,
+                chainName: name,
+                rpcUrls: [rpc],
+                nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+              },
+            ],
+          });
+        } catch (addErr) {
+          if (addErr?.code !== 4001) {
+            setSwitchError(addErr?.message || `Could not add ${name}.`);
+          }
+        }
+        return;
       }
+      if (err?.code === 4001) return; // the user declined; not an error
+      setSwitchError(err?.message || `Could not switch to ${name}.`);
     }
   }
 
@@ -692,7 +663,7 @@ function WalletButton({ health }) {
             }`}
           />
           <span className="mono">{short(account)}</span>
-          <span className="hidden md:inline-block text-[10px] text-ink-muted bg-night/5 px-2 py-0.5 rounded-full font-medium">
+          <span className="hidden md:inline-block text-[10px] text-ink-muted bg-noir/5 px-2 py-0.5 rounded-full font-medium">
             {chainLabel}
           </span>
         </button>
@@ -728,7 +699,7 @@ function WalletButton({ health }) {
                   <div className="text-[10px] font-bold uppercase tracking-wider text-ink-faint">
                     Wallet Account
                   </div>
-                  <div className="mt-1 flex items-center justify-between gap-1 rounded-xl bg-night/5 p-2 font-mono text-[11px] text-ink">
+                  <div className="mt-1 flex items-center justify-between gap-1 rounded-xl bg-noir/5 p-2 font-mono text-[11px] text-ink">
                     <span className="truncate">{account}</span>
                     <button
                       type="button"
@@ -737,9 +708,9 @@ function WalletButton({ health }) {
                         setCopied(true);
                         setTimeout(() => setCopied(false), 2000);
                       }}
-                      className="shrink-0 rounded px-1.5 py-0.5 text-[10px] bg-white border border-line font-sans font-semibold hover:bg-night/10"
+                      className="shrink-0 rounded px-1.5 py-0.5 text-[10px] bg-white border border-line font-sans font-semibold hover:bg-noir/10"
                     >
-                      {copied ? '✓' : 'Copy'}
+                      {copied ? <CheckIcon size={12} /> : 'Copy'}
                     </button>
                   </div>
                 </div>
@@ -780,6 +751,11 @@ function WalletButton({ health }) {
                   <div className="text-[10px] font-bold uppercase tracking-wider text-ink-faint">
                     Switch Network
                   </div>
+                  {switchError && (
+                    <p className="rounded-xl bg-danger-tint px-2.5 py-2 text-[11px] leading-relaxed text-danger-deep">
+                      {switchError}
+                    </p>
+                  )}
                   <div className="flex gap-2">
                     <button
                       type="button"
@@ -788,21 +764,19 @@ function WalletButton({ health }) {
                       }
                       className={`flex-1 rounded-xl py-1.5 text-xs font-semibold border transition ${
                         isLocalChain
-                          ? 'border-lime-500 bg-lime-500/10 text-ink'
-                          : 'border-line bg-white hover:bg-night/5 text-ink'
+                          ? 'border-accent bg-accent/10 text-ink'
+                          : 'border-line bg-white hover:bg-noir/5 text-ink'
                       }`}
                     >
                       Localhost (31337)
                     </button>
                     <button
                       type="button"
-                      onClick={() =>
-                        switchToChain('0xaa36a7', 'Sepolia Testnet', 'https://rpc.sepolia.org')
-                      }
+                      onClick={() => switchToChain('0xaa36a7', 'Sepolia', null)}
                       className={`flex-1 rounded-xl py-1.5 text-xs font-semibold border transition ${
                         isSepolia
-                          ? 'border-lime-500 bg-lime-500/10 text-ink'
-                          : 'border-line bg-white hover:bg-night/5 text-ink'
+                          ? 'border-accent bg-accent/10 text-ink'
+                          : 'border-line bg-white hover:bg-noir/5 text-ink'
                       }`}
                     >
                       Sepolia (11155111)
@@ -827,65 +801,6 @@ function WalletButton({ health }) {
 
 /* ----------------------------------------------------- notifications ------ */
 
-/** Bell with a popover of live system status / warnings. */
-function NotificationsBell({ health }) {
-  const [open, setOpen] = useState(false);
-  const warnings = health?.warnings ?? [];
-  const count = warnings.length;
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        className="btn-icon relative"
-        aria-label="Notifications"
-        onClick={() => setOpen((o) => !o)}
-      >
-        <BellIcon />
-        {count > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 grid h-4 w-4 place-items-center rounded-full bg-probable text-[9px] font-bold text-white">
-            {count}
-          </span>
-        )}
-      </button>
-
-      {open && (
-        <>
-          <button
-            type="button"
-            aria-label="Close"
-            className="fixed inset-0 z-40 cursor-default"
-            onClick={() => setOpen(false)}
-          />
-          <div className="absolute right-0 z-50 mt-2 w-72 rounded-2xl border border-line bg-white p-3 shadow-panel">
-            <div className="mb-2 px-1 text-xs font-bold uppercase tracking-wide text-ink-faint">
-              System status
-            </div>
-            {count === 0 ? (
-              <div className="flex items-center gap-2 rounded-xl bg-attributed/10 px-3 py-2.5 text-sm text-attributed">
-                <span className="h-2 w-2 rounded-full bg-attributed" />
-                All systems operational
-              </div>
-            ) : (
-              <ul className="space-y-1.5">
-                {warnings.map((w, i) => (
-                  <li
-                    key={i}
-                    className="flex items-start gap-2 rounded-xl bg-probable/10 px-3 py-2 text-xs text-ink"
-                  >
-                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-probable" />
-                    <span>{w}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
 /* ----------------------------------------------------------------- icons -- */
 const S = {
   stroke: 'currentColor',
@@ -894,18 +809,30 @@ const S = {
   strokeLinejoin: 'round',
 };
 
-function NavIcon({ children, active, light }) {
+/** Icons inherit their colour from the control, so one rule covers the light
+    top bar, the dark rail, and the coral active pill. */
+function NavIcon({ children }) {
   return (
     <svg
       width="18"
       height="18"
       viewBox="0 0 24 24"
       fill="none"
-      className={light || active ? 'text-current' : 'text-ink-faint group-hover:text-ink-muted'}
+      className="text-current"
       aria-hidden="true"
     >
       {children}
     </svg>
+  );
+}
+function FingerprintIcon(p) {
+  return (
+    <NavIcon {...p}>
+      <path d="M5 12a7 7 0 0 1 14 0" {...S} />
+      <path d="M8 12.4a4 4 0 0 1 8 0c0 2.2-.3 4.3-.9 6.3" {...S} />
+      <path d="M11 12.6a1 1 0 0 1 2 0c0 3-.5 5.9-1.4 8.6" {...S} />
+      <path d="M5.4 16.5c.4 1.4.5 2.6.4 3.9" {...S} />
+    </NavIcon>
   );
 }
 function DocIcon(p) {
@@ -970,24 +897,17 @@ function MenuIcon() {
     </svg>
   );
 }
-function BellIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6ZM9.5 20a2.5 2.5 0 0 0 5 0" {...S} />
-    </svg>
-  );
-}
 function WalletIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
         d="M3 7h15a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"
-        stroke="#fff"
+        stroke="currentColor"
         strokeWidth="1.8"
       />
       <path
         d="M3 7V6a2 2 0 0 1 2-2h11M16 13h2"
-        stroke="#fff"
+        stroke="currentColor"
         strokeWidth="1.8"
         strokeLinecap="round"
       />

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getAssets, uploadAsset, getUsers } from '../lib/api.js';
+import { getAssets, uploadAsset, getUsers, revealAllotment } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
+import { CheckIcon, CloseIcon, CopyIcon, EyeIcon, EyeOffIcon } from '../components/icons.jsx';
+import Select from '../components/Select.jsx';
 
 /**
  * The document register.
@@ -36,20 +38,21 @@ export default function Assets() {
       : assets
     : [];
 
-  const filteredAssets = classificationFilter === 'ALL'
-    ? officerAssets
-    : officerAssets.filter((a) => a.classification === classificationFilter);
+  const filteredAssets =
+    classificationFilter === 'ALL'
+      ? officerAssets
+      : officerAssets.filter((a) => a.classification === classificationFilter);
 
   return (
     <section className="space-y-3.5">
       <Header
+        eyebrow="Registry"
         title="Protected documents"
-        subtitle="Encrypted at rest with NIST ML-KEM-768 broadcast encryption. Every decryption is watermarked and anchored on-chain."
         action={
           mayUpload ? (
             <button
               type="button"
-              className="btn-lime"
+              className="btn-accent"
               onClick={() => {
                 setDroppedInitialFile(null);
                 setUploadOpen(true);
@@ -90,12 +93,12 @@ export default function Assets() {
           }}
           className={`cursor-pointer rounded-2xl border-2 border-dashed p-3 sm:p-3.5 text-center transition-all duration-200 ${
             pageDragging
-              ? 'border-lime-deep bg-lime/20 scale-[1.01] shadow-lg ring-4 ring-lime/30'
-              : 'border-line/80 bg-gradient-to-r from-[#fbfbf7] to-white hover:border-lime-deep hover:bg-lime/5'
+              ? 'border-accent-deep bg-accent/20 scale-[1.01] shadow-lg ring-4 ring-accent/30'
+              : 'border-line/80 bg-gradient-to-r from-[#faf8f5] to-white hover:border-accent-deep hover:bg-accent/5'
           }`}
         >
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-lime text-night shadow-sm">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5">
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-accent text-noir shadow-sm">
               <PlusIcon />
             </div>
             <div className="text-center sm:text-left">
@@ -126,9 +129,7 @@ export default function Assets() {
       )}
 
       {!error && filteredAssets.length === 0 && officerAssets.length > 0 && (
-        <Notice>
-          No documents found with classification "{classificationFilter}".
-        </Notice>
+        <Notice>No documents found with classification "{classificationFilter}".</Notice>
       )}
 
       {!error && officerAssets.length > 0 && (
@@ -192,26 +193,28 @@ function DragDropInput({ file, onFileChange }) {
   return (
     <div className="space-y-1.5">
       <span className="block text-xs font-bold uppercase tracking-wide text-ink-faint">
-        Document PDF or Image <span className="text-rose-500">*</span>
+        Document PDF or Image <span className="text-danger">*</span>
       </span>
       {file ? (
-        <div className="flex items-center justify-between rounded-2xl border-2 border-lime/60 bg-lime/10 p-3.5 transition">
+        <div className="flex items-center justify-between rounded-2xl border-2 border-accent/60 bg-accent/10 p-3.5 transition">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-night text-lime font-extrabold text-xs">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-noir text-accent font-extrabold text-xs">
               {file.name.endsWith('.pdf') ? 'PDF' : 'IMG'}
             </div>
             <div className="min-w-0">
               <div className="truncate text-xs font-bold text-ink">{file.name}</div>
-              <div className="text-[11px] text-ink-muted">{formatBytes(file.size)} · Ready to encrypt</div>
+              <div className="text-[11px] text-ink-muted">
+                {formatBytes(file.size)} · Ready to encrypt
+              </div>
             </div>
           </div>
           <button
             type="button"
             onClick={() => onFileChange(null)}
-            className="rounded-lg p-1.5 text-xs text-ink-muted hover:bg-white hover:text-rose-600 transition"
+            className="rounded-lg p-1.5 text-xs text-ink-muted hover:bg-white hover:text-danger-deep transition"
             title="Remove file"
           >
-            ✕
+            <CloseIcon size={14} />
           </button>
         </div>
       ) : (
@@ -222,8 +225,8 @@ function DragDropInput({ file, onFileChange }) {
           onClick={() => inputRef.current?.click()}
           className={`cursor-pointer rounded-2xl border-2 border-dashed p-6 text-center transition-all duration-200 ${
             isOver
-              ? 'border-lime-deep bg-lime/15 scale-[1.01] shadow-inner'
-              : 'border-line hover:border-lime-deep bg-[#fbfbf7] hover:bg-lime/5'
+              ? 'border-accent-deep bg-accent/15 scale-[1.01] shadow-inner'
+              : 'border-line hover:border-accent-deep bg-[#faf8f5] hover:bg-accent/5'
           }`}
         >
           <input
@@ -235,8 +238,15 @@ function DragDropInput({ file, onFileChange }) {
               if (e.target.files?.[0]) onFileChange(e.target.files[0]);
             }}
           />
-          <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-lime text-night mb-2 shadow-sm">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+          <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-accent text-noir mb-2 shadow-sm">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+            >
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
               <polyline points="17 8 12 3 7 8" />
               <line x1="12" y1="3" x2="12" y2="15" />
@@ -257,9 +267,7 @@ function DragDropInput({ file, onFileChange }) {
 /* -- upload modal ----------------------------------------------------------- */
 
 function UploadModal({ initialFile, onClose, onDone }) {
-  const [title, setTitle] = useState(
-    initialFile ? initialFile.name.replace(/\.[^/.]+$/, '') : ''
-  );
+  const [title, setTitle] = useState(initialFile ? initialFile.name.replace(/\.[^/.]+$/, '') : '');
   const [classification, setClassification] = useState('CONFIDENTIAL');
   const [file, setFile] = useState(initialFile || null);
   const [status, setStatus] = useState('idle'); // idle | working | error
@@ -270,7 +278,7 @@ function UploadModal({ initialFile, onClose, onDone }) {
   useEffect(() => {
     getUsers()
       .then((data) => {
-        const eligible = (data.users || []).filter((u) => u.active);
+        const eligible = (data.users || []).filter((u) => u.active && u.role === 'OFFICER');
         setAvailableUsers(eligible);
         setSelectedUserIds(eligible.map((u) => u.userId));
       })
@@ -298,7 +306,7 @@ function UploadModal({ initialFile, onClose, onDone }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-night/40 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 grid place-items-center bg-noir/40 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <form
@@ -309,11 +317,12 @@ function UploadModal({ initialFile, onClose, onDone }) {
         <div className="flex items-center justify-between">
           <h3 className="font-display text-xl font-extrabold text-ink">Upload a document</h3>
           <button type="button" onClick={onClose} className="btn-icon !h-8 !w-8" aria-label="Close">
-            ✕
+            <CloseIcon size={14} />
           </button>
         </div>
         <p className="text-sm text-ink-muted">
-          The file is SHA-256 hashed and encrypted with AES-256-GCM. The content key is encapsulated using NIST ML-KEM-768 for each authorized recipient.
+          The file is SHA-256 hashed and encrypted with AES-256-GCM. The content key is encapsulated
+          using NIST ML-KEM-768 for each authorized recipient.
         </p>
 
         <label className="block">
@@ -333,15 +342,16 @@ function UploadModal({ initialFile, onClose, onDone }) {
           <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-faint">
             Classification
           </span>
-          <select
-            className="input"
+          <Select
+            ariaLabel="Classification"
             value={classification}
-            onChange={(e) => setClassification(e.target.value)}
-          >
-            <option value="RESTRICTED">RESTRICTED</option>
-            <option value="CONFIDENTIAL">CONFIDENTIAL</option>
-            <option value="SECRET">SECRET</option>
-          </select>
+            onChange={setClassification}
+            options={[
+              { value: 'RESTRICTED', label: 'RESTRICTED' },
+              { value: 'CONFIDENTIAL', label: 'CONFIDENTIAL' },
+              { value: 'SECRET', label: 'SECRET' },
+            ]}
+          />
         </label>
 
         <DragDropInput
@@ -361,7 +371,7 @@ function UploadModal({ initialFile, onClose, onDone }) {
               <span className="text-xs font-bold uppercase tracking-wide text-ink-faint">
                 Authorized Recipients (ML-KEM-768)
               </span>
-              <span className="text-[11px] text-lime-deep font-semibold">
+              <span className="text-[11px] text-accent-deep font-semibold">
                 {selectedUserIds.length} of {availableUsers.length} selected
               </span>
             </div>
@@ -382,7 +392,7 @@ function UploadModal({ initialFile, onClose, onDone }) {
                             checked ? prev.filter((id) => id !== u.userId) : [...prev, u.userId]
                           );
                         }}
-                        className="rounded text-lime-deep focus:ring-lime"
+                        className="rounded text-accent-deep focus:ring-accent"
                       />
                       <span className="font-semibold">{u.name}</span>
                       <span className="text-ink-muted">· {u.dept}</span>
@@ -403,7 +413,7 @@ function UploadModal({ initialFile, onClose, onDone }) {
           </button>
           <button
             type="submit"
-            className="btn-lime flex-1"
+            className="btn-accent flex-1"
             disabled={status === 'working' || !file || !title.trim()}
           >
             {status === 'working' ? 'Encrypting & Encapsulating…' : 'Upload'}
@@ -422,19 +432,16 @@ function Overview({ assets }) {
   const decryptions = assets.reduce((sum, a) => sum + (a.decryptCount || 0), 0);
 
   return (
-    <div className="relative overflow-hidden rounded-3xl bg-night p-4 sm:p-5 text-white shadow-panel">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+    <div className="relative overflow-hidden rounded-3xl bg-noir p-6 text-white shadow-panel sm:p-7">
+      <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-lime-400">
-            <span className="h-1.5 w-1.5 rounded-full bg-lime animate-pulse" />
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-accent">
+            <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
             Registry overview
           </div>
           <div className="font-display mt-1 text-xl sm:text-2xl font-extrabold tracking-tight">
             {documents} <span className="text-white/40 font-normal">protected documents</span>
           </div>
-          <p className="mt-1 max-w-xl text-xs text-white/70 leading-relaxed">
-            Every document is encrypted with AES-256-GCM. Content keys are encapsulated per recipient with NIST ML-KEM-768. Decryptions embed invisible Haar-DWT watermarks and anchor immutable receipts on the Ethereum blockchain.
-          </p>
         </div>
 
         <div className="grid grid-cols-3 gap-2 sm:gap-3 shrink-0 w-full xl:w-auto">
@@ -450,14 +457,14 @@ function Overview({ assets }) {
 function StatTile({ label, value, highlight }) {
   return (
     <div
-      className={`flex flex-col justify-between rounded-2xl p-2.5 sm:p-3 transition min-w-[75px] sm:min-w-[90px] ${
-        highlight ? 'bg-lime text-night shadow-md' : 'bg-night-soft text-white'
+      className={`flex flex-col justify-between rounded-2xl p-3.5 sm:p-4 transition min-w-[90px] sm:min-w-[110px] ${
+        highlight ? 'bg-accent text-noir shadow-md' : 'bg-noir-soft text-white'
       }`}
     >
       <div className="flex items-center justify-between gap-1">
         <span
-          className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-wider ${
-            highlight ? 'text-night/80' : 'text-white/60'
+          className={`text-[11px] sm:text-xs font-bold uppercase tracking-wider ${
+            highlight ? 'text-noir/80' : 'text-white/60'
           }`}
         >
           {label}
@@ -472,28 +479,37 @@ function StatTile({ label, value, highlight }) {
 /* -- document list: cards on mobile, table on sm+ --------------------------- */
 
 function DocumentList({ assets, user, classificationFilter, setClassificationFilter }) {
+  // The passphrase column is for the person the copy was released to. An
+  // administrator sets these when dispatching, so repeating them against every
+  // document here is noise — and one more place a clearance secret can sit on
+  // an unattended screen.
+  const showPassphrase = user?.role !== 'ADMIN';
   return (
     <div className="space-y-3">
       {/* Classification filter header */}
       <div className="flex flex-wrap items-center justify-between gap-3 px-1">
         <div className="text-xs font-bold uppercase tracking-wider text-ink-muted">
-          {user?.role === 'OFFICER' ? `Assigned Documents (${assets.length})` : `All Documents (${assets.length})`}
+          {user?.role === 'OFFICER'
+            ? `Assigned Documents (${assets.length})`
+            : `All Documents (${assets.length})`}
         </div>
         <div className="flex items-center gap-2">
           <label htmlFor="classification-select" className="text-xs font-semibold text-ink-muted">
             Classification:
           </label>
-          <select
-            id="classification-select"
+          <Select
+            className="w-52"
+            ariaLabel="Filter by classification"
+            buttonClassName="!py-1.5 !text-xs !font-semibold"
             value={classificationFilter}
-            onChange={(e) => setClassificationFilter(e.target.value)}
-            className="rounded-xl border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink shadow-sm hover:border-lime-500 focus:border-lime-500 focus:outline-none"
-          >
-            <option value="ALL">All Classifications</option>
-            <option value="RESTRICTED">RESTRICTED</option>
-            <option value="CONFIDENTIAL">CONFIDENTIAL</option>
-            <option value="SECRET">SECRET</option>
-          </select>
+            onChange={setClassificationFilter}
+            options={[
+              { value: 'ALL', label: 'All Classifications' },
+              { value: 'RESTRICTED', label: 'RESTRICTED' },
+              { value: 'CONFIDENTIAL', label: 'CONFIDENTIAL' },
+              { value: 'SECRET', label: 'SECRET' },
+            ]}
+          />
         </div>
       </div>
 
@@ -506,13 +522,15 @@ function DocumentList({ assets, user, classificationFilter, setClassificationFil
               <ClassificationBadge value={a.classification} />
             </div>
             <div className="text-xs text-ink-muted">
-              <span className="pill !bg-emerald-50 !text-emerald-700 text-xs font-semibold">
+              <span className="pill !bg-attributed-tint !text-attributed-deep text-xs font-semibold">
                 {a.encapsulationCount ?? a.authorizedUserIds?.length ?? 0} Recipients (ML-KEM-768)
               </span>
             </div>
             <dl className="mono grid grid-cols-2 gap-y-1.5 text-xs text-ink-muted pt-2 border-t border-line/60">
               <dt>Created</dt>
-              <dd className="text-right text-ink font-semibold">{new Date(a.createdAt).toLocaleDateString()}</dd>
+              <dd className="text-right text-ink font-semibold">
+                {new Date(a.createdAt).toLocaleDateString()}
+              </dd>
               <dt>Decryptions</dt>
               <dd className="text-right font-extrabold text-ink">{a.decryptCount}</dd>
             </dl>
@@ -520,17 +538,38 @@ function DocumentList({ assets, user, classificationFilter, setClassificationFil
         ))}
       </ul>
 
-      {/* Table — sm and up with sticky header and max height */}
-      <div className="card hidden overflow-hidden shadow-sm sm:block">
-        <div className="overflow-x-auto overflow-y-auto max-h-[460px] scroll-slim">
-          <table className="w-full min-w-[720px] text-sm">
-            <thead className="sticky top-0 z-10 border-b border-line bg-white/95 backdrop-blur-xs text-left text-xs uppercase tracking-wider text-ink-muted font-bold">
-              <tr>
-                <th className="px-5 py-3">Document</th>
-                <th className="px-4 py-3">Classification</th>
-                <th className="px-4 py-3">PQC Broadcast Encryption</th>
-                <th className="px-4 py-3">Created</th>
-                <th className="px-5 py-3 text-right">Decryptions</th>
+      {/* Table — sm and up with smooth horizontal scroll and minimum column widths */}
+      <div className="card hidden overflow-x-auto scroll-slim sm:block shadow-sm">
+        <table className="w-full min-w-[720px] text-sm">
+          <thead>
+            <tr className="border-b border-line bg-noir/[0.02] text-left text-xs uppercase tracking-wider text-ink-muted">
+              <th className="px-5 py-3.5 font-bold">Document</th>
+              <th className="px-4 py-3.5 font-bold">Classification</th>
+              {showPassphrase && (
+                <th className="px-4 py-3.5 font-bold">PQC Broadcast Encryption</th>
+              )}
+              <th className="px-4 py-3.5 font-bold">Created</th>
+              <th className="px-5 py-3.5 text-right font-bold">Decryptions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line/60">
+            {assets.map((a) => (
+              <tr key={a.assetId} className="transition hover:bg-line/30">
+                <td className="px-5 py-4 font-bold text-ink text-sm">{a.title}</td>
+                <td className="px-4 py-4">
+                  <ClassificationBadge value={a.classification} />
+                </td>
+                {showPassphrase && (
+                  <td className="px-4 py-4">
+                    <PassphraseCell asset={a} />
+                  </td>
+                )}
+                <td className="mono px-4 py-4 text-xs text-ink-muted whitespace-nowrap">
+                  {new Date(a.createdAt).toLocaleString()}
+                </td>
+                <td className="mono px-5 py-4 text-right font-extrabold text-sm text-ink">
+                  {a.decryptCount}
+                </td>
               </tr>
             </thead>
             <tbody className="divide-y divide-line/60">
@@ -562,15 +601,141 @@ function DocumentList({ assets, user, classificationFilter, setClassificationFil
   );
 }
 
+/**
+ * The recipient passphrase for a document, kept masked until its owner proves
+ * they are still at the keyboard.
+ *
+ * The dots are not a rendered secret behind a CSS mask — nothing is fetched
+ * until the password check passes, so the value is never in the page for a
+ * screenshot or the dev tools to pick up. Revealing re-locks on unmount and
+ * can be re-locked by hand, because leaving a clearance secret on screen is
+ * the same exposure as never masking it.
+ */
+function PassphraseCell({ asset }) {
+  const [stage, setStage] = useState('locked'); // locked | asking | shown
+  const [password, setPassword] = useState('');
+  const [secret, setSecret] = useState('');
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  async function unlock(e) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await revealAllotment(asset.assetId, password);
+      setSecret(r.passphrase);
+      setStage('shown');
+      setPassword('');
+    } catch (err) {
+      setError(err.message || 'Could not verify that password.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function relock() {
+    setSecret('');
+    setStage('locked');
+    setError(null);
+  }
+
+  function copy() {
+    navigator.clipboard.writeText(secret);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  }
+
+  if (stage === 'shown') {
+    return (
+      <div className="flex items-center gap-1.5">
+        <span className="mono rounded-lg bg-accent-tint px-2.5 py-1 text-xs font-semibold text-ink">
+          {secret}
+        </span>
+        <button
+          type="button"
+          onClick={copy}
+          title="Copy passphrase"
+          className="btn-icon !h-7 !w-7"
+          aria-label="Copy passphrase"
+        >
+          {copied ? <CheckIcon size={12} /> : <CopyIcon size={12} />}
+        </button>
+        <button
+          type="button"
+          onClick={relock}
+          title="Hide again"
+          className="btn-icon !h-7 !w-7"
+          aria-label="Hide passphrase"
+        >
+          <EyeOffIcon size={12} />
+        </button>
+      </div>
+    );
+  }
+
+  if (stage === 'asking') {
+    return (
+      <form onSubmit={unlock} className="flex items-center gap-1.5">
+        <input
+          type="password"
+          autoFocus
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Your login password"
+          aria-label="Your login password"
+          className="input !w-44 !py-1.5 text-xs"
+        />
+        <button type="submit" className="btn-accent !px-3 !py-1.5 !text-xs" disabled={busy}>
+          {busy ? '…' : 'Unlock'}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setStage('locked');
+            setPassword('');
+            setError(null);
+          }}
+          className="btn-icon !h-7 !w-7"
+          aria-label="Cancel"
+        >
+          <CloseIcon size={12} />
+        </button>
+        {error && <span className="text-[11px] font-semibold text-danger-deep">{error}</span>}
+      </form>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="mono select-none text-sm tracking-[0.2em] text-ink-faint" aria-hidden="true">
+        ••••••••••
+      </span>
+      <button
+        type="button"
+        onClick={() => setStage('asking')}
+        title="Reveal passphrase"
+        className="btn-icon !h-7 !w-7"
+        aria-label="Reveal passphrase"
+      >
+        <EyeIcon size={12} />
+      </button>
+    </div>
+  );
+}
+
 const CLASS_STYLE = {
   RESTRICTED: 'bg-line text-ink-muted',
-  CONFIDENTIAL: 'bg-lime text-night',
-  SECRET: 'bg-night text-white',
+  CONFIDENTIAL: 'bg-accent text-noir',
+  SECRET: 'bg-noir text-white',
 };
 
 function ClassificationBadge({ value }) {
   return (
-    <span className={`pill text-xs font-bold shrink-0 ${CLASS_STYLE[value] || 'bg-line text-ink-muted'}`}>
+    <span
+      className={`pill text-xs font-bold shrink-0 ${CLASS_STYLE[value] || 'bg-line text-ink-muted'}`}
+    >
       {value}
     </span>
   );
@@ -578,14 +743,22 @@ function ClassificationBadge({ value }) {
 
 /* -- shared building blocks reused across the other screens ----------------- */
 
-export function Header({ title, subtitle, action }) {
+/**
+ * Page header. The reference leads each section with a small uppercase eyebrow
+ * over a large, tightly-tracked display line, then rules it off — that rhythm
+ * is what makes its pages feel composed rather than stacked.
+ */
+export function Header({ title, subtitle, action, eyebrow }) {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-      <div>
-        <h2 className="font-display text-xl sm:text-2xl font-extrabold tracking-tight text-ink">
+    <div className="flex flex-col gap-5 border-b border-line pb-6 sm:flex-row sm:items-end sm:justify-between">
+      <div className="min-w-0">
+        {eyebrow && <div className="eyebrow mb-2.5">{eyebrow}</div>}
+        <h2 className="font-display text-[28px] font-extrabold leading-[1.08] tracking-tight text-ink sm:text-[34px]">
           {title}
         </h2>
-        {subtitle && <p className="mt-1 max-w-2xl text-xs sm:text-[13px] leading-relaxed text-ink-muted">{subtitle}</p>}
+        {subtitle && (
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-ink-muted">{subtitle}</p>
+        )}
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </div>
@@ -595,9 +768,9 @@ export function Header({ title, subtitle, action }) {
 export function Notice({ children, tone = 'default' }) {
   const styles =
     tone === 'error'
-      ? 'border-rose-200 bg-rose-50 text-rose-700'
+      ? 'border-danger-bright bg-danger-tint text-danger-deep'
       : 'border-line bg-white text-ink-muted';
-  return <div className={`rounded-2xl border px-5 py-4 text-sm ${styles}`}>{children}</div>;
+  return <div className={`rounded-3xl border px-5 py-4 text-sm ${styles}`}>{children}</div>;
 }
 
 /** Kept for screens that still import Panel. */
@@ -625,7 +798,7 @@ function ArrowUpRight({ highlight }) {
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
         d="M7 17 17 7M8 7h9v9"
-        stroke={highlight ? '#141410' : '#fff'}
+        stroke={highlight ? '#0f151d' : '#fff'}
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"

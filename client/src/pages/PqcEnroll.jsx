@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { getUsers, getPqcPublicKey, generatePqcKeys, shortHash } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { Header, Notice } from './Assets.jsx';
+import { CheckIcon, CloseIcon, EyeIcon, EyeOffIcon, ShieldIcon } from '../components/icons.jsx';
 
 function ArrowUpRight({ highlight }) {
   return (
@@ -119,21 +120,15 @@ export default function PqcEnroll() {
     }
   };
 
-  const setPresetPassphrase = (preset) => {
-    setPassphrase(preset);
-    setConfirmPassphrase(preset);
-    setModalError(null);
-  };
-
   // Passphrase strength estimation
   const getStrength = (p) => {
     if (!p) return { label: 'None', width: '0%', color: 'bg-line' };
-    if (p.length < 6) return { label: 'Too short (<6 chars)', width: '25%', color: 'bg-rose-500' };
-    if (p.length < 9) return { label: 'Fair (Acceptable)', width: '50%', color: 'bg-amber-500' };
+    if (p.length < 6) return { label: 'Too short (<6 chars)', width: '25%', color: 'bg-danger' };
+    if (p.length < 9) return { label: 'Fair (Acceptable)', width: '50%', color: 'bg-probable' };
     if (/[0-9]/.test(p) && /[A-Za-z]/.test(p) && /[^A-Za-z0-9]/.test(p)) {
-      return { label: 'Strong (High Security)', width: '100%', color: 'bg-emerald-500' };
+      return { label: 'Strong (High Security)', width: '100%', color: 'bg-attributed' };
     }
-    return { label: 'Good', width: '75%', color: 'bg-lime' };
+    return { label: 'Good', width: '75%', color: 'bg-accent' };
   };
 
   const strength = getStrength(passphrase);
@@ -142,53 +137,48 @@ export default function PqcEnroll() {
   const pendingCount = totalUsers - enrolledCount;
 
   return (
-    <section className="space-y-3.5">
-      <Header
-        title="Post-Quantum Cryptography Enrollment"
-        subtitle="Provision NIST FIPS 203 (ML-KEM-768) and FIPS 204 (ML-DSA-65) quantum-resistant identity keypairs for authorized officers."
-      />
+    <section className="space-y-6">
+      <Header eyebrow="Key management" title="Post-Quantum Cryptography Enrollment" />
 
       {error && <Notice tone="error">{error}</Notice>}
 
-      {/* ── Dark Overview Hero Panel (Provenance Signature Style) ──────── */}
-      <div className="relative overflow-hidden rounded-3xl bg-night p-4 sm:p-5 text-white shadow-panel">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-lime-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-lime animate-pulse" />
-              Quantum-Resistant PKI Infrastructure
-            </div>
-            <div className="font-display mt-1 text-xl sm:text-2xl font-extrabold tracking-tight">
-              {enrolledCount} of {totalUsers}{' '}
-              <span className="text-white/40 font-normal">officers enrolled</span>
-            </div>
-            <p className="mt-1 max-w-xl text-xs text-white/70 leading-relaxed">
-              Every officer identity is provisioned with NIST ML-KEM-768 broadcast decapsulation keys and ML-DSA-65 non-repudiation signing keys. Private key bundles are sealed via scrypt + AES-256-GCM.
-            </p>
+      {/* KPI Overview Tiles */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="rounded-xl border border-line bg-white p-5 backdrop-blur-sm">
+          <div className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+            Total Officers
+          </div>
+          <div className="mt-2 text-3xl font-bold tracking-tight text-ink">
+            {loading ? '—' : totalUsers}
+          </div>
+          <p className="mt-1 text-xs text-ink-muted">Registered in authorization directory</p>
+        </div>
+
+        <div className="rounded-xl border border-line bg-white p-5 backdrop-blur-sm">
+          <div className="text-xs font-semibold uppercase tracking-wider text-accent">
+            PQC Enrolled
+          </div>
+          <div className="mt-2 text-3xl font-bold tracking-tight text-ink">
+            {loading ? '—' : enrolledCount}
           </div>
 
-          <div className="grid grid-cols-3 gap-2 sm:gap-3 shrink-0 w-full xl:w-auto">
-            <StatTile label="Officers" value={totalUsers} />
-            <StatTile label="Enrolled" value={enrolledCount} highlight />
-            <StatTile label="Pending" value={pendingCount} />
+        <div className="rounded-xl border border-line bg-white p-5 backdrop-blur-sm">
+          <div className="text-xs font-semibold uppercase tracking-wider text-probable">
+            Pending Keys
+          </div>
+          <div className="mt-2 text-3xl font-bold tracking-tight text-ink">
+            {loading ? '—' : pendingCount}
           </div>
         </div>
       </div>
 
-      {/* ── Officer Cryptographic Roster Card ───────────────────────────── */}
-      <div className="card overflow-hidden shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-line px-5 py-3 sm:px-6 sm:py-3.5 bg-night/[0.01]">
-          <div>
-            <h2 className="text-sm sm:text-base font-extrabold text-ink">Officer Cryptographic Roster</h2>
-            <p className="text-[11px] sm:text-xs text-ink-muted mt-0.5">
-              Inspect public key parameters, verify algorithms, and provision post-quantum credentials.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="pill !bg-lime/20 !text-ink text-[11px] font-bold">
-              NIST FIPS 203 / 204
-            </span>
-          </div>
+      {/* Main Roster Table */}
+      <div className="overflow-hidden rounded-xl border border-line bg-white">
+        <div className="border-b border-line px-6 py-4">
+          <h2 className="text-base font-semibold text-ink">Officer Cryptographic Roster</h2>
+          <p className="text-xs text-ink-muted">
+            Inspect public key parameters and issue post-quantum credentials.
+          </p>
         </div>
 
         {loading ? (
@@ -199,7 +189,7 @@ export default function PqcEnroll() {
         ) : (
           <div className="overflow-x-auto overflow-y-auto max-h-[460px] scroll-slim">
             <table className="w-full min-w-[760px] text-left text-sm">
-              <thead className="sticky top-0 z-10 border-b border-line bg-white/95 backdrop-blur-xs text-xs font-bold uppercase tracking-wider text-ink-muted">
+              <thead className="border-b border-line/60 bg-noir/20 text-xs font-bold uppercase tracking-wider text-ink-muted">
                 <tr>
                   <th className="px-5 py-3 font-bold">Officer / Role</th>
                   <th className="px-5 py-3 font-bold">Department</th>
@@ -209,14 +199,14 @@ export default function PqcEnroll() {
                   <th className="px-5 py-3 text-right font-bold">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-line/60">
+              <tbody className="divide-y divide-line/40">
                 {users.map((u) => {
                   const status = keyStatuses[u.userId];
                   const isEnrolled = status?.hasPqcKeys;
 
                   return (
-                    <tr key={u.userId} className="transition-colors hover:bg-line/25">
-                      <td className="px-5 py-3">
+                    <tr key={u.userId} className="transition-colors hover:bg-muted">
+                      <td className="px-6 py-4">
                         <div className="font-bold text-ink text-sm">{u.name}</div>
                         <div className="flex items-center gap-2 text-xs text-ink-muted mt-0.5 flex-wrap">
                           <span className="pill !text-[10px] !py-0.5 bg-line/60 text-ink font-semibold">
@@ -231,18 +221,18 @@ export default function PqcEnroll() {
                           </span>
                         </div>
                       </td>
-                      <td className="px-5 py-3 text-xs sm:text-sm text-ink-muted font-semibold">
+                      <td className="px-6 py-4 text-xs sm:text-sm text-ink-muted font-medium">
                         {u.dept}
                       </td>
-                      <td className="px-5 py-3">
+                      <td className="px-6 py-4">
                         {isEnrolled ? (
-                          <span className="pill !bg-emerald-50 !text-emerald-700 text-xs font-bold border border-emerald-200/70 inline-flex items-center gap-1.5">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-attributed/10 px-2.5 py-1 text-xs font-bold text-attributed-deep ring-1 ring-attributed/20">
+                            <span className="h-1.5 w-1.5 rounded-full bg-attributed animate-pulse" />
                             Enrolled
                           </span>
                         ) : (
-                          <span className="pill !bg-amber-50 !text-amber-700 text-xs font-bold border border-amber-200/70 inline-flex items-center gap-1.5">
-                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-probable/10 px-2.5 py-1 text-xs font-bold text-probable-deep ring-1 ring-probable/20">
+                            <span className="h-1.5 w-1.5 rounded-full bg-probable" />
                             Pending
                           </span>
                         )}
@@ -275,11 +265,7 @@ export default function PqcEnroll() {
                         <button
                           type="button"
                           onClick={() => openEnrollModal(u)}
-                          className={
-                            isEnrolled
-                              ? 'btn-ghost !text-xs !py-1 !px-3'
-                              : 'btn-lime !text-xs !py-1 !px-3 shadow-xs'
-                          }
+                          className="rounded-xl border border-line bg-white px-3.5 py-1.5 text-xs font-bold text-ink shadow-xs transition hover:border-accent-deep hover:bg-accent/20"
                         >
                           {isEnrolled ? 'Re-enroll' : 'Enroll PQC'}
                         </button>
@@ -295,22 +281,14 @@ export default function PqcEnroll() {
 
       {/* ── Polished Enrollment Modal ───────────────────────────────────── */}
       {enrollingUser && (
-        <div
-          className="fixed inset-0 z-50 grid place-items-center bg-night/50 p-4 backdrop-blur-sm"
-          onClick={() => setEnrollingUser(null)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md rounded-3xl bg-white p-6 shadow-panel border border-line space-y-4 animate-in fade-in"
-          >
-            <div className="flex items-center justify-between border-b border-line pb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-line bg-white p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-line/60 pb-4">
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-lime" />
-                  <h3 className="text-base font-extrabold text-ink">Set Officer PQC Passphrase</h3>
-                </div>
-                <p className="text-xs text-ink-muted mt-1">
-                  Target: <strong className="text-ink">{enrollingUser.name}</strong> ({enrollingUser.dept})
+                <h3 className="text-lg font-semibold text-ink">Set Officer PQC Passphrase</h3>
+                <p className="text-xs text-ink-muted mt-0.5">
+                  Target: <span className="font-semibold text-ink">{enrollingUser.name}</span> (
+                  {enrollingUser.dept})
                 </p>
               </div>
               <button
@@ -318,41 +296,48 @@ export default function PqcEnroll() {
                 onClick={() => setEnrollingUser(null)}
                 className="rounded-xl border border-line p-1.5 text-xs text-ink-muted hover:bg-night/5 hover:text-ink transition cursor-pointer"
               >
-                ✕
+                <CloseIcon size={15} />
               </button>
             </div>
 
             {enrollSuccess ? (
-              <div className="space-y-4">
-                <div className="rounded-2xl bg-emerald-50 border border-emerald-200/80 p-4 text-xs text-emerald-800 space-y-1">
-                  <div className="font-extrabold text-sm text-emerald-900">
-                    ✓ Post-Quantum Keypair Provisioned
+              <div className="mt-5 space-y-4">
+                <div className="rounded-lg bg-attributed/10 border border-attributed/20 p-4 text-sm text-attributed-bright">
+                  <div className="flex items-center gap-1.5 font-semibold">
+                    <CheckIcon size={14} /> Post-Quantum Keypair Provisioned
                   </div>
-                  <p className="leading-relaxed text-emerald-700">
-                    ML-KEM-768 and ML-DSA-65 keys generated successfully. The private key bundle was encrypted with scrypt + AES-256-GCM under your chosen passphrase.
+                  <p className="mt-1 text-xs text-attributed-bright/80 leading-relaxed">
+                    ML-KEM-768 and ML-DSA-65 keys generated successfully. The private key bundle was
+                    encrypted with scrypt + AES-GCM under your chosen passphrase.
                   </p>
                 </div>
 
-                <div className="space-y-2 rounded-2xl bg-[#fbfbf7] border border-line p-3.5 font-mono text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="text-ink-muted">KEM Public Key:</span>
-                    <span className="text-ink font-bold">{shortHash(enrollSuccess.kemPublicKey, 8, 8)}</span>
+                <div className="space-y-2 rounded-lg bg-muted p-3 font-mono text-xs">
+                  <div>
+                    <span className="text-ink-muted">KEM Public Key: </span>
+                    <span className="text-ink font-semibold">
+                      {shortHash(enrollSuccess.kemPublicKey, 8, 8)}
+                    </span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-ink-muted">DSA Public Key:</span>
-                    <span className="text-ink font-bold">{shortHash(enrollSuccess.dsaPublicKey, 8, 8)}</span>
+                  <div>
+                    <span className="text-ink-muted">DSA Public Key: </span>
+                    <span className="text-ink font-semibold">
+                      {shortHash(enrollSuccess.dsaPublicKey, 8, 8)}
+                    </span>
                   </div>
                 </div>
 
-                <div className="rounded-2xl bg-slate-50 border border-line p-3 text-xs text-ink-muted leading-relaxed">
-                  <strong className="text-ink">Important:</strong> Remember this passphrase. Officer{' '}
-                  <strong>{enrollingUser.name}</strong> will enter this passphrase in the browser during document decryption to unlock their ML-DSA-65 signing key.
+                <div className="rounded-lg bg-muted border border-line p-3 text-xs text-ink-muted">
+                  <span className="font-semibold text-ink">Important:</span> Remember this
+                  passphrase. Officer <strong>{enrollingUser.name}</strong> will enter this
+                  passphrase in the browser during document decryption to unlock their ML-DSA-65
+                  signing key.
                 </div>
 
                 <button
                   type="button"
                   onClick={() => setEnrollingUser(null)}
-                  className="btn-lime w-full text-sm font-bold"
+                  className="w-full rounded-xl bg-accent py-2.5 text-sm font-semibold text-noir transition hover:bg-accent-bright"
                 >
                   Done
                 </button>
@@ -360,31 +345,19 @@ export default function PqcEnroll() {
             ) : (
               <form onSubmit={handleEnroll} className="space-y-4">
                 {/* Security explainer badge */}
-                <div className="rounded-2xl border border-lime/40 bg-lime/10 p-3.5 text-xs text-ink">
-                  <div className="font-bold text-ink flex items-center gap-1.5">
-                    <span>🛡️</span> Post-Quantum Private Key Protection
+                <div className="rounded-xl border border-accent/30 bg-accent/10 p-3 text-xs text-ink">
+                  <div className="font-semibold text-accent flex items-center gap-1.5">
+                    <ShieldIcon size={14} /> Post-Quantum Private Key Protection
                   </div>
                   <p className="mt-1 text-ink-muted text-[11px] leading-relaxed">
-                    This passphrase derives an AES-256-GCM key via scrypt to seal the officer's private keys. The private key is unlocked strictly in the client's browser during decryption.
+                    This passphrase derives an AES-256-GCM key via scrypt to seal the officer's
+                    private keys. The private key is unlocked strictly in the client's browser
+                    during decryption.
                   </p>
                 </div>
 
-                {/* Quick Presets helper bar */}
-                <div className="flex items-center justify-between gap-2 pt-0.5">
-                  <span className="text-[11px] font-bold text-ink-muted uppercase tracking-wider">
-                    Quick Preset:
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setPresetPassphrase('officer123')}
-                    className="rounded-xl border border-line bg-[#fbfbf7] px-3 py-1 text-xs font-bold text-ink hover:border-lime-deep hover:bg-lime/20 transition cursor-pointer"
-                  >
-                    Demo Default (<span className="mono">officer123</span>)
-                  </button>
-                </div>
-
                 {modalError && (
-                  <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs font-semibold text-rose-700">
+                  <div className="rounded-lg bg-danger/10 border border-danger/20 p-3 text-xs text-danger-bright">
                     {modalError}
                   </div>
                 )}
@@ -400,17 +373,22 @@ export default function PqcEnroll() {
                       onClick={() => setShowPass((s) => !s)}
                       className="text-xs text-ink-muted hover:text-ink font-semibold cursor-pointer"
                     >
-                      {showPass ? 'Hide 👁️' : 'Show 👁️'}
+                      <span className="flex items-center gap-1.5">
+                        {showPass ? <EyeOffIcon size={13} /> : <EyeIcon size={13} />}
+                        {showPass ? 'Hide' : 'Show'}
+                      </span>
                     </button>
                   </div>
-                  <input
-                    type={showPass ? 'text' : 'password'}
-                    required
-                    value={passphrase}
-                    onChange={(e) => setPassphrase(e.target.value)}
-                    placeholder="Minimum 6 characters"
-                    className="input text-sm font-mono"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPass ? 'text' : 'password'}
+                      required
+                      value={passphrase}
+                      onChange={(e) => setPassphrase(e.target.value)}
+                      placeholder="Minimum 6 characters"
+                      className="w-full rounded-xl border border-line bg-white px-3.5 py-2.5 text-sm text-ink placeholder-ink-muted/50 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                    />
+                  </div>
 
                   {/* Password Strength Indicator */}
                   {passphrase && (
@@ -419,7 +397,7 @@ export default function PqcEnroll() {
                         <span className="text-ink-muted">Security Strength:</span>
                         <span className="font-bold text-ink">{strength.label}</span>
                       </div>
-                      <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden border border-line">
+                      <div className="h-1.5 w-full rounded-full bg-line overflow-hidden border border-line/40">
                         <div
                           className={`h-full ${strength.color} transition-all duration-300`}
                           style={{ width: strength.width }}
@@ -440,13 +418,15 @@ export default function PqcEnroll() {
                     value={confirmPassphrase}
                     onChange={(e) => setConfirmPassphrase(e.target.value)}
                     placeholder="Re-enter passphrase"
-                    className="input text-sm font-mono"
+                    className="w-full rounded-xl border border-line bg-white px-3.5 py-2.5 text-sm text-ink placeholder-ink-muted/50 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                   />
                   {confirmPassphrase && passphrase !== confirmPassphrase && (
-                    <p className="text-[11px] font-bold text-rose-600">Passphrases do not match</p>
+                    <p className="mt-1 text-[11px] text-danger-bright">Passphrases do not match</p>
                   )}
                   {confirmPassphrase && passphrase === confirmPassphrase && (
-                    <p className="text-[11px] font-bold text-emerald-600">✓ Passphrases match</p>
+                    <p className="mt-1 text-[11px] text-attributed-bright">
+                      <CheckIcon size={11} /> Passphrases match
+                    </p>
                   )}
                 </div>
 
@@ -454,14 +434,16 @@ export default function PqcEnroll() {
                   <button
                     type="button"
                     onClick={() => setEnrollingUser(null)}
-                    className="btn-ghost flex-1 text-xs"
+                    className="flex-1 rounded-xl border border-line bg-white py-2.5 text-sm font-semibold text-ink hover:bg-noir/40"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    disabled={submitting || passphrase.length < 6 || passphrase !== confirmPassphrase}
-                    className="btn-lime flex-1 text-xs"
+                    disabled={
+                      submitting || passphrase.length < 6 || passphrase !== confirmPassphrase
+                    }
+                    className="flex-1 rounded-xl bg-accent py-2.5 text-sm font-semibold text-noir transition hover:bg-accent-bright disabled:opacity-50"
                   >
                     {submitting ? 'Generating…' : 'Save & Provision'}
                   </button>

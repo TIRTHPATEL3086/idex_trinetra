@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { getAssets, getAudit, toggleUserActive, shortHash } from '../lib/api.js';
 import { Header, Notice } from './Assets.jsx';
+import { BanIcon, ExternalLinkIcon, UnlockIcon, WarningIcon } from '../components/icons.jsx';
+import Select from '../components/Select.jsx';
 
 /**
  * Per-asset audit trail: who opened a document, when, from which device,
@@ -50,20 +52,16 @@ export default function Timeline() {
   return (
     <section className="space-y-3.5">
       <Header
+        eyebrow="Audit"
         title="Audit timeline & Anomaly Forensics"
-        subtitle="Every decryption of a document, in order — with automated velocity burst, off-hours, device anomaly tracking, and zero-trust revocation."
         action={
-          <select
-            className="input w-56 !py-1 text-xs sm:text-sm"
+          <Select
+            className="w-56"
+            ariaLabel="Document"
             value={assetId}
-            onChange={(e) => setAssetId(e.target.value)}
-          >
-            {assets.map((a) => (
-              <option key={a.assetId} value={a.assetId}>
-                {a.title}
-              </option>
-            ))}
-          </select>
+            onChange={setAssetId}
+            options={assets.map((a) => ({ value: a.assetId, label: a.title }))}
+          />
         }
       />
 
@@ -77,14 +75,16 @@ export default function Timeline() {
       {data && data.timeline.length > 0 && (
         <ol className="relative space-y-3 before:absolute before:left-[13px] before:top-2 before:h-[calc(100%-1rem)] before:w-px before:bg-line sm:before:left-[15px] max-h-[500px] overflow-y-auto scroll-slim pr-1.5">
           {data.timeline.map((e) => (
-            <li key={e.receiptId} className="relative flex gap-3 sm:gap-3.5">
-              <span className={`z-10 mt-1 grid h-7 w-7 sm:h-8 sm:w-8 shrink-0 place-items-center rounded-full ${
-                e.riskLevel === 'CRITICAL'
-                  ? 'bg-rose-500 text-white animate-pulse'
-                  : e.riskLevel === 'ELEVATED'
-                  ? 'bg-amber-500 text-white'
-                  : 'bg-lime text-ink'
-              }`}>
+            <li key={e.receiptId} className="relative flex gap-4">
+              <span
+                className={`z-10 mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full sm:h-10 sm:w-10 ${
+                  e.riskLevel === 'CRITICAL'
+                    ? 'bg-danger text-white animate-pulse'
+                    : e.riskLevel === 'ELEVATED'
+                      ? 'bg-probable text-white'
+                      : 'bg-accent text-ink'
+                }`}
+              >
                 <DotGlyph />
               </span>
               <div className="card flex-1 p-3 sm:p-3.5">
@@ -93,23 +93,24 @@ export default function Timeline() {
                     <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                       <span className="text-xs sm:text-sm font-bold text-ink">{e.userName}</span>
                       {e.riskLevel === 'CRITICAL' && (
-                        <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700">
+                        <span className="rounded-full bg-danger-tint px-2.5 py-0.5 text-xs font-bold text-danger-deep">
                           CRITICAL ANOMALY
                         </span>
                       )}
                       {e.riskLevel === 'ELEVATED' && (
-                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                        <span className="rounded-full bg-probable-tint px-2.5 py-0.5 text-xs font-bold text-probable-deep">
                           ELEVATED RISK
                         </span>
                       )}
                       {e.userActive === false && (
-                        <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                        <span className="rounded-full bg-danger-deep px-2.5 py-0.5 text-xs font-bold text-white">
                           FROZEN / REVOKED
                         </span>
                       )}
                     </div>
-                    <div className="text-[11px] sm:text-xs text-ink-muted mt-0.5">
-                      {e.department} · Endpoint: <span className="font-mono text-[11px]">{e.device}</span>
+                    <div className="text-xs sm:text-sm text-ink-muted mt-0.5">
+                      {e.department} · Endpoint:{' '}
+                      <span className="font-mono text-xs">{e.device}</span>
                     </div>
                   </div>
 
@@ -122,11 +123,18 @@ export default function Timeline() {
                         onClick={() => handleToggle(e.userId)}
                         className={`rounded-lg px-2 py-0.5 text-[11px] font-semibold transition ${
                           e.userActive === false
-                            ? 'bg-slate-200 text-slate-800 hover:bg-slate-300'
-                            : 'bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100'
+                            ? 'bg-line text-ink hover:bg-line'
+                            : 'bg-danger-tint border border-danger-bright text-danger-deep hover:bg-danger-tint'
                         }`}
                       >
-                        {e.userActive === false ? 'Unfreeze Access 🔓' : 'Freeze Access 🚫'}
+                        <span className="flex items-center gap-1.5">
+                          {e.userActive === false ? (
+                            <UnlockIcon size={13} />
+                          ) : (
+                            <BanIcon size={13} />
+                          )}
+                          {e.userActive === false ? 'Unfreeze Access' : 'Freeze Access'}
+                        </span>
                       </button>
                     )}
                   </div>
@@ -138,9 +146,9 @@ export default function Timeline() {
                     {e.anomalies.map((a, i) => (
                       <span
                         key={i}
-                        className="rounded-md bg-amber-50 border border-amber-200/70 px-2 py-0.5 text-[11px] font-medium text-amber-800 flex items-center gap-1"
+                        className="rounded-md bg-probable-tint border border-probable-bright/70 px-2.5 py-0.5 text-xs font-medium text-probable-deep flex items-center gap-1"
                       >
-                        <span>⚠</span> {a}
+                        <WarningIcon size={12} /> {a}
                       </span>
                     ))}
                   </div>
@@ -157,7 +165,7 @@ export default function Timeline() {
                       rel="noreferrer"
                       className="font-semibold text-attributed hover:underline"
                     >
-                      Etherscan ↗
+                      Etherscan <ExternalLinkIcon size={11} />
                     </a>
                   )}
                 </div>
@@ -175,7 +183,7 @@ function DotGlyph() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
         d="M5 12h14M12 5l7 7-7 7"
-        stroke="#141410"
+        stroke="#0f151d"
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"

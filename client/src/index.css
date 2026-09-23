@@ -25,17 +25,24 @@ html {
 
 body {
   font-family:
-    'Plus Jakarta Sans',
+    Inter,
     ui-sans-serif,
     system-ui,
     -apple-system,
     sans-serif;
-  color: #16160f;
-  /* The dark olive canvas the white app card sits on. */
-  background-color: #3a3d1a;
+  color: #1f1a23;
+  /* Chromia White 500 — the canvas everything sits on. */
+  background-color: #fff8f8;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
+}
+
+/* The reference sets headings tight and slightly negative-tracked. */
+h1,
+h2,
+h3 {
+  letter-spacing: -0.025em;
 }
 
 .mono {
@@ -44,19 +51,53 @@ body {
   overflow-wrap: anywhere;
 }
 
+/* Chromia's headlines are a heavy, soft-serifed display face set tight.
+   `opsz` is Fraunces's optical-size axis: large headlines want the display
+   cut, which sharpens the serifs and closes the spacing. */
 .font-display {
-  font-family: 'Baloo 2', ui-rounded, sans-serif;
+  font-family: Fraunces, ui-serif, Georgia, serif;
+  font-weight: 900;
+  font-variation-settings:
+    'opsz' 120,
+    'SOFT' 30;
+  letter-spacing: -0.03em;
 }
 
-/* Stylish scroll area — a slim rounded lime thumb that grows and brightens
-   while you scroll or hover, and slims back down when idle. */
+/* Smaller display lines want the text cut, not the display cut. */
+.font-display-sm {
+  font-family: Fraunces, ui-serif, Georgia, serif;
+  font-weight: 700;
+  font-variation-settings: 'opsz' 24;
+  letter-spacing: -0.015em;
+}
+
+/* The wordmark: chunky, rounded, all caps, tightly set. */
+.wordmark {
+  font-family: Sniglet, ui-rounded, Inter, sans-serif;
+  font-weight: 800;
+  text-transform: uppercase;
+  /* Fat rounded caps crowd each other, so they are given a little air —
+     the reference sets its own wordmark loosely for the same reason. */
+  letter-spacing: 0.01em;
+}
+
+/* Second line of a two-tone heading — the reference paints it coral by
+   clipping a gradient to the glyphs. */
+.tone-accent {
+  background-image: linear-gradient(90deg, #9e5ecf 0%, #cc91f0 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Slim coral scroll thumb that grows and warms while you scroll or hover. */
 .scroll-slim {
   scrollbar-width: thin; /* Firefox */
-  scrollbar-color: #dcefa6 transparent;
+  scrollbar-color: #e9d2fa transparent;
   scroll-behavior: smooth;
 }
 .scroll-slim:hover {
-  scrollbar-color: #c9f24d transparent; /* Firefox: brighten on hover */
+  scrollbar-color: #cc91f0 transparent; /* Firefox: brighten on hover */
 }
 .scroll-slim::-webkit-scrollbar {
   width: 12px;
@@ -67,7 +108,7 @@ body {
   margin: 6px 0;
 }
 .scroll-slim::-webkit-scrollbar-thumb {
-  background-color: #dcefa6; /* muted lime, slim */
+  background-color: #e9d2fa; /* soft purple, slim */
   border: 4px solid transparent; /* padding -> a thin pill */
   border-radius: 999px;
   background-clip: content-box;
@@ -76,60 +117,320 @@ body {
     background-color 0.2s ease,
     border-width 0.15s ease;
 }
-/* Grow + brighten while the area is scrolled/hovered/dragged. */
 .scroll-slim:hover::-webkit-scrollbar-thumb {
-  background-color: #c9f24d;
+  background-color: #cc91f0;
   border-width: 3px;
 }
 .scroll-slim::-webkit-scrollbar-thumb:hover,
 .scroll-slim::-webkit-scrollbar-thumb:active {
-  background-color: #b4e02c;
+  background-color: #9e5ecf;
   border-width: 2px; /* widest while dragging */
 }
 
+/* Dark surfaces invert the thumb so it stays visible on navy. */
+.scroll-dark {
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+.scroll-dark::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.22);
+}
+.scroll-dark:hover::-webkit-scrollbar-thumb,
+.scroll-dark::-webkit-scrollbar-thumb:hover {
+  background-color: #cc91f0;
+}
+
+/* Chromia's dark panels carry a faint dot field rather than a flat fill. */
+.dot-field {
+  background-image: radial-gradient(rgba(255, 248, 248, 0.14) 1.3px, transparent 1.4px);
+  background-size: 26px 26px;
+}
+
+/* The same texture, dark on a light card. */
+.dot-field-light {
+  background-image: radial-gradient(rgba(31, 26, 35, 0.11) 1.3px, transparent 1.4px);
+  background-size: 26px 26px;
+}
+
 @layer components {
-  /* White content card — the primary frame. */
+  /* White content card — the primary frame. Large radius, hairline border. */
   .card {
-    @apply rounded-2xl border border-line bg-white shadow-card;
+    @apply rounded-3xl border border-line bg-white shadow-card;
   }
 
-  /* Primary action — lime with black text, pill-shaped like the reference. */
-  .btn-lime {
-    @apply inline-flex items-center justify-center gap-2 rounded-full bg-lime px-4 py-2
-      text-xs sm:text-sm font-bold text-night transition hover:bg-lime-deep
-      focus:outline-none focus-visible:ring-4 focus-visible:ring-lime/40
+  /* Accent action — the identity's purple, carrying dark ink. Chromia puts
+     black text on every one of its bright fills for the same reason: white
+     on #cc91f0 is 2.0:1 and would fail at any size. */
+  .btn-accent {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-accent px-5 py-2.5
+      text-sm font-semibold text-noir transition hover:bg-accent-deep
+      focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/35
       disabled:cursor-not-allowed disabled:opacity-60;
   }
 
-  /* Dark pill action (like "Broadcast" / "New"). */
+  /* Solid dark pill — the quieter of the two solid actions. */
   .btn-dark {
-    @apply inline-flex items-center justify-center gap-2 rounded-full bg-night px-4 py-2
-      text-xs sm:text-sm font-semibold text-white transition hover:bg-night-soft
-      focus:outline-none focus-visible:ring-4 focus-visible:ring-night/30;
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-noir px-5 py-2.5
+      text-sm font-semibold text-white transition hover:bg-noir-soft
+      focus:outline-none focus-visible:ring-4 focus-visible:ring-noir/25
+      disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   /* Outline / secondary action. */
   .btn-ghost {
     @apply inline-flex items-center justify-center gap-2 rounded-full border border-line
-      bg-white px-4 py-2 text-xs sm:text-sm font-semibold text-ink transition
-      hover:border-ink-faint hover:bg-line/40 focus:outline-none
-      focus-visible:ring-4 focus-visible:ring-lime/25;
+      bg-white px-5 py-2.5 text-sm font-semibold text-ink transition
+      hover:border-ink-faint hover:bg-muted focus:outline-none
+      focus-visible:ring-4 focus-visible:ring-accent/25
+      disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   /* Round icon button in a hairline circle. */
   .btn-icon {
-    @apply grid h-9 w-9 shrink-0 place-items-center rounded-full border border-line
-      bg-white text-ink-muted transition hover:text-ink;
+    @apply grid h-10 w-10 shrink-0 place-items-center rounded-full border border-line
+      bg-white text-ink-muted transition hover:border-ink-faint hover:text-ink;
   }
 
   /* Small status / meta pill. */
   .pill {
-    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold;
+    @apply inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-semibold;
   }
 
   /* Form control — selects and text inputs. */
   .input {
-    @apply w-full rounded-xl border border-line bg-white px-3.5 py-2 text-xs sm:text-sm font-medium text-ink
-      outline-none transition focus:border-lime-deep focus:ring-4 focus:ring-lime/25;
+    @apply w-full rounded-2xl border border-line bg-white px-3.5 py-2.5 text-sm font-medium text-ink
+      outline-none transition placeholder:text-ink-faint
+      focus:border-accent focus:ring-4 focus:ring-accent/20;
+  }
+
+  /* The reference's call to action: coral pill, near-white label, Inter 500,
+     12px/20px padding. Marketing type at 16px+ and a large hit area — inside
+     the app, controls are smaller and denser, so those keep dark ink on coral
+     (see .btn-accent) where the contrast has to carry real work. */
+  .cta-pill {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-noir px-5 py-3
+      font-semibold text-canvas transition hover:bg-noir-soft
+      focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/40;
+  }
+
+  /* Chromia's signature control: a fully-rounded coloured chip with a small
+     circular button at its right edge. The hue is applied at the call site,
+     because the whole point of the palette is that these come in eight. */
+  .chip {
+    @apply inline-flex w-full items-center justify-between gap-3 rounded-full px-5 py-3
+      text-left text-sm font-semibold text-noir;
+  }
+
+  .chip-knob {
+    @apply grid h-7 w-7 shrink-0 place-items-center rounded-full bg-noir text-canvas;
+  }
+
+  /* The expanded state of a chip — same hue, squared off into a card. */
+  .chip-card {
+    @apply rounded-[1.75rem] p-5 text-sm text-noir;
+  }
+
+  /* The small dark action that sits inside a coloured card. */
+  .chip-action {
+    @apply inline-flex items-center gap-1.5 rounded-full bg-noir px-4 py-2
+      text-xs font-semibold text-canvas transition hover:bg-noir-soft;
+  }
+
+  /* Section eyebrow — the small uppercase label above a heading. */
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-wider text-ink-faint;
+  }
+}
+
+/* ==========================================================================
+   Landing page — motion
+   ==========================================================================
+   The reference never animates `background-color`. It paints the page from a
+   fixed stack of three layers and cross-fades their opacity as sections scroll
+   past. Opacity is compositor-only, so the change costs nothing while the page
+   is moving; animating a colour would repaint every frame.
+   ========================================================================== */
+
+.site-background {
+  position: fixed;
+  inset: -1px;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background-color: #fff8f8;
+}
+
+.site-background__layer {
+  position: absolute;
+  inset: 0;
+  will-change: opacity;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  transition: opacity var(--background-transition-duration, 1.25s)
+    var(--background-transition-timing, cubic-bezier(0.4, 0, 0.2, 1));
+}
+
+.site-background__base {
+  background-color: #fff8f8;
+  opacity: 1;
+}
+
+/* The faint graph-paper ruling the reference lays over its cream pages. Two
+   repeating gradients cost nothing and scale to any viewport. */
+.site-background__grid {
+  opacity: var(--background-grid-opacity, 1);
+  background-image:
+    linear-gradient(to right, rgba(31, 26, 35, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(31, 26, 35, 0.05) 1px, transparent 1px);
+  background-size: 80px 80px;
+}
+
+/* The grid belongs to the cream page; it would only muddy coral or navy. */
+:root[data-home-background='accent'],
+:root[data-home-background='dark'] {
+  --background-grid-opacity: 0;
+}
+.site-background__accent {
+  background-color: #cc91f0;
+  opacity: var(--background-accent-opacity, 0);
+}
+.site-background__dark {
+  background-color: #17111b;
+  opacity: var(--background-dark-opacity, 0);
+}
+
+/* Which layer is showing is a single attribute on <html>, set by whichever
+   section currently owns the viewport. */
+:root[data-home-background='base'] {
+  --background-accent-opacity: 0;
+  --background-dark-opacity: 0;
+}
+:root[data-home-background='accent'] {
+  --background-accent-opacity: 1;
+  --background-dark-opacity: 0;
+}
+:root[data-home-background='dark'] {
+  --background-accent-opacity: 0;
+  --background-dark-opacity: 1;
+}
+
+/* The body's own fill would paint over a z-index:-1 layer, so it steps aside
+   while the landing owns the page. */
+:root[data-home-background] body {
+  background-color: transparent;
+}
+
+/* -- entrances ------------------------------------------------------------ */
+
+@keyframes hero-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(34px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero-fade-up {
+  opacity: 0;
+  animation: 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards hero-fade-up;
+}
+.hero-fade-up--d1 {
+  animation-delay: 0.3s;
+}
+.hero-fade-up--d2 {
+  animation-delay: 0.6s;
+}
+.hero-fade-up--d3 {
+  animation-delay: 0.9s;
+}
+.hero-fade-up--d4 {
+  animation-delay: 1.2s;
+}
+.hero-fade-up--d5 {
+  animation-delay: 1.5s;
+}
+
+/* Sections below the fold wait until they are actually scrolled to. */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity 1.25s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 1.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* -- marquee -------------------------------------------------------------- */
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-100% - var(--gap)));
+  }
+}
+
+.animate-marquee {
+  animation: marquee var(--duration, 34s) linear infinite;
+}
+/* Pausing on hover lets someone actually read a term they half-caught. */
+.marquee-track:hover .animate-marquee {
+  animation-play-state: paused;
+}
+
+/* -- ambient -------------------------------------------------------------- */
+
+@keyframes float-soft {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+.animate-float {
+  animation: float-soft 9s ease-in-out infinite;
+}
+
+@keyframes pill-edge-glow {
+  0%,
+  100% {
+    box-shadow: 0 8px 20px -8px rgba(15, 21, 29, 0.4);
+  }
+  50% {
+    box-shadow:
+      0 0 20px 2px rgba(255, 255, 255, 0.12),
+      0 8px 20px -8px rgba(15, 21, 29, 0.4);
+  }
+}
+.animate-pill-glow {
+  animation: pill-edge-glow 6s ease-in-out infinite;
+}
+
+/* Everything above is decoration. Anyone who has asked their system to stop
+   moving things gets the finished state immediately. */
+@media (prefers-reduced-motion: reduce) {
+  .hero-fade-up,
+  .animate-marquee,
+  .animate-float,
+  .animate-pill-glow {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .site-background__layer {
+    transition: none;
   }
 }

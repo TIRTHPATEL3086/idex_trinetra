@@ -10,8 +10,19 @@ import {
   shortHash,
 } from '../lib/api.js';
 import { unlockAndSign } from '../lib/pqc.js';
-import { Header, Notice } from './Assets.jsx';
+import { Header } from './Assets.jsx';
 import { useAuth } from '../lib/auth.jsx';
+import {
+  BanIcon,
+  CheckIcon,
+  DownloadIcon,
+  EyeIcon,
+  EyeOffIcon,
+  KeyIcon,
+  SendIcon,
+  UnlockIcon,
+} from '../components/icons.jsx';
+import Select from '../components/Select.jsx';
 
 /**
  * Decrypt & Multi-Officer Dispatch.
@@ -32,14 +43,12 @@ export default function Decrypt() {
   const isAdmin = can('decrypt:any');
 
   const [assets, setAssets] = useState([]);
-  const [users, setUsers]   = useState([]);
+  const [users, setUsers] = useState([]);
   const [assetId, setAssetId] = useState('');
   const [deviceLabel, setDeviceLabel] = useState(isAdmin ? 'ADMIN-DISPATCH-01' : 'DESK-114');
 
   // Admin Multi-recipient state
   const [selectedUserIds, setSelectedUserIds] = useState([]);
-  const [passphraseMode, setPassphraseMode] = useState('common'); // 'common' | 'individual'
-  const [commonPassphrase, setCommonPassphrase] = useState('');
   const [individualPassphrases, setIndividualPassphrases] = useState({});
 
   // Officer Single-recipient state
@@ -57,7 +66,9 @@ export default function Decrypt() {
       .then(([a, u]) => {
         let availableAssets = a.assets || [];
         if (user?.role === 'OFFICER') {
-          availableAssets = availableAssets.filter((x) => x.authorizedUserIds?.includes(user.userId));
+          availableAssets = availableAssets.filter((x) =>
+            x.authorizedUserIds?.includes(user.userId)
+          );
         }
         setAssets(availableAssets);
         const uList = u.users || [];
@@ -88,9 +99,7 @@ export default function Decrypt() {
   };
 
   const selectAllOfficers = () => {
-    const officerIds = users
-      .filter((x) => x.role === 'OFFICER' && x.active)
-      .map((x) => x.userId);
+    const officerIds = users.filter((x) => x.role === 'OFFICER' && x.active).map((x) => x.userId);
     setSelectedUserIds(officerIds);
   };
 
@@ -119,8 +128,9 @@ export default function Decrypt() {
       const res = await batchDecryptAsset({
         assetId: Number(assetId),
         userIds: selectedUserIds,
-        passphraseMode,
-        commonPassphrase: commonPassphrase.trim() || 'officer123',
+        // Every recipient is issued their own passphrase; there is no
+        // longer a shared-secret mode in the interface.
+        passphraseMode: 'individual',
         individualPassphrases,
         deviceLabel: deviceLabel || 'ADMIN-DISPATCH-01',
       });
@@ -133,105 +143,105 @@ export default function Decrypt() {
   };
 
   // ─── OFFICER: Submit Single Decrypt with Allotted Passphrase ─────────────
-  const submitOfficerDecrypt = useCallback(async (e) => {
-    e.preventDefault();
-    setError(null);
-    setSingleResult(null);
-    setSigStatus(null);
+  const submitOfficerDecrypt = useCallback(
+    async (e) => {
+      e.preventDefault();
+      setError(null);
+      setSingleResult(null);
+      setSigStatus(null);
 
-    if (!officerPassphrase.trim()) {
-      setError('You must enter your allotted clearance passphrase to decrypt this document.');
-      return;
-    }
-
-    const aId = Number(assetId);
-    const uId = Number(user?.userId);
-
-    let clientSignature = undefined;
-    let challengeId = undefined;
-
-    // Client-side PQC signing if enrolled
-    try {
-      setSigStatus('signing');
-      const bundleRes = await getPqcKeyBundle();
-      if (bundleRes?.encryptedPqcKeys) {
-        const challenge = await requestDecryptChallenge({ assetId: aId, userId: uId });
-        const sig = await unlockAndSign(
-          bundleRes.encryptedPqcKeys,
-          officerPassphrase.trim(),
-          challenge.challengeHex
-        );
-        clientSignature = sig;
-        challengeId = challenge.challengeId;
-        setSigStatus('ok');
-      } else {
-        setSigStatus('skipped');
+      if (!officerPassphrase.trim()) {
+        setError('You must enter your allotted clearance passphrase to decrypt this document.');
+        return;
       }
-    } catch (sigErr) {
-      console.warn('[pqc] Client signing failed or incorrect passphrase:', sigErr.message);
-      setError('Decryption passphrase incorrect or invalid key bundle.');
-      setStatus('error');
-      setSigStatus('error');
-      return;
-    }
 
-    setStatus('working');
-    try {
-      const r = await decryptAsset({
-        assetId: aId,
-        userId: uId,
-        deviceLabel: deviceLabel || 'DESK-114',
-        passphrase: officerPassphrase.trim(),
-        clientSignature,
-        challengeId,
-      });
-      setSingleResult(r);
-      setStatus('done');
-    } catch (err) {
-      setError(err.message || 'Decryption failed: invalid or unauthorized passphrase.');
-      setStatus('error');
-    }
-  }, [assetId, user?.userId, officerPassphrase, deviceLabel]);
+      const aId = Number(assetId);
+      const uId = Number(user?.userId);
+
+      let clientSignature = undefined;
+      let challengeId = undefined;
+
+      // Client-side PQC signing if enrolled
+      try {
+        setSigStatus('signing');
+        const bundleRes = await getPqcKeyBundle();
+        if (bundleRes?.encryptedPqcKeys) {
+          const challenge = await requestDecryptChallenge({ assetId: aId, userId: uId });
+          const sig = await unlockAndSign(
+            bundleRes.encryptedPqcKeys,
+            officerPassphrase.trim(),
+            challenge.challengeHex
+          );
+          clientSignature = sig;
+          challengeId = challenge.challengeId;
+          setSigStatus('ok');
+        } else {
+          setSigStatus('skipped');
+        }
+      } catch (sigErr) {
+        console.warn('[pqc] Client signing failed or incorrect passphrase:', sigErr.message);
+        setError('Decryption passphrase incorrect or invalid key bundle.');
+        setStatus('error');
+        setSigStatus('error');
+        return;
+      }
+
+      setStatus('working');
+      try {
+        const r = await decryptAsset({
+          assetId: aId,
+          userId: uId,
+          deviceLabel: deviceLabel || 'DESK-114',
+          passphrase: officerPassphrase.trim(),
+          clientSignature,
+          challengeId,
+        });
+        setSingleResult(r);
+        setStatus('done');
+      } catch (err) {
+        setError(err.message || 'Decryption failed: invalid or unauthorized passphrase.');
+        setStatus('error');
+      }
+    },
+    [assetId, user?.userId, officerPassphrase, deviceLabel]
+  );
 
   const isBusy = status === 'working';
 
   return (
     <section className="space-y-3.5">
       <Header
+        eyebrow="Release"
         title={isAdmin ? 'Decrypt & Multi-Officer Dispatch' : 'Decrypt protected document'}
-        subtitle={
-          isAdmin
-            ? 'Select a document, choose one or multiple recipient officers, and assign common or individual access passphrases.'
-            : 'Enter your allotted clearance passphrase to decapsulate the content key and release your watermarked copy.'
-        }
       />
 
-      <div className="grid gap-3.5 xl:grid-cols-12">
+      <div className={`grid gap-6 ${status === 'idle' ? '' : 'xl:grid-cols-12'}`}>
         {/* ── Left Column: Form ────────────────────────────────────────── */}
-        <div className="space-y-3.5 xl:col-span-6">
+        <div
+          className={`space-y-5 ${status === 'idle' ? 'mx-auto w-full max-w-3xl' : 'xl:col-span-6'}`}
+        >
           <form
             onSubmit={isAdmin ? submitAdminBatch : submitOfficerDecrypt}
             className="card space-y-3.5 p-4 sm:p-5"
           >
             {/* Document Selection */}
             <Field label="Protected Document (PDF / Image)">
-              <select
-                className="input text-xs sm:text-sm font-semibold"
+              <Select
+                ariaLabel="Protected document"
                 value={assetId}
-                onChange={(e) => setAssetId(e.target.value)}
-              >
-                {assets.map((a) => (
-                  <option key={a.assetId} value={a.assetId}>
-                    {a.title} · [{a.classification}]
-                  </option>
-                ))}
-              </select>
+                onChange={setAssetId}
+                options={assets.map((a) => ({
+                  value: a.assetId,
+                  label: a.title,
+                  hint: a.classification,
+                }))}
+              />
             </Field>
 
             {/* ── ADMIN: Multi-choice Officer Selection & Passphrase Modes ── */}
             {isAdmin ? (
-              <div className="space-y-3 rounded-2xl border border-line bg-[#fbfbf7] p-3 sm:p-3.5">
-                <div className="flex flex-wrap items-center justify-between gap-1.5">
+              <div className="space-y-4 rounded-2xl border border-line bg-[#faf8f5] p-4 sm:p-4.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs font-bold uppercase tracking-wide text-ink">
                     Select Recipient Officers ({selectedUserIds.length} selected)
                   </span>
@@ -239,14 +249,14 @@ export default function Decrypt() {
                     <button
                       type="button"
                       onClick={selectAllOfficers}
-                      className="rounded-md bg-white border border-line px-2 py-0.5 text-[11px] font-bold text-ink hover:bg-lime/20 transition"
+                      className="rounded-md bg-white border border-line px-2.5 py-1 text-xs font-bold text-ink hover:bg-accent/20 transition"
                     >
                       Select All
                     </button>
                     <button
                       type="button"
                       onClick={clearSelectedOfficers}
-                      className="rounded-md bg-white border border-line px-2 py-0.5 text-[11px] font-bold text-ink-muted hover:text-rose-600 transition"
+                      className="rounded-md bg-white border border-line px-2.5 py-1 text-xs font-bold text-ink-muted hover:text-danger-deep transition"
                     >
                       Clear
                     </button>
@@ -265,7 +275,7 @@ export default function Decrypt() {
                           onClick={() => toggleUser(u.userId)}
                           className={`flex items-center gap-2.5 rounded-xl border p-2 sm:p-2.5 cursor-pointer transition select-none ${
                             isChecked
-                              ? 'border-lime bg-lime/10 shadow-xs'
+                              ? 'border-accent bg-accent/10 shadow-xs'
                               : 'border-line/60 bg-white hover:border-line'
                           }`}
                         >
@@ -273,12 +283,12 @@ export default function Decrypt() {
                             type="checkbox"
                             checked={isChecked}
                             onChange={() => {}}
-                            className="h-3.5 w-3.5 rounded text-lime focus:ring-lime"
+                            className="h-4 w-4 rounded text-accent focus:ring-accent"
                           />
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs sm:text-sm font-bold text-ink">{u.name}</span>
-                              <span className="rounded bg-night/5 px-1.5 py-0.5 text-[10px] font-bold text-ink-muted">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-bold text-ink">{u.name}</span>
+                              <span className="rounded bg-noir/5 px-1.5 py-0.5 text-[11px] font-bold text-ink-muted">
                                 {u.dept}
                               </span>
                             </div>
@@ -291,116 +301,75 @@ export default function Decrypt() {
                     })}
                 </div>
 
-                {/* Passphrase Allotment Mode Switcher */}
+                {/* One passphrase per recipient — there is no shared-secret mode,
+                    because a secret several officers hold cannot tie a leaked
+                    copy back to one of them. */}
                 <div className="pt-2 border-t border-line/60">
-                  <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink">
-                    Passphrase Allotment Mode
+                  <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-ink">
+                    Recipient Passphrases
                   </span>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setPassphraseMode('common')}
-                      className={`rounded-xl py-1.5 px-2.5 text-xs font-bold transition border ${
-                        passphraseMode === 'common'
-                          ? 'bg-night text-lime border-night shadow-sm'
-                          : 'bg-white text-ink-muted border-line hover:text-ink'
-                      }`}
-                    >
-                      🔒 Common Passphrase
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPassphraseMode('individual')}
-                      className={`rounded-xl py-1.5 px-2.5 text-xs font-bold transition border ${
-                        passphraseMode === 'individual'
-                          ? 'bg-night text-lime border-night shadow-sm'
-                          : 'bg-white text-ink-muted border-line hover:text-ink'
-                      }`}
-                    >
-                      🔑 Individual Passphrases
-                    </button>
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-semibold text-ink-muted">
+                      Set a passphrase for each selected officer:
+                    </label>
+                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                      {users
+                        .filter((u) => selectedUserIds.includes(u.userId))
+                        .map((u) => (
+                          <div
+                            key={u.userId}
+                            className="flex items-center gap-2 rounded-xl bg-white border border-line p-2 text-xs"
+                          >
+                            <span className="font-bold text-ink w-32 truncate">{u.name}</span>
+                            <input
+                              type="text"
+                              className="input h-8 text-xs font-mono flex-1"
+                              placeholder={`Custom secret for ${u.name}`}
+                              value={individualPassphrases[u.userId] || ''}
+                              onChange={(e) => setOfficerIndivPass(u.userId, e.target.value)}
+                            />
+                          </div>
+                        ))}
+                    </div>
                   </div>
-
-                  {/* Mode A: Common Passphrase */}
-                  {passphraseMode === 'common' && (
-                    <div className="mt-2.5 space-y-1">
-                      <label className="text-[11px] font-semibold text-ink-muted">
-                        Common Passphrase for all selected officers
-                      </label>
-                      <input
-                        type="text"
-                        className="input font-mono text-xs w-full !py-1.5"
-                        value={commonPassphrase}
-                        onChange={(e) => setCommonPassphrase(e.target.value)}
-                        placeholder="Enter common clearance passphrase (e.g. ClearancePass#2026)"
-                      />
-                      <p className="text-[10px] text-ink-faint">
-                        All selected officers must enter this identical passphrase in their dashboard to unlock this copy.
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Mode B: Individual Passphrases */}
-                  {passphraseMode === 'individual' && (
-                    <div className="mt-2.5 space-y-1.5">
-                      <label className="text-[11px] font-semibold text-ink-muted">
-                        Set specific passphrase for each recipient officer:
-                      </label>
-                      <div className="space-y-1.5 max-h-40 overflow-y-auto scroll-slim pr-1">
-                        {users
-                          .filter((u) => selectedUserIds.includes(u.userId))
-                          .map((u) => (
-                            <div
-                              key={u.userId}
-                              className="flex items-center gap-2 rounded-xl bg-white border border-line p-1.5 text-xs"
-                            >
-                              <span className="font-bold text-ink w-28 truncate text-[11px]">
-                                {u.name}
-                              </span>
-                              <input
-                                type="text"
-                                className="input !h-7 text-xs font-mono flex-1 !py-1"
-                                placeholder={`Custom secret for ${u.name}`}
-                                value={individualPassphrases[u.userId] || ''}
-                                onChange={(e) => setOfficerIndivPass(u.userId, e.target.value)}
-                              />
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
             ) : (
               /* ── OFFICER: Locked Single Identity & Mandatory Passphrase ── */
               <div className="space-y-3">
                 <Field label="Authorized Recipient">
-                  <div className="rounded-2xl border border-lime/40 bg-lime/10 px-3.5 py-2.5">
+                  <div className="rounded-2xl border border-accent/40 bg-accent/10 px-4 py-3">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-bold text-ink">{user?.name}</span>
-                      <span className="pill bg-lime text-night text-[10px] font-bold">
+                      <span className="pill bg-accent text-noir text-[10px] font-bold">
                         {user?.role}
                       </span>
                     </div>
-                    <div className="mt-0.5 text-xs text-ink-muted">
-                      Department: <strong className="text-ink">{user?.dept}</strong> · Only you can decapsulate this copy with your allotted clearance key.
+                    <div className="mt-1 text-xs text-ink-muted">
+                      Department: <strong className="text-ink">{user?.dept}</strong> · Only you can
+                      decapsulate this copy with your allotted clearance key.
                     </div>
                   </div>
                 </Field>
 
                 {/* Mandatory Allotted Passphrase */}
-                <div className="rounded-2xl border border-line bg-[#fbfbf7] p-3 space-y-1.5">
+                <div className="rounded-2xl border border-line bg-[#faf8f5] p-4 space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold uppercase tracking-wide text-ink flex items-center gap-1.5">
-                      <span>🔑 Allotted Clearance Passphrase</span>
-                      <span className="text-rose-500 font-bold">*</span>
+                      <span className="flex items-center gap-1.5">
+                        <KeyIcon size={13} /> Allotted Clearance Passphrase
+                      </span>
+                      <span className="text-danger font-bold">*</span>
                     </label>
                     <button
                       type="button"
                       onClick={() => setShowPass((s) => !s)}
                       className="text-[11px] font-semibold text-ink-muted hover:text-ink"
                     >
-                      {showPass ? 'Hide 👁️' : 'Show 👁️'}
+                      <span className="flex items-center gap-1.5">
+                        {showPass ? <EyeOffIcon size={13} /> : <EyeIcon size={13} />}
+                        {showPass ? 'Hide' : 'Show'}
+                      </span>
                     </button>
                   </div>
 
@@ -415,8 +384,9 @@ export default function Decrypt() {
                     />
                   </div>
 
-                  <div className="text-[10px] text-ink-faint">
-                    Without your exact allotted passphrase, cryptographic decapsulation will strictly fail.
+                  <div className="text-[11px] text-ink-faint">
+                    Without your exact allotted passphrase, cryptographic decapsulation will
+                    strictly fail.
                   </div>
                 </div>
               </div>
@@ -435,20 +405,28 @@ export default function Decrypt() {
             {/* Submit Action */}
             <button
               type="submit"
-              className="btn-lime w-full h-10 text-xs sm:text-sm font-extrabold shadow-sm transition hover:scale-[1.005]"
+              className="btn-accent w-full h-12 text-sm font-extrabold shadow-md transition hover:scale-[1.01]"
               disabled={isBusy}
             >
-              {isBusy
-                ? 'Processing Cryptographic Release & Blockchain Anchor…'
-                : isAdmin
-                ? `🚀 Decrypt & Dispatch to ${selectedUserIds.length} Officers`
-                : '🔓 Verify Passphrase & Decrypt Document'}
+              {isBusy ? (
+                'Processing Cryptographic Release & Blockchain Anchor…'
+              ) : isAdmin ? (
+                <>
+                  <SendIcon size={15} />
+                  {`Decrypt & Dispatch to ${selectedUserIds.length} Officers`}
+                </>
+              ) : (
+                <>
+                  <UnlockIcon size={15} />
+                  Verify Passphrase & Decrypt Document
+                </>
+              )}
             </button>
 
             {error && (
-              <div className="rounded-xl border border-rose-300 bg-rose-50 p-3 text-xs font-semibold text-rose-800 space-y-1">
-                <div className="flex items-center gap-2 font-bold text-sm text-rose-900">
-                  <span>⛔ Access / Clearance Error</span>
+              <div className="rounded-xl border border-danger-bright bg-danger-tint p-4 text-xs font-semibold text-danger-deep space-y-1">
+                <div className="flex items-center gap-2 font-bold text-sm text-danger-deep">
+                  <BanIcon size={14} /> Access / Clearance Error
                 </div>
                 <div>{error}</div>
               </div>
@@ -457,24 +435,14 @@ export default function Decrypt() {
         </div>
 
         {/* ── Right Column: Interactive Results & Receipts ─────────────── */}
-        <div className="space-y-3.5 xl:col-span-6">
-          {status === 'idle' && (
-            <Notice>
-              {isAdmin
-                ? 'Choose a protected document, select the recipient officers, and assign passphrases to dispatch watermarked copies.'
-                : 'Enter your allotted clearance passphrase to verify your identity, decapsulate the content key, and download your watermarked document.'}
-            </Notice>
-          )}
-
+        <div className={`space-y-5 ${status === 'idle' ? 'hidden' : 'xl:col-span-6'}`}>
           {isBusy && (
-            <div className="card grid place-items-center p-8 text-center space-y-3">
-              <div className="h-8 w-8 animate-spin rounded-full border-3 border-lime border-t-transparent" />
-              <div className="mono text-xs sm:text-sm font-bold text-ink animate-pulse">
+            <div className="card grid place-items-center p-12 text-center space-y-4">
+              <div className="h-10 w-10 animate-spin rounded-full border-4 border-accent border-t-transparent" />
+              <div className="mono text-sm font-bold text-ink animate-pulse">
                 Embedding invisible Haar-DWT watermark & anchoring on Sepolia blockchain…
               </div>
-              <div className="text-[11px] text-ink-muted">
-                Zero-trust verification in progress.
-              </div>
+              <div className="text-xs text-ink-muted">Zero-trust verification in progress.</div>
             </div>
           )}
 
@@ -486,12 +454,13 @@ export default function Decrypt() {
                   <h3 className="text-sm sm:text-base font-extrabold text-ink">
                     Dispatch Completed Successfully
                   </h3>
-                  <p className="text-[11px] text-ink-muted mt-0.5">
-                    {batchResult.assetTitle} · {batchResult.totalDispatched} copies anchored on-chain
+                  <p className="text-xs text-ink-muted mt-0.5">
+                    {batchResult.assetTitle} · {batchResult.totalDispatched} copies anchored
+                    on-chain
                   </p>
                 </div>
-                <span className="pill bg-emerald-600 text-white font-bold text-[11px]">
-                  DISPATCHED ✓
+                <span className="pill bg-attributed-deep text-white font-bold text-xs">
+                  DISPATCHED <CheckIcon size={11} />
                 </span>
               </div>
 
@@ -499,7 +468,7 @@ export default function Decrypt() {
                 {batchResult.dispatches.map((d) => (
                   <div
                     key={d.userId}
-                    className="rounded-2xl border border-line bg-[#fbfbf7] p-3 space-y-2 shadow-xs"
+                    className="rounded-2xl border border-line bg-[#faf8f5] p-4 space-y-2.5 shadow-xs"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-1.5">
                       <div className="flex items-center gap-1.5">
@@ -508,8 +477,8 @@ export default function Decrypt() {
                           [{d.department}]
                         </span>
                       </div>
-                      <span className="mono rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-bold text-ink">
-                        Passphrase: <strong className="text-night">{d.allottedPassphrase}</strong>
+                      <span className="mono rounded-full bg-line px-2.5 py-0.5 text-xs font-bold text-ink">
+                        Passphrase: <strong className="text-noir">{d.allottedPassphrase}</strong>
                       </span>
                     </div>
 
@@ -524,17 +493,19 @@ export default function Decrypt() {
                           href={d.etherscanUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-xs font-bold text-blue-600 hover:underline"
+                          className="text-xs font-bold text-pending-deep hover:underline"
                         >
                           View on Sepolia ↗
                         </a>
-                      ) : <span />}
+                      ) : (
+                        <span />
+                      )}
 
                       {d.downloadUrl && (
                         <a
                           href={markedFileUrl(d.downloadUrl)}
                           download
-                          className="btn-lime h-7 px-3 text-xs font-bold inline-flex items-center gap-1.5 shadow-xs"
+                          className="btn-accent h-8 px-3.5 text-xs font-bold inline-flex items-center gap-1.5 shadow-xs"
                         >
                           <span>Download Watermarked Copy</span>
                           <span>↓</span>
@@ -569,19 +540,19 @@ function Receipt({ result, officer, asset, device, sigStatus }) {
   return (
     <div className="space-y-4">
       {/* On-chain receipt banner */}
-      <div className="rounded-3xl bg-night bg-gradient-to-br from-[#20220f] to-night p-5 text-white shadow-panel">
+      <div className="rounded-3xl bg-noir bg-gradient-to-br from-[#131b26] to-noir p-5 text-white shadow-panel">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-sm font-bold flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-lime animate-pulse" />
+            <span className="h-2 w-2 rounded-full bg-accent animate-pulse" />
             <span>On-chain Provenance Receipt</span>
           </h3>
-          <span className="pill bg-lime text-night font-bold">VERIFIED ON SEPOLIA</span>
+          <span className="pill bg-accent text-noir font-bold">VERIFIED ON SEPOLIA</span>
         </div>
         <dl className="mono space-y-2 text-xs">
           <ChainRow k="receipt id" v={shortHash(result.receiptId, 10, 6)} />
-          <ChainRow k="tx hash"    v={shortHash(result.txHash, 10, 6)} />
-          <ChainRow k="block"      v={result.blockNumber ?? '—'} />
-          <ChainRow k="payload"    v={`${result.payloadBits?.length ?? 0} bits embedded`} />
+          <ChainRow k="tx hash" v={shortHash(result.txHash, 10, 6)} />
+          <ChainRow k="block" v={result.blockNumber ?? '—'} />
+          <ChainRow k="payload" v={`${result.payloadBits?.length ?? 0} bits embedded`} />
           {result.pqc?.signatureCommit && (
             <ChainRow k="sig commit" v={shortHash(result.pqc.signatureCommit, 10, 6)} />
           )}
@@ -602,27 +573,27 @@ function Receipt({ result, officer, asset, device, sigStatus }) {
       <div className="card p-5 space-y-4">
         <div className="flex items-center justify-between border-b border-line pb-2.5">
           <h3 className="text-sm font-bold text-ink">Decrypted Document Registry</h3>
-          <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+          <span className="rounded bg-attributed-tint px-2 py-0.5 text-[10px] font-bold text-attributed-deep">
             PASSPHRASE AUTHENTICATED
           </span>
         </div>
 
         <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-          <Reg k="Officer"      v={officer?.name} />
-          <Reg k="Department"   v={officer?.dept} />
-          <Reg k="Document"     v={asset?.title} />
-          <Reg k="Device"       v={device} />
-          <Reg k="PSNR"         v={result.psnrDb != null ? `${result.psnrDb.toFixed(1)} dB` : '—'} />
+          <Reg k="Officer" v={officer?.name} />
+          <Reg k="Department" v={officer?.dept} />
+          <Reg k="Document" v={asset?.title} />
+          <Reg k="Device" v={device} />
+          <Reg k="PSNR" v={result.psnrDb != null ? `${result.psnrDb.toFixed(1)} dB` : '—'} />
           <Reg k="QIM strength" v={`Δ = ${result.deltaUsed}`} />
         </dl>
 
         <div className="pt-2">
           <a
             href={markedFileUrl(result.downloadUrl)}
-            className="btn-lime w-full h-11 text-sm font-extrabold flex items-center justify-center gap-2 shadow-sm"
+            className="btn-accent w-full h-11 text-sm font-extrabold flex items-center justify-center gap-2 shadow-sm"
             download
           >
-            <span>📥 Download Watermarked Document</span>
+            <DownloadIcon size={15} /> Download Watermarked Document
           </a>
         </div>
       </div>
