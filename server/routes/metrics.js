@@ -17,12 +17,18 @@ const router = Router();
 
 const METRICS_PATH = path.join(ROOT, 'test', 'metrics.json');
 
-router.get('/', requireCap('metrics:read'), async (_req, res, next) => {
+router.get('/', requireCap('metrics:read'), async (req, res, next) => {
   try {
+    // Telemetry can be narrowed to one classification, so a reviewer can ask
+    // whether the marks hold up on SECRET material specifically rather than
+    // only in aggregate across everything released.
+    const classification = String(req.query.classification || 'ALL').toUpperCase();
+    const scoped = classification !== 'ALL' ? { asset: { classification } } : undefined;
     const raw = await fs.readFile(METRICS_PATH, 'utf8').catch(() => null);
 
     // Compute live telemetry from actual DecryptionEvents in PostgreSQL
     const recentEvents = await prisma.decryptionEvent.findMany({
+      where: scoped,
       take: 50,
       orderBy: { createdAt: 'desc' },
       select: {
@@ -30,10 +36,11 @@ router.get('/', requireCap('metrics:read'), async (_req, res, next) => {
         deltaUsed: true,
         psnrDb: true,
         createdAt: true,
+        asset: { select: { classification: true } },
       },
     });
 
-    const totalEvents = await prisma.decryptionEvent.count();
+    const totalEvents = await prisma.decryptionEvent.count({ where: scoped });
     let avgPsnr = 0;
     let minPsnr = null;
     let maxPsnr = null;
@@ -51,6 +58,7 @@ router.get('/', requireCap('metrics:read'), async (_req, res, next) => {
     }
 
     const live = {
+      classification,
       totalDecryptions: totalEvents,
       sampleCount: recentEvents.length,
       avgPsnr,
@@ -61,6 +69,7 @@ router.get('/', requireCap('metrics:read'), async (_req, res, next) => {
           index: recentEvents.length - idx,
           psnrDb: Math.round(e.psnrDb * 10) / 10,
           delta: e.deltaUsed,
+          classification: e.asset?.classification,
           time: e.createdAt,
         }))
         .reverse(),

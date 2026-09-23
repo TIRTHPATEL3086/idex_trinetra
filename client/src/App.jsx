@@ -7,10 +7,12 @@ import { RequireAuth, RequireCap } from './components/RequireAuth.jsx';
 import Logo from './components/Logo.jsx';
 import {
   CheckIcon,
+  CloseIcon,
   CopyIcon,
   ShieldIcon as ShieldGlyph,
   SignOutIcon,
 } from './components/icons.jsx';
+import Landing from './pages/Landing.jsx';
 import Login from './pages/Login.jsx';
 import Assets from './pages/Assets.jsx';
 import Decrypt from './pages/Decrypt.jsx';
@@ -19,6 +21,7 @@ import Timeline from './pages/Timeline.jsx';
 import Robustness from './pages/Robustness.jsx';
 import History from './pages/History.jsx';
 import PqcEnroll from './pages/PqcEnroll.jsx';
+import Inspect from './pages/Inspect.jsx';
 
 /**
  * Application shell — a white, large-radius app panel on a warm cream canvas,
@@ -41,6 +44,7 @@ const NAV = [
   { to: '/assets', label: 'Documents', icon: DocIcon, cap: 'assets:read' },
   { to: '/decrypt', label: 'Decrypt', icon: KeyIcon, cap: 'decrypt:self' },
   { to: '/trace', label: 'Trace', icon: SearchIcon, cap: 'trace:run' },
+  { to: '/inspect', label: 'Watermark', icon: FingerprintIcon, cap: 'decrypt:any' },
   { to: '/timeline', label: 'Timeline', icon: ClockIcon, cap: 'audit:own' },
   { to: '/history', label: 'History', icon: HistoryIcon, cap: 'audit:read' },
   { to: '/enroll', label: 'PQC Enroll', icon: ShieldIcon, cap: 'assets:upload' },
@@ -50,6 +54,7 @@ const NAV = [
 export default function App() {
   return (
     <Routes>
+      <Route path="/" element={<LandingGate />} />
       <Route path="/login" element={<Login />} />
       <Route
         path="/*"
@@ -61,6 +66,19 @@ export default function App() {
       />
     </Routes>
   );
+}
+
+/**
+ * `/` is public. Someone already signed in has no use for the pitch, so they go
+ * straight to whichever screen their role lands on — but only once the
+ * boot-time session check has answered, or a returning user would see the
+ * landing page flash before being bounced.
+ */
+function LandingGate() {
+  const { user, state } = useAuth();
+  if (state === 'checking') return null;
+  if (user) return <Navigate to={user.landing || '/assets'} replace />;
+  return <Landing />;
 }
 
 function Shell() {
@@ -81,14 +99,9 @@ function Shell() {
   }, [navOpen]);
 
   return (
-    <div className="overflow-hidden bg-canvas p-2 [height:100dvh] sm:p-4 lg:p-6">
-      {/* The app panel. The reference's radius is 1.5rem on mobile and 3.125rem
-          from the large breakpoint up — we follow it exactly. */}
+    <div className="overflow-hidden bg-canvas p-1.5 [height:100dvh] sm:p-3 xl:p-4">
+      {/* The reference's radius: 1.5rem on mobile, 3.125rem from lg up. */}
       <div className="mx-auto flex h-full w-full max-w-[1440px] flex-col overflow-hidden rounded-panel border border-line bg-white shadow-app lg:rounded-[3.125rem]">
-        {/* ---- top bar (fixed) ---- */}
-        <header className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-3.5 sm:px-7 lg:px-8">
-    <div className="h-screen overflow-hidden bg-olive p-1.5 [height:100dvh] sm:p-3 xl:p-4">
-      <div className="mx-auto flex h-full w-full max-w-[1440px] flex-col overflow-hidden rounded-2xl bg-white shadow-app sm:rounded-3xl">
         {/* ---- top bar (fixed) ---- */}
         <header className="flex shrink-0 items-center gap-2.5 border-b border-line px-3.5 py-3 sm:px-6">
           <button
@@ -111,12 +124,6 @@ function Shell() {
           </span>
 
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-            {user?.role !== 'OFFICER' && (
-              <>
-                <HealthChip health={health} />
-                <NotificationsBell health={health} />
-              </>
-            )}
             <WalletButton health={health} />
             <AccountMenu user={user} />
           </div>
@@ -133,9 +140,8 @@ function Shell() {
             />
           )}
 
-          <Sidebar health={health} open={navOpen} can={can} user={user} />
+          <Sidebar open={navOpen} can={can} />
 
-          <main className="scroll-slim min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-6 sm:px-6 sm:py-8 lg:px-9 lg:py-10">
           <main className="scroll-slim min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3.5 py-5 sm:px-6 sm:py-6 xl:px-8">
             <div className="mx-auto w-full max-w-6xl">
               <Routes>
@@ -149,11 +155,7 @@ function Shell() {
                   path="/assets"
                   element={
                     <RequireCap capability="assets:read">
-                      {user?.role === 'OFFICER' ? (
-                        <Navigate to="/decrypt" replace />
-                      ) : (
-                        <Assets />
-                      )}
+                      <Assets />
                     </RequireCap>
                   }
                 />
@@ -162,6 +164,14 @@ function Shell() {
                   element={
                     <RequireCap capability="decrypt:self">
                       <Decrypt />
+                    </RequireCap>
+                  }
+                />
+                <Route
+                  path="/inspect"
+                  element={
+                    <RequireCap capability="decrypt:any">
+                      <Inspect />
                     </RequireCap>
                   }
                 />
@@ -215,17 +225,11 @@ function Shell() {
   );
 }
 
-/**
- * Navigation rail — an inset, large-radius dark block, the way the reference
- * drops a dark section into its cream page. The active item is a coral pill;
- * coral carries dark ink rather than white, because white on #ff7448 is only
- * a 2.8:1 contrast and these labels are 14px.
- */
-function Sidebar({ health, open, can, user }) {
-  const items = NAV.filter((n) => {
-    if (n.to === '/assets' && user?.role === 'OFFICER') return false;
-    return can(n.cap);
-  });
+function Sidebar({ open, can }) {
+  // Capability alone decides what appears here. A hard-coded role exception
+  // would put the menu and the router out of step with the server, which is
+  // the one thing this list exists to prevent.
+  const items = NAV.filter((n) => can(n.cap));
   return (
     <aside
       className={`scroll-slim scroll-dark fixed inset-y-0 left-0 z-40 flex w-64 max-w-[82vw] flex-col overflow-y-auto bg-noir-deep p-4 text-white transition-transform duration-200 lg:static lg:z-auto lg:my-3 lg:ml-3 lg:w-64 lg:max-w-none lg:translate-x-0 lg:rounded-3xl ${
@@ -247,7 +251,7 @@ function Sidebar({ health, open, can, user }) {
             className={({ isActive }) =>
               `group flex items-center gap-3 rounded-full px-4 py-2.5 text-sm font-semibold transition ${
                 isActive
-                  ? 'bg-accent text-noir shadow-[0_8px_20px_-10px_rgba(255,116,72,0.95)]'
+                  ? 'bg-accent text-noir shadow-[0_8px_22px_-10px_rgba(255,255,255,0.75)]'
                   : 'text-white/65 hover:bg-white/10 hover:text-white'
               }`
             }
@@ -262,22 +266,12 @@ function Sidebar({ health, open, can, user }) {
         ))}
       </nav>
 
-      <div className="mt-auto space-y-3 pt-6">
-        {can('trace:run') && (
-          <NavLink to="/trace" className="btn-accent w-full">
-            <SearchIcon />
       {can('trace:run') && (
         <div className="mt-auto pt-6">
-          <NavLink to="/trace" className="btn-dark w-full">
-            <SearchIcon light />
+          <NavLink to="/trace" className="btn-accent w-full">
+            <SearchIcon />
             Trace a leak
           </NavLink>
-        </div>
-      )}
-      {user?.role !== 'OFFICER' && (
-        <div className="mt-4 space-y-3">
-          <RoleCard user={user} />
-          <HealthBadge health={health} />
         </div>
       )}
     </aside>
@@ -300,98 +294,6 @@ function useHealth() {
     };
   }, []);
   return health;
-}
-
-/**
- * The same status is shown twice — as a chip on the white top bar and inside
- * the badge on the dark rail — so each state carries both cuts. `toneDark` is
- * not decoration: #007956 on navy is unreadable.
- */
-function healthTone(health) {
-  if (!health)
-    return { dot: 'bg-ink-faint', label: '…', tone: 'text-ink-faint', toneDark: 'text-white/50' };
-  if (!health.ok)
-    return {
-      dot: 'bg-inconclusive',
-      label: 'API down',
-      tone: 'text-inconclusive',
-      toneDark: 'text-inconclusive-bright',
-    };
-  if (health.warnings?.length)
-    return {
-      dot: 'bg-probable',
-      label: 'Degraded',
-      tone: 'text-probable',
-      toneDark: 'text-probable-bright',
-    };
-  return {
-    dot: 'bg-attributed',
-    label: 'All systems go',
-    tone: 'text-attributed-deep',
-    toneDark: 'text-attributed-bright',
-  };
-}
-
-function HealthChip({ health }) {
-  const { dot, label, tone } = healthTone(health);
-  return (
-    <span className="hidden items-center gap-2 rounded-full border border-line bg-white px-3 py-2 text-xs font-bold sm:inline-flex">
-      <span className={`h-2 w-2 rounded-full ${dot}`} />
-      <span className={tone}>{label}</span>
-    </span>
-  );
-}
-
-function HealthBadge({ health }) {
-  if (!health) return null;
-  const { dot, label, toneDark } = healthTone(health);
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-3.5">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs font-semibold">
-          <span className={`h-2.5 w-2.5 rounded-full ${dot} animate-pulse`} />
-          <span className={toneDark}>{label}</span>
-        </div>
-        <span className="mono rounded bg-white/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-white/50">
-          NODE TELEMETRY
-        </span>
-      </div>
-      {health.ok && (
-        <dl className="mono mt-2.5 space-y-1.5 divide-y divide-white/10 text-[11px] text-white/60">
-          <div className="pt-1">
-            <Row k="DATABASE" v={health.db?.toUpperCase() || 'UP'} good={health.db === 'up'} />
-          </div>
-          <div className="pt-1">
-            <Row
-              k="LEDGER"
-              v={health.chainMode === 'sepolia' ? 'SEPOLIA (ETH)' : health.chainMode?.toUpperCase()}
-              good={health.chain?.connected}
-            />
-          </div>
-          <div className="pt-1 flex items-center justify-between">
-            <dt className="text-white/45">PQC ALGO</dt>
-            <dd className="font-semibold text-attributed-bright">ML-KEM / DSA</dd>
-          </div>
-          {health.warnings?.length > 0 && (
-            <div className="pt-1 text-[10px] font-medium text-probable-bright">
-              {health.warnings.length} warning(s) flagged
-            </div>
-          )}
-        </dl>
-      )}
-    </div>
-  );
-}
-
-function Row({ k, v, good }) {
-  return (
-    <div className="flex items-center justify-between">
-      <dt className="text-white/45">{k}</dt>
-      <dd className={good ? 'font-semibold text-attributed-bright' : 'font-semibold text-white/50'}>
-        {v}
-      </dd>
-    </div>
-  );
 }
 
 /* -------------------------------------------------------------- account --- */
@@ -425,13 +327,9 @@ function AccountMenu({ user }) {
       {/* Top Header Pill Trigger */}
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-label="Account"
-        aria-expanded={open}
-        className="group flex items-center gap-2.5 rounded-full border border-line/80 bg-white/90 px-2 py-1.5 shadow-sm backdrop-blur-md transition-all duration-200 hover:border-accent-deep hover:shadow-md sm:pr-3"
         onClick={() => setOpen(true)}
         aria-label="Account details and session"
-        className="group flex items-center gap-2.5 rounded-full border border-line/80 bg-white/90 px-2 py-1.5 shadow-sm backdrop-blur-md transition-all duration-200 hover:border-lime-deep hover:shadow-md sm:pr-3 cursor-pointer"
+        className="group flex items-center gap-2.5 rounded-full border border-line/80 bg-white/90 px-2 py-1.5 shadow-sm backdrop-blur-md transition-all duration-200 hover:border-accent-deep hover:shadow-md sm:pr-3 cursor-pointer"
       >
         <div className="relative">
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-tr from-noir to-[#1b232e] text-xs font-extrabold text-accent ring-2 ring-accent/30 transition group-hover:ring-accent">
@@ -452,28 +350,8 @@ function AccountMenu({ user }) {
 
       {/* ── Centered Modal Popup with Partial Background Blur ── */}
       {open && (
-        <>
-          <button
-            type="button"
-            aria-label="Close account menu"
-            className="fixed inset-0 z-40 cursor-default"
-            onClick={() => setOpen(false)}
-          />
-          <div className="absolute right-0 z-50 mt-2.5 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-3xl border border-line/80 bg-white/95 p-4 shadow-2xl backdrop-blur-xl transition-all animate-in fade-in zoom-in-95">
-            {/* Header / Avatar */}
-            <div className="flex items-center gap-3.5 border-b border-line/60 pb-3.5">
-              <div className="relative">
-                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-tr from-noir to-[#1b232e] text-sm font-extrabold text-accent shadow-md ring-2 ring-accent/20">
-                  {initialsOf(user.name)}
-                </span>
-                <span className="absolute -bottom-1 -right-1 h-3.5 w-3.5 rounded-full border-2 border-white bg-attributed" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="truncate text-sm font-bold text-ink">{user.name}</span>
-                  <span className="rounded bg-accent/20 px-1.5 py-0.2 text-[10px] font-bold text-accent-deep">
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-night/50 backdrop-blur-md transition-all duration-200 animate-in fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-noir/50 backdrop-blur-md transition-all duration-200 animate-in fade-in"
           onClick={handleClose}
         >
           <div
@@ -483,7 +361,7 @@ function AccountMenu({ user }) {
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-line/70 pb-4">
               <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="h-2 w-2 rounded-full bg-attributed animate-pulse" />
                 <h3 className="text-sm font-extrabold tracking-wide uppercase text-ink-muted">
                   Account & Clearance Profile
                 </h3>
@@ -491,25 +369,25 @@ function AccountMenu({ user }) {
               <button
                 type="button"
                 onClick={handleClose}
-                className="grid h-8 w-8 place-items-center rounded-full text-ink-muted hover:bg-night/5 hover:text-ink transition font-bold"
+                className="grid h-8 w-8 place-items-center rounded-full text-ink-muted hover:bg-noir/5 hover:text-ink transition font-bold"
                 aria-label="Close popup"
               >
-                ✕
+                <CloseIcon size={14} />
               </button>
             </div>
 
             {/* User Profile Overview */}
-            <div className="flex items-center gap-4 rounded-2xl bg-gradient-to-br from-[#fcfcf9] to-slate-50 p-4 border border-line/80 shadow-xs">
+            <div className="flex items-center gap-4 rounded-2xl bg-gradient-to-br from-[#fcfcf9] to-muted p-4 border border-line/80 shadow-xs">
               <div className="relative shrink-0">
-                <span className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-tr from-night to-[#282b15] text-base font-extrabold text-lime shadow-md ring-2 ring-lime/40">
+                <span className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-tr from-noir to-[#1b232e] text-base font-extrabold text-accent shadow-md ring-2 ring-accent/40">
                   {initialsOf(user.name)}
                 </span>
-                <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-white bg-emerald-500" />
+                <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-white bg-attributed" />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h4 className="text-base font-extrabold text-ink truncate">{user.name}</h4>
-                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                  <span className="rounded-full bg-attributed-tint px-2 py-0.5 text-[10px] font-bold text-attributed-deep">
                     ACTIVE
                   </span>
                 </div>
@@ -518,95 +396,28 @@ function AccountMenu({ user }) {
                   <span className="font-bold text-ink">Dept: {user.dept}</span>
                   <span className="text-ink-faint">·</span>
                   <span className={`pill !text-[10px] !py-0.5 ${meta.badge ?? 'bg-line text-ink'}`}>
-                    🛡️ {meta.short || user.role}
+                    <ShieldGlyph size={12} />
+                    {meta.short || user.role}
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Role & duty, and the hashed handle — the only identity that
-                reaches the chain, kept deliberately apart from the name above. */}
-            {user?.role !== 'OFFICER' && (
-              <div className="mt-3.5 space-y-2.5 border-t border-line pt-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-ink-faint">
-                    Security Clearance
-                  </span>
-                  <span className={`pill ${meta.badge ?? 'bg-line text-ink'}`}>
-                    <ShieldGlyph size={12} />
-                    {meta.short || user.role}
-                  </span>
-                </div>
-                <p className="rounded-xl bg-muted p-2.5 text-[11px] leading-relaxed text-ink-muted">
-                  {meta.blurb}
-                </p>
-
-                {/* On-Chain Privacy Identity (The Cryptographic Highlight) */}
-                <div className="rounded-2xl border border-line/70 bg-gradient-to-br from-[#faf8f5] to-muted p-3 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
-                      <span className="h-1.5 w-1.5 rounded-full bg-attributed animate-pulse" />
-                      On-Chain Identity (Sepolia)
-                    </span>
-                    <span className="text-[9px] font-semibold text-attributed-deep bg-attributed-tint px-1.5 py-0.5 rounded">
-                      Zero-PII
-                    </span>
-                  </div>
-                  <p className="mt-1 text-[10px] text-ink-muted">
-                    Cryptographic Keccak-256 handle committed to Ethereum ledger:
-                  </p>
-                  <div className="mt-2 flex items-center justify-between gap-2 rounded-xl border border-line/80 bg-white px-2.5 py-1.5 shadow-inner">
-                    <span className="mono text-xs font-semibold text-ink">
-                      {shortHash(user.userRef, 8, 6)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={copyHandle}
-                      className="flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-[10px] font-bold text-ink-muted transition hover:bg-accent hover:text-noir"
-                      title="Copy full 32-byte on-chain userRef"
-                    >
-                      {copied ? (
-                        <span className="flex items-center gap-1 font-bold text-attributed-deep">
-                          <CheckIcon size={12} /> Copied
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1">
-                          <CopyIcon size={12} /> Copy
-                        </span>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Sign Out Action */}
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                signOut();
-              }}
-              className="mt-3.5 flex w-full items-center justify-center gap-2 rounded-xl border border-line bg-muted/80 py-2.5 text-xs font-bold text-ink transition hover:border-danger-bright hover:bg-danger-tint hover:text-danger-deep"
-            >
-              <span>Sign out</span>
-              <SignOutIcon size={14} />
-            </button>
             {/* Clearance & Role Capability Blurb */}
             {meta.blurb && (
-              <p className="rounded-2xl bg-slate-50 p-3 text-xs leading-relaxed text-ink-muted border border-line/60">
+              <p className="rounded-2xl bg-muted p-3 text-xs leading-relaxed text-ink-muted border border-line/60">
                 {meta.blurb}
               </p>
             )}
 
             {/* On-Chain Sepolia Identity Card */}
-            <div className="rounded-2xl border border-line/70 bg-gradient-to-br from-[#fbfbf7] to-slate-50 p-4 space-y-2 shadow-xs">
+            <div className="rounded-2xl border border-line/70 bg-gradient-to-br from-[#faf8f5] to-muted p-4 space-y-2 shadow-xs">
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-attributed" />
                   On-Chain Cryptographic Identity
                 </span>
-                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full">
+                <span className="text-[10px] font-bold text-attributed-deep bg-attributed-tint/70 px-2 py-0.5 rounded-full">
                   Sepolia Zero-PII
                 </span>
               </div>
@@ -620,13 +431,17 @@ function AccountMenu({ user }) {
                 <button
                   type="button"
                   onClick={copyHandle}
-                  className="shrink-0 flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-ink-muted transition hover:bg-lime hover:text-night"
+                  className="shrink-0 flex items-center gap-1 rounded-lg bg-muted px-2.5 py-1 text-[11px] font-bold text-ink-muted transition hover:bg-accent hover:text-noir"
                   title="Copy full 32-byte on-chain userRef"
                 >
                   {copied ? (
-                    <span className="text-emerald-700 font-extrabold">✓ Copied</span>
+                    <span className="flex items-center gap-1 font-bold text-attributed-deep">
+                      <CheckIcon size={12} /> Copied
+                    </span>
                   ) : (
-                    <span>Copy ⧉</span>
+                    <span className="flex items-center gap-1">
+                      <CopyIcon size={12} /> Copy
+                    </span>
                   )}
                 </button>
               </div>
@@ -639,26 +454,27 @@ function AccountMenu({ user }) {
                   <button
                     type="button"
                     onClick={() => setConfirmSignOut(true)}
-                    className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 py-3 text-xs font-extrabold text-rose-700 hover:bg-rose-100 hover:border-rose-300 transition shadow-xs cursor-pointer"
+                    className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-danger-bright bg-danger-tint py-3 text-xs font-extrabold text-danger-deep hover:bg-danger-tint hover:border-danger-bright transition shadow-xs cursor-pointer"
                   >
                     <span>Sign out of session</span>
-                    <span className="text-sm">↳</span>
+                    <SignOutIcon size={14} />
                   </button>
                   <button
                     type="button"
                     onClick={handleClose}
-                    className="rounded-2xl border border-line bg-white px-4 py-3 text-xs font-bold text-ink-muted hover:bg-night/5 hover:text-ink transition cursor-pointer"
+                    className="rounded-2xl border border-line bg-white px-4 py-3 text-xs font-bold text-ink-muted hover:bg-noir/5 hover:text-ink transition cursor-pointer"
                   >
                     Cancel
                   </button>
                 </div>
               ) : (
-                <div className="rounded-2xl border border-rose-300 bg-rose-50/90 p-4 space-y-3 animate-in fade-in">
-                  <div className="text-xs font-bold text-rose-900">
+                <div className="rounded-2xl border border-danger-bright bg-danger-tint/90 p-4 space-y-3 animate-in fade-in">
+                  <div className="text-xs font-bold text-danger-deep">
                     Are you sure you want to end your security session?
                   </div>
-                  <p className="text-[11px] text-rose-700">
-                    Signing out terminates your authenticated enclave session. You will need to re-enter your clearance credentials to access protected documents.
+                  <p className="text-[11px] text-danger-deep">
+                    Signing out terminates your authenticated enclave session. You will need to
+                    re-enter your clearance credentials to access protected documents.
                   </p>
                   <div className="flex items-center gap-2">
                     <button
@@ -667,14 +483,14 @@ function AccountMenu({ user }) {
                         handleClose();
                         signOut();
                       }}
-                      className="flex-1 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold py-2.5 text-xs shadow-md transition hover:scale-[1.01] cursor-pointer"
+                      className="flex-1 rounded-xl bg-danger-deep hover:bg-danger-deep text-white font-extrabold py-2.5 text-xs shadow-md transition hover:scale-[1.01] cursor-pointer"
                     >
                       Confirm Sign Out
                     </button>
                     <button
                       type="button"
                       onClick={() => setConfirmSignOut(false)}
-                      className="rounded-xl border border-line bg-white px-4 py-2.5 text-xs font-bold text-ink hover:bg-night/5 transition cursor-pointer"
+                      className="rounded-xl border border-line bg-white px-4 py-2.5 text-xs font-bold text-ink hover:bg-noir/5 transition cursor-pointer"
                     >
                       Stay Signed In
                     </button>
@@ -689,30 +505,6 @@ function AccountMenu({ user }) {
   );
 }
 
-/** The role reminder pinned above the health badge in the sidebar. */
-function RoleCard({ user }) {
-  if (!user) return null;
-  const meta = ROLE_UI[user.role] ?? {};
-  return (
-    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.06] p-3.5 text-white">
-      <div className="flex items-center justify-between gap-2">
-        <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-accent/90">
-          <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
-          Enclave Session
-        </span>
-        <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent">
-          {meta.short || user.role}
-        </span>
-      </div>
-      <div className="mt-2 truncate text-xs font-bold text-white tracking-wide">{user.name}</div>
-      <div className="flex items-center justify-between text-[11px] text-white/60 mt-0.5">
-        <span className="truncate">{user.dept || 'HQ Operations'}</span>
-        <span className="mono text-[10px] text-white/40 font-semibold">U-00{user.id}</span>
-      </div>
-    </div>
-  );
-}
-
 /* ------------------------------------------------------------- wallet ----- */
 
 const short = (a) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '');
@@ -724,6 +516,7 @@ function WalletButton({ health }) {
   const [busy, setBusy] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [switchError, setSwitchError] = useState(null);
 
   useEffect(() => {
     const eth = window.ethereum;
@@ -771,8 +564,8 @@ function WalletButton({ health }) {
             method: 'wallet_switchEthereumChain',
             params: [{ chainId: '0x7a69' }], // 31337 in hex
           });
-        } catch (switchError) {
-          if (switchError.code === 4902) {
+        } catch (err) {
+          if (err?.code === 4902) {
             await eth.request({
               method: 'wallet_addEthereumChain',
               params: [
@@ -794,28 +587,53 @@ function WalletButton({ health }) {
     }
   }
 
+  /**
+   * Ask the wallet to change network.
+   *
+   * Three things this has to get right. It must not ask to switch to the
+   * chain the wallet is already on — that is a no-op the extension can choke
+   * on. It must only offer to *add* a chain the wallet genuinely does not
+   * know: Sepolia ships with MetaMask, and adding a built-in network is
+   * refused. And it must not swallow the result, or a refusal looks
+   * identical to success.
+   */
   async function switchToChain(targetHex, name, rpc) {
     const eth = window.ethereum;
     if (!eth) return;
+    setSwitchError(null);
+
+    if (chainId && chainId.toLowerCase() === targetHex.toLowerCase()) return;
+
     try {
       await eth.request({
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: targetHex }],
       });
     } catch (err) {
-      if (err.code === 4902 && rpc) {
-        await eth.request({
-          method: 'wallet_addEthereumChain',
-          params: [
-            {
-              chainId: targetHex,
-              chainName: name,
-              rpcUrls: [rpc],
-              nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
-            },
-          ],
-        });
+      // 4902 means the wallet has never heard of this chain, which for us
+      // only ever happens with a local dev node.
+      if (err?.code === 4902 && rpc) {
+        try {
+          await eth.request({
+            method: 'wallet_addEthereumChain',
+            params: [
+              {
+                chainId: targetHex,
+                chainName: name,
+                rpcUrls: [rpc],
+                nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+              },
+            ],
+          });
+        } catch (addErr) {
+          if (addErr?.code !== 4001) {
+            setSwitchError(addErr?.message || `Could not add ${name}.`);
+          }
+        }
+        return;
       }
+      if (err?.code === 4001) return; // the user declined; not an error
+      setSwitchError(err?.message || `Could not switch to ${name}.`);
     }
   }
 
@@ -933,6 +751,11 @@ function WalletButton({ health }) {
                   <div className="text-[10px] font-bold uppercase tracking-wider text-ink-faint">
                     Switch Network
                   </div>
+                  {switchError && (
+                    <p className="rounded-xl bg-danger-tint px-2.5 py-2 text-[11px] leading-relaxed text-danger-deep">
+                      {switchError}
+                    </p>
+                  )}
                   <div className="flex gap-2">
                     <button
                       type="button"
@@ -949,9 +772,7 @@ function WalletButton({ health }) {
                     </button>
                     <button
                       type="button"
-                      onClick={() =>
-                        switchToChain('0xaa36a7', 'Sepolia Testnet', 'https://rpc.sepolia.org')
-                      }
+                      onClick={() => switchToChain('0xaa36a7', 'Sepolia', null)}
                       className={`flex-1 rounded-xl py-1.5 text-xs font-semibold border transition ${
                         isSepolia
                           ? 'border-accent bg-accent/10 text-ink'
@@ -980,65 +801,6 @@ function WalletButton({ health }) {
 
 /* ----------------------------------------------------- notifications ------ */
 
-/** Bell with a popover of live system status / warnings. */
-function NotificationsBell({ health }) {
-  const [open, setOpen] = useState(false);
-  const warnings = health?.warnings ?? [];
-  const count = warnings.length;
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        className="btn-icon relative"
-        aria-label="Notifications"
-        onClick={() => setOpen((o) => !o)}
-      >
-        <BellIcon />
-        {count > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 grid h-4 w-4 place-items-center rounded-full bg-probable text-[9px] font-bold text-white">
-            {count}
-          </span>
-        )}
-      </button>
-
-      {open && (
-        <>
-          <button
-            type="button"
-            aria-label="Close"
-            className="fixed inset-0 z-40 cursor-default"
-            onClick={() => setOpen(false)}
-          />
-          <div className="absolute right-0 z-50 mt-2 w-72 rounded-2xl border border-line bg-white p-3 shadow-panel">
-            <div className="mb-2 px-1 text-xs font-bold uppercase tracking-wide text-ink-faint">
-              System status
-            </div>
-            {count === 0 ? (
-              <div className="flex items-center gap-2 rounded-xl bg-attributed/10 px-3 py-2.5 text-sm text-attributed">
-                <span className="h-2 w-2 rounded-full bg-attributed" />
-                All systems operational
-              </div>
-            ) : (
-              <ul className="space-y-1.5">
-                {warnings.map((w, i) => (
-                  <li
-                    key={i}
-                    className="flex items-start gap-2 rounded-xl bg-probable/10 px-3 py-2 text-xs text-ink"
-                  >
-                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-probable" />
-                    <span>{w}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
 /* ----------------------------------------------------------------- icons -- */
 const S = {
   stroke: 'currentColor',
@@ -1047,8 +809,8 @@ const S = {
   strokeLinejoin: 'round',
 };
 
-/** Icons inherit their colour from the nav item, so one rule covers the
-    light top bar, the dark rail, and the coral active pill. */
+/** Icons inherit their colour from the control, so one rule covers the light
+    top bar, the dark rail, and the coral active pill. */
 function NavIcon({ children }) {
   return (
     <svg
@@ -1061,6 +823,16 @@ function NavIcon({ children }) {
     >
       {children}
     </svg>
+  );
+}
+function FingerprintIcon(p) {
+  return (
+    <NavIcon {...p}>
+      <path d="M5 12a7 7 0 0 1 14 0" {...S} />
+      <path d="M8 12.4a4 4 0 0 1 8 0c0 2.2-.3 4.3-.9 6.3" {...S} />
+      <path d="M11 12.6a1 1 0 0 1 2 0c0 3-.5 5.9-1.4 8.6" {...S} />
+      <path d="M5.4 16.5c.4 1.4.5 2.6.4 3.9" {...S} />
+    </NavIcon>
   );
 }
 function DocIcon(p) {
@@ -1122,13 +894,6 @@ function MenuIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path d="M4 6h16M4 12h16M4 18h16" {...S} />
-    </svg>
-  );
-}
-function BellIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6ZM9.5 20a2.5 2.5 0 0 0 5 0" {...S} />
     </svg>
   );
 }

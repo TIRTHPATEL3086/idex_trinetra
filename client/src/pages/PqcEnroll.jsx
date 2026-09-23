@@ -84,12 +84,6 @@ export default function PqcEnroll() {
     }
   };
 
-  const setPresetPassphrase = (preset) => {
-    setPassphrase(preset);
-    setConfirmPassphrase(preset);
-    setModalError(null);
-  };
-
   // Passphrase strength estimation
   const getStrength = (p) => {
     if (!p) return { label: 'None', width: '0%', color: 'bg-line' };
@@ -108,17 +102,13 @@ export default function PqcEnroll() {
 
   return (
     <section className="space-y-6">
-      <Header
-        eyebrow="Key management"
-        title="Post-Quantum Cryptography Enrollment"
-        subtitle="Provision NIST FIPS 203 (ML-KEM-768) and FIPS 204 (ML-DSA-65) quantum-resistant identity keypairs for authorized officers."
-      />
+      <Header eyebrow="Key management" title="Post-Quantum Cryptography Enrollment" />
 
       {error && <Notice tone="error">{error}</Notice>}
 
       {/* KPI Overview Tiles */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-xl border border-line bg-card/60 p-5 backdrop-blur-sm">
+        <div className="rounded-xl border border-line bg-white p-5 backdrop-blur-sm">
           <div className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
             Total Officers
           </div>
@@ -128,7 +118,7 @@ export default function PqcEnroll() {
           <p className="mt-1 text-xs text-ink-muted">Registered in authorization directory</p>
         </div>
 
-        <div className="rounded-xl border border-line bg-card/60 p-5 backdrop-blur-sm">
+        <div className="rounded-xl border border-line bg-white p-5 backdrop-blur-sm">
           <div className="text-xs font-semibold uppercase tracking-wider text-accent">
             PQC Enrolled
           </div>
@@ -138,7 +128,7 @@ export default function PqcEnroll() {
           <p className="mt-1 text-xs text-ink-muted">ML-KEM-768 & ML-DSA-65 active</p>
         </div>
 
-        <div className="rounded-xl border border-line bg-card/60 p-5 backdrop-blur-sm">
+        <div className="rounded-xl border border-line bg-white p-5 backdrop-blur-sm">
           <div className="text-xs font-semibold uppercase tracking-wider text-probable">
             Pending Keys
           </div>
@@ -150,7 +140,7 @@ export default function PqcEnroll() {
       </div>
 
       {/* Main Roster Table */}
-      <div className="overflow-hidden rounded-xl border border-line bg-card">
+      <div className="overflow-hidden rounded-xl border border-line bg-white">
         <div className="border-b border-line px-6 py-4">
           <h2 className="text-base font-semibold text-ink">Officer Cryptographic Roster</h2>
           <p className="text-xs text-ink-muted">
@@ -161,12 +151,9 @@ export default function PqcEnroll() {
         {loading ? (
           <div className="p-8 text-center text-sm text-ink-muted">Loading officer credentials…</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-line/60 bg-muted text-xs font-semibold uppercase tracking-wider text-ink-muted">
           <div className="overflow-x-auto scroll-slim">
             <table className="w-full min-w-[760px] text-left text-sm">
-              <thead className="border-b border-edge/60 bg-night/20 text-xs font-bold uppercase tracking-wider text-ink-muted">
+              <thead className="border-b border-line/60 bg-noir/20 text-xs font-bold uppercase tracking-wider text-ink-muted">
                 <tr>
                   <th className="px-6 py-3.5">Officer / Role</th>
                   <th className="px-6 py-3.5">Department</th>
@@ -188,29 +175,21 @@ export default function PqcEnroll() {
                         <div className="flex items-center gap-2 text-xs text-ink-muted mt-0.5">
                           <span className="font-semibold">{u.roleLabel || u.role}</span>
                           <span>•</span>
-                          <span className="font-mono text-[11px] text-ink-muted/80">
-                            {u.userRef}
-                          </span>
                           <span className="font-mono text-xs text-ink-muted/90">{u.userRef}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-xs sm:text-sm text-ink-muted font-medium">{u.dept}</td>
+                      <td className="px-6 py-4 text-xs sm:text-sm text-ink-muted font-medium">
+                        {u.dept}
+                      </td>
                       <td className="px-6 py-4">
                         {isEnrolled ? (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-attributed/10 px-2.5 py-1 text-xs font-medium text-attributed-deep ring-1 ring-attributed/20">
-                            <span className="h-1.5 w-1.5 rounded-full bg-attributed-bright animate-pulse" />
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-attributed/10 px-2.5 py-1 text-xs font-bold text-attributed-deep ring-1 ring-attributed/20">
+                            <span className="h-1.5 w-1.5 rounded-full bg-attributed animate-pulse" />
                             Enrolled
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-probable/10 px-2.5 py-1 text-xs font-medium text-probable-deep ring-1 ring-probable/20">
-                            <span className="h-1.5 w-1.5 rounded-full bg-probable-bright" />
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-bold text-emerald-600 ring-1 ring-emerald-500/20">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            Enrolled
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-bold text-amber-600 ring-1 ring-amber-500/20">
-                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-probable/10 px-2.5 py-1 text-xs font-bold text-probable-deep ring-1 ring-probable/20">
+                            <span className="h-1.5 w-1.5 rounded-full bg-probable" />
                             Pending
                           </span>
                         )}
@@ -237,8 +216,7 @@ export default function PqcEnroll() {
                         <button
                           type="button"
                           onClick={() => openEnrollModal(u)}
-                          className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink transition hover:border-accent/60 hover:text-accent"
-                          className="rounded-xl border border-line bg-white px-3.5 py-1.5 text-xs font-bold text-ink shadow-xs transition hover:border-lime-deep hover:bg-lime/20"
+                          className="rounded-xl border border-line bg-white px-3.5 py-1.5 text-xs font-bold text-ink shadow-xs transition hover:border-accent-deep hover:bg-accent/20"
                         >
                           {isEnrolled ? 'Re-enroll' : 'Enroll PQC'}
                         </button>
@@ -255,7 +233,7 @@ export default function PqcEnroll() {
       {/* Enhanced Enrollment Modal with Passphrase Controls */}
       {enrollingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-line bg-card p-6 shadow-2xl">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-line bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between border-b border-line/60 pb-4">
               <div>
                 <h3 className="text-lg font-semibold text-ink">Set Officer PQC Passphrase</h3>
@@ -267,8 +245,7 @@ export default function PqcEnroll() {
               <button
                 type="button"
                 onClick={() => setEnrollingUser(null)}
-                className="rounded-lg p-1 text-ink-muted transition hover:text-ink"
-                aria-label="Close"
+                className="rounded-lg p-1 text-ink-muted hover:text-ink"
               >
                 <CloseIcon size={15} />
               </button>
@@ -276,11 +253,11 @@ export default function PqcEnroll() {
 
             {enrollSuccess ? (
               <div className="mt-5 space-y-4">
-                <div className="rounded-lg bg-attributed/10 border border-attributed/20 p-4 text-sm text-attributed-deep">
+                <div className="rounded-lg bg-attributed/10 border border-attributed/20 p-4 text-sm text-attributed-bright">
                   <div className="flex items-center gap-1.5 font-semibold">
                     <CheckIcon size={14} /> Post-Quantum Keypair Provisioned
                   </div>
-                  <p className="mt-1 text-xs text-attributed-deep/80 leading-relaxed">
+                  <p className="mt-1 text-xs text-attributed-bright/80 leading-relaxed">
                     ML-KEM-768 and ML-DSA-65 keys generated successfully. The private key bundle was
                     encrypted with scrypt + AES-GCM under your chosen passphrase.
                   </p>
@@ -330,22 +307,8 @@ export default function PqcEnroll() {
                   </p>
                 </div>
 
-                {/* Quick Presets helper bar */}
-                <div className="flex items-center justify-between gap-2 pt-1">
-                  <span className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider">
-                    Quick Preset:
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setPresetPassphrase('officer123')}
-                    className="rounded-lg border border-line bg-white px-2.5 py-1 text-[11px] font-medium text-ink hover:border-accent/50 hover:text-accent transition"
-                  >
-                    Default Demo (<span className="mono">officer123</span>)
-                  </button>
-                </div>
-
                 {modalError && (
-                  <div className="rounded-lg bg-danger/10 border border-danger/20 p-3 text-xs text-danger-deep">
+                  <div className="rounded-lg bg-danger/10 border border-danger/20 p-3 text-xs text-danger-bright">
                     {modalError}
                   </div>
                 )}
@@ -409,10 +372,10 @@ export default function PqcEnroll() {
                     className="w-full rounded-xl border border-line bg-white px-3.5 py-2.5 text-sm text-ink placeholder-ink-muted/50 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                   />
                   {confirmPassphrase && passphrase !== confirmPassphrase && (
-                    <p className="mt-1 text-[11px] text-danger-deep">Passphrases do not match</p>
+                    <p className="mt-1 text-[11px] text-danger-bright">Passphrases do not match</p>
                   )}
                   {confirmPassphrase && passphrase === confirmPassphrase && (
-                    <p className="mt-1 flex items-center gap-1 text-[11px] text-attributed-deep">
+                    <p className="mt-1 text-[11px] text-attributed-bright">
                       <CheckIcon size={11} /> Passphrases match
                     </p>
                   )}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { getAssets, getAudit, toggleUserActive, shortHash } from '../lib/api.js';
 import { Header, Notice } from './Assets.jsx';
 import { BanIcon, ExternalLinkIcon, UnlockIcon, WarningIcon } from '../components/icons.jsx';
+import Select from '../components/Select.jsx';
 
 /**
  * Per-asset audit trail: who opened a document, when, from which device,
@@ -53,19 +54,14 @@ export default function Timeline() {
       <Header
         eyebrow="Audit"
         title="Audit timeline & Anomaly Forensics"
-        subtitle="Every decryption of a document, in order — with automated velocity burst, off-hours, device anomaly tracking, and zero-trust revocation."
         action={
-          <select
-            className="input w-56"
+          <Select
+            className="w-56"
+            ariaLabel="Document"
             value={assetId}
-            onChange={(e) => setAssetId(e.target.value)}
-          >
-            {assets.map((a) => (
-              <option key={a.assetId} value={a.assetId}>
-                {a.title}
-              </option>
-            ))}
-          </select>
+            onChange={setAssetId}
+            options={assets.map((a) => ({ value: a.assetId, label: a.title }))}
+          />
         }
       />
 
@@ -97,26 +93,24 @@ export default function Timeline() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm sm:text-base font-bold text-ink">{e.userName}</span>
                       {e.riskLevel === 'CRITICAL' && (
-                        <span className="rounded-full bg-danger-tint px-2 py-0.5 text-[10px] font-bold text-danger-deep">
-                        <span className="rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-bold text-rose-700">
+                        <span className="rounded-full bg-danger-tint px-2.5 py-0.5 text-xs font-bold text-danger-deep">
                           CRITICAL ANOMALY
                         </span>
                       )}
                       {e.riskLevel === 'ELEVATED' && (
-                        <span className="rounded-full bg-probable-tint px-2 py-0.5 text-[10px] font-bold text-probable-deep">
-                        <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-700">
+                        <span className="rounded-full bg-probable-tint px-2.5 py-0.5 text-xs font-bold text-probable-deep">
                           ELEVATED RISK
                         </span>
                       )}
                       {e.userActive === false && (
-                        <span className="rounded-full bg-danger-deep px-2 py-0.5 text-[10px] font-bold text-white">
-                        <span className="rounded-full bg-red-600 px-2.5 py-0.5 text-xs font-bold text-white">
+                        <span className="rounded-full bg-danger-deep px-2.5 py-0.5 text-xs font-bold text-white">
                           FROZEN / REVOKED
                         </span>
                       )}
                     </div>
                     <div className="text-xs sm:text-sm text-ink-muted mt-0.5">
-                      {e.department} · Endpoint: <span className="font-mono text-xs">{e.device}</span>
+                      {e.department} · Endpoint:{' '}
+                      <span className="font-mono text-xs">{e.device}</span>
                     </div>
                   </div>
 
@@ -152,8 +146,7 @@ export default function Timeline() {
                     {e.anomalies.map((a, i) => (
                       <span
                         key={i}
-                        className="rounded-md bg-probable-tint border border-probable-bright/70 px-2 py-0.5 text-[11px] font-medium text-probable-deep flex items-center gap-1"
-                        className="rounded-md bg-amber-50 border border-amber-200/70 px-2.5 py-0.5 text-xs font-medium text-amber-800 flex items-center gap-1"
+                        className="rounded-md bg-probable-tint border border-probable-bright/70 px-2.5 py-0.5 text-xs font-medium text-probable-deep flex items-center gap-1"
                       >
                         <WarningIcon size={12} /> {a}
                       </span>

@@ -100,11 +100,25 @@ export const requestDecryptChallenge = ({ assetId, userId }) =>
     body: JSON.stringify({ assetId, userId }),
   });
 
-export const decryptAsset = ({ assetId, userId, deviceLabel, passphrase, clientSignature, challengeId }) =>
+export const decryptAsset = ({
+  assetId,
+  userId,
+  deviceLabel,
+  passphrase,
+  clientSignature,
+  challengeId,
+}) =>
   request('/api/decrypt', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ assetId, userId, deviceLabel, passphrase, clientSignature, challengeId }),
+    body: JSON.stringify({
+      assetId,
+      userId,
+      deviceLabel,
+      passphrase,
+      clientSignature,
+      challengeId,
+    }),
   });
 
 export const batchDecryptAsset = ({
@@ -128,7 +142,32 @@ export const batchDecryptAsset = ({
     }),
   });
 
+/** Released copies of a document — administrators only. */
+export const getReleases = (assetId) => request(`/api/decrypt/releases/${assetId}`);
+
+/**
+ * Recover the watermark from a stored copy and check it against the record.
+ * Reads the file; it never alters it, so the released copy is untouched.
+ */
+export const inspectRelease = (receiptId) =>
+  request(`/api/decrypt/inspect/${String(receiptId).replace(/^0x/, '')}`, { method: 'POST' });
+
 export const getAllotments = (assetId) => request(`/api/decrypt/allotments/${assetId}`);
+
+/**
+ * Reveal your own allotted passphrase for a document. Takes the account
+ * password because a live session alone should not read out a clearance
+ * secret; `userId` is only honoured for roles that may release on someone
+ * else's behalf.
+ */
+export const revealAllotment = (assetId, password, userId) =>
+  request(`/api/decrypt/allotments/${assetId}/reveal${userId ? `?userId=${userId}` : ''}`, {
+    method: 'POST',
+    // `request` does not add this; without it Express's json parser skips the
+    // body and the route sees no password at all.
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  });
 
 export function traceFile(file) {
   const form = new FormData();
@@ -143,7 +182,10 @@ export const getAudit = (assetId) => request(`/api/audit/${assetId}`);
 export const toggleUserActive = (userId) =>
   request(`/api/users/${userId}/toggle-active`, { method: 'POST' });
 
-export const getMetrics = () => request('/api/metrics');
+export const getMetrics = (classification) =>
+  request(
+    `/api/metrics${classification && classification !== 'ALL' ? `?classification=${classification}` : ''}`
+  );
 
 export const markedFileUrl = (downloadUrl) => `${BASE}${downloadUrl}`;
 

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import sharp from 'sharp';
 import { z } from 'zod';
 
 import { prisma } from '../lib/prisma.js';
@@ -19,12 +20,30 @@ import {
   bufferToHex,
 } from '../lib/refs.js';
 import { validate } from '../middleware/validate.js';
+import { verifyPassword } from '../lib/auth.js';
 import { requireAuth, requireAnyCap, forbidden } from '../middleware/auth.js';
 import { can } from '../lib/permissions.js';
 import * as chain from '../core/chain.js';
 import * as bktree from '../core/bktree.js';
-import { decrypt as aesDecrypt, encrypt as aesEncrypt, sha256, md5, embed, hashes, isPdf, embedPdf } from '../core/index.js';
-import { buildPayload, shortIdOf } from '../core/payload.js';
+import {
+  decrypt as aesDecrypt,
+  encrypt as aesEncrypt,
+  sha256,
+  md5,
+  embed,
+  hashes,
+  isPdf,
+  embedPdf,
+  extract,
+  extractPdf,
+} from '../core/index.js';
+import {
+  buildPayload,
+  shortIdOf,
+  parsePayload,
+  bitsMatching,
+  PAYLOAD_BITS,
+} from '../core/payload.js';
 import {
   decapsulateKey,
   encapsulateKey,
@@ -80,7 +99,9 @@ router.post('/challenge', guard, async (req, res, next) => {
     pruneExpiredChallenges();
     const { assetId, userId } = req.body;
     if (!assetId || !userId) {
-      return res.status(400).json({ error: { code: 'BAD_INPUT', message: 'assetId and userId required' } });
+      return res
+        .status(400)
+        .json({ error: { code: 'BAD_INPUT', message: 'assetId and userId required' } });
     }
     const challengeBytes = crypto.randomBytes(32);
     const challengeId = crypto.randomUUID();
@@ -125,7 +146,9 @@ export async function executeDecryption({
   if (!asset) throw notFound(`No asset ${assetId}`);
   if (!user) throw notFound(`No user ${userId}`);
   if (!user.active) {
-    throw forbidden(`Officer ${user.name} access has been REVOKED/FROZEN by Administrator under Zero-Trust policy.`);
+    throw forbidden(
+      `Officer ${user.name} access has been REVOKED/FROZEN by Administrator under Zero-Trust policy.`
+    );
   }
   if (!asset.cipherPath || !asset.iv || !asset.authTag) {
     throw badInput(`Asset ${assetId} has no encrypted blob — re-upload it.`);
@@ -279,12 +302,7 @@ export async function executeDecryption({
   let decryptionSignature = null;
   let sigCommitHex = null;
 
-  const receiptDigest = sha256(
-    Buffer.concat([
-      hexToBuffer(receiptIdHex),
-      hexToBuffer(userRefHex),
-    ])
-  );
+  const receiptDigest = sha256(Buffer.concat([hexToBuffer(receiptIdHex), hexToBuffer(userRefHex)]));
 
   if (clientSignature && user.dsaPublicKey) {
     try {
@@ -456,106 +474,121 @@ const BatchDecryptBody = z.object({
   delta: z.coerce.number().int().min(2).max(48).optional(),
 });
 
-router.post('/batch', requireAnyCap('decrypt:any'), validate(BatchDecryptBody), async (req, res, next) => {
-  try {
-    const {
-      assetId,
-      userIds,
-      passphraseMode,
-      commonPassphrase,
-      individualPassphrases,
-      deviceLabel,
-      delta,
-    } = req.valid;
+router.post(
+  '/batch',
+  requireAnyCap('decrypt:any'),
+  validate(BatchDecryptBody),
+  async (req, res, next) => {
+    try {
+      const {
+        assetId,
+        userIds,
+        passphraseMode,
+        commonPassphrase,
+        individualPassphrases,
+        deviceLabel,
+        delta,
+      } = req.valid;
 
-    const asset = await prisma.asset.findUnique({ where: { id: assetId } });
-    if (!asset) throw notFound(`No asset ${assetId}`);
+      const asset = await prisma.asset.findUnique({ where: { id: assetId } });
+      if (!asset) throw notFound(`No asset ${assetId}`);
 
-    const dispatches = [];
+      const dispatches = [];
 
-    for (const uid of userIds) {
-      const targetUser = await prisma.user.findUnique({ where: { id: uid } });
-      if (!targetUser || !targetUser.active) continue;
+      for (const uid of userIds) {
+        const targetUser = await prisma.user.findUnique({ where: { id: uid } });
+        if (!targetUser || !targetUser.active) continue;
 
-      const targetPassphrase = (
-        passphraseMode === 'individual'
-          ? (individualPassphrases?.[String(uid)] || commonPassphrase || 'officer123')
-          : (commonPassphrase || 'officer123')
-      ).trim();
+        const targetPassphrase = (
+          passphraseMode === 'individual'
+            ? individualPassphrases?.[String(uid)] || commonPassphrase || 'officer123'
+            : commonPassphrase || 'officer123'
+        ).trim();
 
-      // Upsert AssetKeyEncapsulation with the allotted passphrase
-      const existingEncap = await prisma.assetKeyEncapsulation.findUnique({
-        where: { assetId_userId: { assetId, userId: uid } },
-      });
-
-      if (existingEncap) {
-        await prisma.assetKeyEncapsulation.update({
+        // Upsert AssetKeyEncapsulation with the allotted passphrase
+        const existingEncap = await prisma.assetKeyEncapsulation.findUnique({
           where: { assetId_userId: { assetId, userId: uid } },
-          data: { allottedPassphrase: targetPassphrase },
         });
-      } else {
-        await prisma.assetKeyEncapsulation.create({
-          data: {
+
+        if (existingEncap) {
+          await prisma.assetKeyEncapsulation.update({
+            where: { assetId_userId: { assetId, userId: uid } },
+            data: { allottedPassphrase: targetPassphrase },
+          });
+        } else {
+          await prisma.assetKeyEncapsulation.create({
+            data: {
+              assetId,
+              userId: uid,
+              kemCiphertext: Buffer.alloc(1088),
+              encryptedKey: Buffer.alloc(32),
+              iv: Buffer.alloc(12),
+              authTag: Buffer.alloc(16),
+              allottedPassphrase: targetPassphrase,
+            },
+          });
+        }
+
+        // Execute release for this officer
+        try {
+          const decResult = await executeDecryption({
             assetId,
             userId: uid,
-            kemCiphertext: Buffer.alloc(1088),
-            encryptedKey: Buffer.alloc(32),
-            iv: Buffer.alloc(12),
-            authTag: Buffer.alloc(16),
+            deviceLabel,
+            delta: delta ?? env.watermarkDelta,
+            passphrase: targetPassphrase,
+            callerRole: 'ADMIN',
+          });
+
+          dispatches.push({
+            userId: targetUser.id,
+            userName: targetUser.name,
+            department: targetUser.dept,
+            role: targetUser.role,
             allottedPassphrase: targetPassphrase,
-          },
-        });
+            receiptId: decResult.receiptId,
+            txHash: decResult.txHash,
+            etherscanUrl: decResult.etherscanUrl,
+            downloadUrl: decResult.downloadUrl,
+            psnrDb: decResult.psnrDb,
+            success: true,
+          });
+        } catch (err) {
+          dispatches.push({
+            userId: targetUser.id,
+            userName: targetUser.name,
+            department: targetUser.dept,
+            role: targetUser.role,
+            allottedPassphrase: targetPassphrase,
+            success: false,
+            error: err.message,
+          });
+        }
       }
 
-      // Execute release for this officer
-      try {
-        const decResult = await executeDecryption({
-          assetId,
-          userId: uid,
-          deviceLabel,
-          delta: delta ?? env.watermarkDelta,
-          passphrase: targetPassphrase,
-          callerRole: 'ADMIN',
-        });
-
-        dispatches.push({
-          userId: targetUser.id,
-          userName: targetUser.name,
-          department: targetUser.dept,
-          role: targetUser.role,
-          allottedPassphrase: targetPassphrase,
-          receiptId: decResult.receiptId,
-          txHash: decResult.txHash,
-          etherscanUrl: decResult.etherscanUrl,
-          downloadUrl: decResult.downloadUrl,
-          psnrDb: decResult.psnrDb,
-          success: true,
-        });
-      } catch (err) {
-        dispatches.push({
-          userId: targetUser.id,
-          userName: targetUser.name,
-          department: targetUser.dept,
-          role: targetUser.role,
-          allottedPassphrase: targetPassphrase,
-          success: false,
-          error: err.message,
-        });
-      }
+      res.json({
+        ok: true,
+        assetTitle: asset.title,
+        totalDispatched: dispatches.filter((d) => d.success).length,
+        dispatches,
+      });
+    } catch (err) {
+      next(err);
     }
-
-    res.json({
-      ok: true,
-      assetTitle: asset.title,
-      totalDispatched: dispatches.filter((d) => d.success).length,
-      dispatches,
-    });
-  } catch (err) {
-    next(err);
   }
-});
+);
 
 // ──────────────────────── GET /api/decrypt/allotments/:assetId ──────────────
+/**
+ * Who a document was encapsulated for.
+ *
+ * The allotted passphrase is a per-recipient secret: it is the thing that ties
+ * a released copy to one person. Handing every signed-in user the whole list
+ * would let one officer release a copy under another's passphrase, which is
+ * exactly the attribution this system exists to make possible. So the list
+ * carries names for everyone and a passphrase for nobody — the secret itself
+ * only comes back from the reveal route below, and only your own.
+ */
 router.get('/allotments/:assetId', guard, async (req, res, next) => {
   try {
     const assetId = Number(req.params.assetId);
@@ -571,7 +604,7 @@ router.get('/allotments/:assetId', guard, async (req, res, next) => {
         email: e.user?.email,
         dept: e.user?.dept,
         role: e.user?.role,
-        allottedPassphrase: e.allottedPassphrase || 'officer123',
+        hasPassphrase: Boolean(e.allottedPassphrase),
       })),
     });
   } catch (err) {
@@ -579,9 +612,198 @@ router.get('/allotments/:assetId', guard, async (req, res, next) => {
   }
 });
 
+const RevealBody = z.object({ password: z.string().min(1) });
+
+/**
+ * Reveal the caller's own allotted passphrase for a document.
+ *
+ * Re-authentication rather than session alone: an unattended screen should not
+ * be enough to read out a clearance secret. An administrator may reveal for a
+ * named recipient, because releasing on their behalf is their job; everyone
+ * else gets their own and nothing else.
+ */
+router.post('/allotments/:assetId/reveal', guard, validate(RevealBody), async (req, res, next) => {
+  try {
+    const assetId = Number(req.params.assetId);
+    const requested = Number(req.query.userId ?? req.user.id);
+
+    if (requested !== req.user.id && !can(req.user.role, 'decrypt:any')) {
+      return next(forbidden('You may only reveal your own passphrase.'));
+    }
+
+    const account = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!account || !verifyPassword(req.valid.password, account.passwordHash)) {
+      // 403, not 401: the session is perfectly valid — it is the re-check that
+      // failed. The client treats a 401 on a non-auth route as an expired
+      // cookie and signs the user out, so a typo here would log them off.
+      return res.status(403).json({
+        error: { code: 'BAD_PASSWORD', message: 'That password is not correct.' },
+      });
+    }
+
+    const encap = await prisma.assetKeyEncapsulation.findFirst({
+      where: { assetId, userId: requested },
+    });
+    if (!encap) return next(notFound('No encapsulation for that recipient.'));
+
+    return res.json({ userId: requested, passphrase: encap.allottedPassphrase || 'officer123' });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 // ------------------------------------- GET /api/files/marked/:receiptId -----
 /** Serves the watermarked copy. Mounted separately in index.js. */
+/**
+ * Released copies of one document, for the registry administrator.
+ *
+ * This is the audit side of a release: which copies exist, who holds each and
+ * what quality they were marked at. It carries no passphrases — knowing a copy
+ * exists is a different thing from being able to open it.
+ */
+router.get('/releases/:assetId', requireAnyCap('decrypt:any'), async (req, res, next) => {
+  try {
+    const assetId = Number(req.params.assetId);
+    const events = await prisma.decryptionEvent.findMany({
+      where: { assetId },
+      orderBy: { createdAt: 'desc' },
+      include: { user: { select: { id: true, name: true, dept: true, role: true } } },
+    });
+
+    res.json({
+      assetId,
+      releases: events.map((e) => ({
+        receiptId: bufferToHex(e.receiptId),
+        userId: e.userId,
+        recipient: e.user?.name,
+        dept: e.user?.dept,
+        deviceLabel: e.deviceLabel,
+        createdAt: e.createdAt,
+        psnrDb: e.psnrDb,
+        deltaUsed: e.deltaUsed,
+        chainMode: e.chainMode,
+        txHash: e.txHash ? bufferToHex(e.txHash) : null,
+        hasMarkedFile: Boolean(e.markedPath),
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Recover the watermark from a released copy and check it against the record.
+ *
+ * The mark is invisible by construction and stays that way — nothing here
+ * alters the released file. What an administrator gets is the extraction: the
+ * bits actually recoverable from the copy on disk, how closely they agree with
+ * the bits embedded at release, and which recipient that resolves to.
+ *
+ * Agreement is reported as a figure rather than a verdict. A copy that has
+ * been through compression will lose bits, and a reviewer needs to see how
+ * many before deciding what the result is worth.
+ */
+router.post('/inspect/:receiptId', requireAnyCap('decrypt:any'), async (req, res, next) => {
+  try {
+    const key = String(req.params.receiptId).replace(/^0x/, '');
+    if (!/^[0-9a-f]{4,64}$/i.test(key)) throw badInput('Malformed receiptId');
+
+    const event = await prisma.decryptionEvent.findFirst({
+      where: { receiptId: hexToBuffer(`0x${key}`) },
+      include: {
+        asset: { select: { id: true, title: true, classification: true, mimeType: true } },
+        user: { select: { id: true, name: true, dept: true, role: true } },
+      },
+    });
+    if (!event) throw notFound(`No release for ${key}`);
+    if (!event.markedPath) throw notFound('That release has no stored copy to inspect.');
+
+    const buffer = await fs.readFile(event.markedPath);
+    const recovered = isPdf(buffer)
+      ? await extractPdf(buffer)
+      : await extract(buffer, event.deltaUsed);
+
+    const recoveredBits = recovered?.payloadBits || '';
+    const embeddedBits = event.payloadBits || '';
+    const matching = recoveredBits && embeddedBits ? bitsMatching(recoveredBits, embeddedBits) : 0;
+    const total = embeddedBits.length || PAYLOAD_BITS;
+    let parsed = null;
+    try {
+      parsed = parsePayload(recoveredBits);
+    } catch {
+      parsed = null;
+    }
+
+    res.json({
+      receiptId: bufferToHex(event.receiptId),
+      asset: event.asset,
+      recipient: event.user,
+      deviceLabel: event.deviceLabel,
+      releasedAt: event.createdAt,
+      psnrDb: event.psnrDb,
+      deltaUsed: event.deltaUsed,
+      embeddedBits,
+      recoveredBits,
+      bitsMatching: matching,
+      bitsTotal: total,
+      crcOk: Boolean(parsed?.crcOk),
+      chain: {
+        mode: event.chainMode,
+        txHash: event.txHash ? bufferToHex(event.txHash) : null,
+        blockNumber: event.blockNumber ? String(event.blockNumber) : null,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export const filesRouter = Router();
+
+/**
+ * Burn a visible stamp into a copy of an image.
+ *
+ * This never touches the released file. It renders a fresh image for the
+ * administrator's own view, so the copy the officer holds stays clean — a
+ * visible stamp can be cropped or cloned out in seconds, and baking one into
+ * the released file would both weaken it and tell a leaker exactly what to
+ * remove. The invisible mark is the evidence; this is a label for the person
+ * reviewing it.
+ */
+async function stampImage(buffer, text, maxWidth) {
+  const source = maxWidth
+    ? await sharp(buffer).resize({ width: maxWidth, withoutEnlargement: true }).toBuffer()
+    : buffer;
+  const image = sharp(source);
+  const { width = 800, height = 600 } = await image.metadata();
+
+  // Size the type to the image so a small thumbnail and a large scan both end
+  // up legible, then tile it on the diagonal.
+  const size = Math.max(12, Math.round(Math.min(width, height) / 22));
+  const stepX = Math.round(text.length * size * 0.62 + size * 3);
+  const stepY = size * 5;
+  const rows = [];
+  for (let y = -height; y < height * 2; y += stepY) {
+    for (let x = -width; x < width * 2; x += stepX) {
+      rows.push(
+        `<text x="${x}" y="${y}" font-family="monospace" font-size="${size}" font-weight="700" ` +
+          `fill="#1f1a23" fill-opacity="0.26">${text}</text>`
+      );
+    }
+  }
+
+  const svg = Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">` +
+      `<g transform="rotate(-24 ${width / 2} ${height / 2})">${rows.join('')}</g>` +
+      `</svg>`
+  );
+
+  const composited = sharp(source).composite([{ input: svg, blend: 'over' }]);
+
+  // A preview of a photographic scan is an order of magnitude smaller as JPEG
+  // than as PNG. The download keeps PNG, where fidelity is the point.
+  return maxWidth ? composited.jpeg({ quality: 82 }).toBuffer() : composited.png().toBuffer();
+}
 
 filesRouter.get('/marked/:receiptId', requireAuth, async (req, res, next) => {
   try {
@@ -606,13 +828,43 @@ filesRouter.get('/marked/:receiptId', requireAuth, async (req, res, next) => {
     const buffer = await fs.readFile(event.markedPath).catch(() => null);
     if (!buffer) throw notFound('The marked file is no longer on disk.');
 
-    res.setHeader('Content-Type', event.asset?.mimeType || 'application/octet-stream');
+    const mime = event.asset?.mimeType || 'application/octet-stream';
+    const wantsStamp = Boolean(req.query.stamped) && mime.startsWith('image/');
+
+    // The stamped rendering is an administrator's aid, so it is gated the same
+    // way the inspection screen is.
+    if (wantsStamp && !can(req.user.role, 'decrypt:any')) {
+      throw forbidden('Only the registry administrator may view a stamped copy.');
+    }
+
+    const recipient = await prisma.user.findUnique({
+      where: { id: event.userId },
+      select: { name: true },
+    });
+
+    // The on-screen pane is a couple of hundred pixels tall, so rendering a
+    // multi-megabyte stamp of a full scan just for the browser to shrink it is
+    // wasted bandwidth; a download still gets full resolution. The unstamped
+    // side is always served byte-for-byte, because that pane's whole claim is
+    // that it is the file on disk.
+    const payload = wantsStamp
+      ? await stampImage(
+          buffer,
+          `${recipient?.name || 'RECIPIENT'} · ${key.slice(0, 16).toUpperCase()}`,
+          req.query.inline ? 700 : null
+        )
+      : buffer;
+
+    const stampedType = req.query.inline ? 'image/jpeg' : 'image/png';
+    res.setHeader('Content-Type', wantsStamp ? stampedType : mime);
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="marked-${key.slice(0, 16)}${extFor(event.asset?.mimeType)}"`
+      `${req.query.inline ? 'inline' : 'attachment'}; filename="${
+        wantsStamp ? 'stamped' : 'marked'
+      }-${key.slice(0, 16)}${wantsStamp ? '.png' : extFor(event.asset?.mimeType)}"`
     );
     res.setHeader('X-Receipt-Id', bufferToHex(event.receiptId));
-    res.send(buffer);
+    res.send(payload);
   } catch (err) {
     next(err);
   }

@@ -74,8 +74,7 @@ export function useAuth() {
 }
 
 /**
- * Presentation for each role — the badge in the header, the dot on the login
- * panel (`tint`, which must read on navy), and the account cards
+ * Presentation for each role — the badge in the header, and the account cards
  * on the login screen. Kept beside the session rather than in the page so the
  * badge and the login card can never describe a role differently.
  */
@@ -96,35 +95,23 @@ export const ROLE_UI = {
     tint: 'bg-accent',
     demo: { email: 'u017@example.gov', password: 'officer123' },
   },
-  INVESTIGATOR: {
-    label: 'Forensic Analyst',
-    short: 'Investigator',
-    blurb: 'Traces leaked files. Cannot decrypt, so cannot manufacture evidence.',
-    badge: 'bg-attributed-tint text-attributed-deep',
-    tint: 'bg-attributed-bright',
-    demo: { email: 'a004@example.gov', password: 'analyst123' },
-  },
-  AUDITOR: {
-    label: 'Oversight',
-    short: 'Auditor',
-    blurb: 'Read-only witness. Neither decrypts nor traces.',
-    badge: 'bg-probable-tint text-probable-deep',
-    tint: 'bg-probable-bright',
-    demo: { email: 'audit@example.gov', password: 'auditor123' },
-  },
+  // INVESTIGATOR and AUDITOR demo roles removed per project requirements
 };
 
-export const ROLE_ORDER = ['ADMIN', 'OFFICER', 'INVESTIGATOR'];
+export const ROLE_ORDER = ['ADMIN', 'OFFICER'];
 
 /**
- * Demo accounts for 1-click evaluation.
- * Auditor removed as requested. Total 3 active clearance officers included.
+ * Demo accounts for one-click evaluation.
+ *
+ * Only the roles this deployment actually ships: INVESTIGATOR and AUDITOR were
+ * removed from ROLE_UI, so listing them here would hand the login page a role
+ * it cannot render.
  */
 export const DEMO_ACCOUNTS = [
   {
     role: 'ADMIN',
     short: 'Admin',
-    badge: 'bg-night text-lime',
+    badge: 'bg-noir text-accent',
     title: 'Registry Administrator',
     name: 'Admin Desk',
     dept: 'HQ',
@@ -135,7 +122,7 @@ export const DEMO_ACCOUNTS = [
   {
     role: 'OFFICER',
     short: 'Officer 1',
-    badge: 'bg-lime text-night',
+    badge: 'bg-accent text-noir',
     title: 'Clearance Holder',
     name: 'Officer U-017',
     dept: 'Ops Wing',
@@ -146,7 +133,7 @@ export const DEMO_ACCOUNTS = [
   {
     role: 'OFFICER',
     short: 'Officer 2',
-    badge: 'bg-lime text-night',
+    badge: 'bg-accent text-noir',
     title: 'Clearance Holder',
     name: 'Officer U-023',
     dept: 'Signals',
@@ -157,24 +144,13 @@ export const DEMO_ACCOUNTS = [
   {
     role: 'OFFICER',
     short: 'Officer 3',
-    badge: 'bg-lime text-night',
+    badge: 'bg-accent text-noir',
     title: 'Clearance Holder',
     name: 'Officer U-041',
     dept: 'Logistics',
     email: 'u041@example.gov',
     password: 'officer123',
     desc: 'Defense Logistics clearance',
-  },
-  {
-    role: 'INVESTIGATOR',
-    short: 'Investigator',
-    badge: 'bg-attributed/15 text-attributed',
-    title: 'Forensic Analyst',
-    name: 'Analyst A-004',
-    dept: 'Intel Cell',
-    email: 'a004@example.gov',
-    password: 'analyst123',
-    desc: 'Forensic leak attribution',
   },
 ];
 

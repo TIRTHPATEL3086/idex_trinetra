@@ -23,7 +23,7 @@ const scrypt = scryptJs.scrypt ?? scryptJs?.default?.scrypt ?? scryptJs;
 
 // ---- AES-256-GCM constants (must match server/core/crypto.js) --------------
 const KEY_BYTES = 32;
-const IV_BYTES  = 12;
+const IV_BYTES = 12;
 const TAG_BYTES = 16;
 
 // ---- scrypt params (must match server/core/crypto.js) ----------------------
@@ -53,9 +53,9 @@ async function deriveKeyFromPassphrase(passphrase, saltHex) {
  */
 async function aesGcmDecrypt(cipherBytes, keyBytes, ivBytes) {
   // Web Crypto expects the auth tag to be appended to the ciphertext
-  const key = await crypto.subtle.importKey(
-    'raw', keyBytes, { name: 'AES-GCM' }, false, ['decrypt']
-  );
+  const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, [
+    'decrypt',
+  ]);
   const plainBuf = await crypto.subtle.decrypt(
     { name: 'AES-GCM', iv: ivBytes, tagLength: 128 },
     key,
@@ -79,9 +79,9 @@ export async function unlockKeyBundle(bundleJson, passphrase) {
     throw new Error(`Unsupported key bundle version: ${parsed.version}`);
   }
 
-  const saltHex    = parsed.salt;
-  const ivBytes    = hexToBytes(parsed.iv);
-  const authTag    = hexToBytes(parsed.authTag);
+  const saltHex = parsed.salt;
+  const ivBytes = hexToBytes(parsed.iv);
+  const authTag = hexToBytes(parsed.authTag);
   const ciphertext = base64ToBytes(parsed.ciphertext);
 
   // Combine ciphertext + authTag (Web Crypto AES-GCM expects tag appended)
