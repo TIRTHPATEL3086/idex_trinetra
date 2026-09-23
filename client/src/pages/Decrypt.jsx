@@ -10,7 +10,7 @@ import {
   shortHash,
 } from '../lib/api.js';
 import { unlockAndSign } from '../lib/pqc.js';
-import { Header, Notice } from './Assets.jsx';
+import { Header } from './Assets.jsx';
 import { useAuth } from '../lib/auth.jsx';
 import {
   BanIcon,
@@ -19,10 +19,10 @@ import {
   EyeIcon,
   EyeOffIcon,
   KeyIcon,
-  LockIcon,
   SendIcon,
   UnlockIcon,
 } from '../components/icons.jsx';
+import Select from '../components/Select.jsx';
 
 /**
  * Decrypt & Multi-Officer Dispatch.
@@ -49,8 +49,6 @@ export default function Decrypt() {
 
   // Admin Multi-recipient state
   const [selectedUserIds, setSelectedUserIds] = useState([]);
-  const [passphraseMode, setPassphraseMode] = useState('common'); // 'common' | 'individual'
-  const [commonPassphrase, setCommonPassphrase] = useState('');
   const [individualPassphrases, setIndividualPassphrases] = useState({});
 
   // Officer Single-recipient state
@@ -130,8 +128,9 @@ export default function Decrypt() {
       const res = await batchDecryptAsset({
         assetId: Number(assetId),
         userIds: selectedUserIds,
-        passphraseMode,
-        commonPassphrase: commonPassphrase.trim() || 'officer123',
+        // Every recipient is issued their own passphrase; there is no
+        // longer a shared-secret mode in the interface.
+        passphraseMode: 'individual',
         individualPassphrases,
         deviceLabel: deviceLabel || 'ADMIN-DISPATCH-01',
       });
@@ -214,33 +213,29 @@ export default function Decrypt() {
       <Header
         eyebrow="Release"
         title={isAdmin ? 'Decrypt & Multi-Officer Dispatch' : 'Decrypt protected document'}
-        subtitle={
-          isAdmin
-            ? 'Select a document, choose one or multiple recipient officers, and assign common or individual access passphrases.'
-            : 'Enter your allotted clearance passphrase to decapsulate the content key and release your watermarked copy.'
-        }
       />
 
-      <div className="grid gap-6 xl:grid-cols-12">
+      <div className={`grid gap-6 ${status === 'idle' ? '' : 'xl:grid-cols-12'}`}>
         {/* ── Left Column: Form ────────────────────────────────────────── */}
-        <div className="space-y-5 xl:col-span-6">
+        <div
+          className={`space-y-5 ${status === 'idle' ? 'mx-auto w-full max-w-3xl' : 'xl:col-span-6'}`}
+        >
           <form
             onSubmit={isAdmin ? submitAdminBatch : submitOfficerDecrypt}
             className="card space-y-5 p-5 sm:p-6"
           >
             {/* Document Selection */}
             <Field label="Protected Document (PDF / Image)">
-              <select
-                className="input text-sm font-semibold"
+              <Select
+                ariaLabel="Protected document"
                 value={assetId}
-                onChange={(e) => setAssetId(e.target.value)}
-              >
-                {assets.map((a) => (
-                  <option key={a.assetId} value={a.assetId}>
-                    {a.title} · [{a.classification}]
-                  </option>
-                ))}
-              </select>
+                onChange={setAssetId}
+                options={assets.map((a) => ({
+                  value: a.assetId,
+                  label: a.title,
+                  hint: a.classification,
+                }))}
+              />
             </Field>
 
             {/* ── ADMIN: Multi-choice Officer Selection & Passphrase Modes ── */}
@@ -306,83 +301,37 @@ export default function Decrypt() {
                     })}
                 </div>
 
-                {/* Passphrase Allotment Mode Switcher */}
+                {/* One passphrase per recipient — there is no shared-secret mode,
+                    because a secret several officers hold cannot tie a leaked
+                    copy back to one of them. */}
                 <div className="pt-2 border-t border-line/60">
                   <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-ink">
-                    Passphrase Allotment Mode
+                    Recipient Passphrases
                   </span>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setPassphraseMode('common')}
-                      className={`rounded-xl py-2 px-3 text-xs font-bold transition border ${
-                        passphraseMode === 'common'
-                          ? 'bg-noir text-accent border-noir shadow-sm'
-                          : 'bg-white text-ink-muted border-line hover:text-ink'
-                      }`}
-                    >
-                      <LockIcon size={13} /> Common Passphrase
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPassphraseMode('individual')}
-                      className={`rounded-xl py-2 px-3 text-xs font-bold transition border ${
-                        passphraseMode === 'individual'
-                          ? 'bg-noir text-accent border-noir shadow-sm'
-                          : 'bg-white text-ink-muted border-line hover:text-ink'
-                      }`}
-                    >
-                      <KeyIcon size={13} /> Individual Passphrases
-                    </button>
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-semibold text-ink-muted">
+                      Set a passphrase for each selected officer:
+                    </label>
+                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                      {users
+                        .filter((u) => selectedUserIds.includes(u.userId))
+                        .map((u) => (
+                          <div
+                            key={u.userId}
+                            className="flex items-center gap-2 rounded-xl bg-white border border-line p-2 text-xs"
+                          >
+                            <span className="font-bold text-ink w-32 truncate">{u.name}</span>
+                            <input
+                              type="text"
+                              className="input h-8 text-xs font-mono flex-1"
+                              placeholder={`Custom secret for ${u.name}`}
+                              value={individualPassphrases[u.userId] || ''}
+                              onChange={(e) => setOfficerIndivPass(u.userId, e.target.value)}
+                            />
+                          </div>
+                        ))}
+                    </div>
                   </div>
-
-                  {/* Mode A: Common Passphrase */}
-                  {passphraseMode === 'common' && (
-                    <div className="mt-3 space-y-1.5">
-                      <label className="text-[11px] font-semibold text-ink-muted">
-                        Common Passphrase for all selected officers
-                      </label>
-                      <input
-                        type="text"
-                        className="input font-mono text-xs w-full"
-                        value={commonPassphrase}
-                        onChange={(e) => setCommonPassphrase(e.target.value)}
-                        placeholder="Enter common clearance passphrase (e.g. ClearancePass#2026)"
-                      />
-                      <p className="text-[11px] text-ink-faint">
-                        All selected officers must enter this identical passphrase in their
-                        dashboard to unlock this copy.
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Mode B: Individual Passphrases */}
-                  {passphraseMode === 'individual' && (
-                    <div className="mt-3 space-y-2">
-                      <label className="text-[11px] font-semibold text-ink-muted">
-                        Set specific passphrase for each recipient officer:
-                      </label>
-                      <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                        {users
-                          .filter((u) => selectedUserIds.includes(u.userId))
-                          .map((u) => (
-                            <div
-                              key={u.userId}
-                              className="flex items-center gap-2 rounded-xl bg-white border border-line p-2 text-xs"
-                            >
-                              <span className="font-bold text-ink w-32 truncate">{u.name}</span>
-                              <input
-                                type="text"
-                                className="input h-8 text-xs font-mono flex-1"
-                                placeholder={`Custom secret for ${u.name}`}
-                                value={individualPassphrases[u.userId] || ''}
-                                onChange={(e) => setOfficerIndivPass(u.userId, e.target.value)}
-                              />
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
             ) : (
@@ -486,15 +435,7 @@ export default function Decrypt() {
         </div>
 
         {/* ── Right Column: Interactive Results & Receipts ─────────────── */}
-        <div className="space-y-5 xl:col-span-6">
-          {status === 'idle' && (
-            <Notice>
-              {isAdmin
-                ? 'Choose a protected document, select the recipient officers, and assign passphrases to dispatch watermarked copies.'
-                : 'Enter your allotted clearance passphrase to verify your identity, decapsulate the content key, and download your watermarked document.'}
-            </Notice>
-          )}
-
+        <div className={`space-y-5 ${status === 'idle' ? 'hidden' : 'xl:col-span-6'}`}>
           {isBusy && (
             <div className="card grid place-items-center p-12 text-center space-y-4">
               <div className="h-10 w-10 animate-spin rounded-full border-4 border-accent border-t-transparent" />

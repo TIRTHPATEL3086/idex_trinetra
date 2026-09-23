@@ -21,6 +21,7 @@ import Timeline from './pages/Timeline.jsx';
 import Robustness from './pages/Robustness.jsx';
 import History from './pages/History.jsx';
 import PqcEnroll from './pages/PqcEnroll.jsx';
+import Inspect from './pages/Inspect.jsx';
 
 /**
  * Application shell — a white, large-radius app panel on a warm cream canvas,
@@ -43,6 +44,7 @@ const NAV = [
   { to: '/assets', label: 'Documents', icon: DocIcon, cap: 'assets:read' },
   { to: '/decrypt', label: 'Decrypt', icon: KeyIcon, cap: 'decrypt:self' },
   { to: '/trace', label: 'Trace', icon: SearchIcon, cap: 'trace:run' },
+  { to: '/inspect', label: 'Watermark', icon: FingerprintIcon, cap: 'decrypt:any' },
   { to: '/timeline', label: 'Timeline', icon: ClockIcon, cap: 'audit:own' },
   { to: '/history', label: 'History', icon: HistoryIcon, cap: 'audit:read' },
   { to: '/enroll', label: 'PQC Enroll', icon: ShieldIcon, cap: 'assets:upload' },
@@ -122,12 +124,6 @@ function Shell() {
           </span>
 
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-            {user?.role !== 'OFFICER' && (
-              <>
-                <HealthChip health={health} />
-                <NotificationsBell health={health} />
-              </>
-            )}
             <WalletButton health={health} />
             <AccountMenu user={user} />
           </div>
@@ -144,7 +140,7 @@ function Shell() {
             />
           )}
 
-          <Sidebar health={health} open={navOpen} can={can} user={user} />
+          <Sidebar open={navOpen} can={can} />
 
           <main className="scroll-slim min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3.5 py-5 sm:px-6 sm:py-6 xl:px-8">
             <div className="mx-auto w-full max-w-6xl">
@@ -159,7 +155,7 @@ function Shell() {
                   path="/assets"
                   element={
                     <RequireCap capability="assets:read">
-                      {user?.role === 'OFFICER' ? <Navigate to="/decrypt" replace /> : <Assets />}
+                      <Assets />
                     </RequireCap>
                   }
                 />
@@ -168,6 +164,14 @@ function Shell() {
                   element={
                     <RequireCap capability="decrypt:self">
                       <Decrypt />
+                    </RequireCap>
+                  }
+                />
+                <Route
+                  path="/inspect"
+                  element={
+                    <RequireCap capability="decrypt:any">
+                      <Inspect />
                     </RequireCap>
                   }
                 />
@@ -221,11 +225,11 @@ function Shell() {
   );
 }
 
-function Sidebar({ health, open, can, user }) {
-  const items = NAV.filter((n) => {
-    if (n.to === '/assets' && user?.role === 'OFFICER') return false;
-    return can(n.cap);
-  });
+function Sidebar({ open, can }) {
+  // Capability alone decides what appears here. A hard-coded role exception
+  // would put the menu and the router out of step with the server, which is
+  // the one thing this list exists to prevent.
+  const items = NAV.filter((n) => can(n.cap));
   return (
     <aside
       className={`scroll-slim scroll-dark fixed inset-y-0 left-0 z-40 flex w-64 max-w-[82vw] flex-col overflow-y-auto bg-noir-deep p-4 text-white transition-transform duration-200 lg:static lg:z-auto lg:my-3 lg:ml-3 lg:w-64 lg:max-w-none lg:translate-x-0 lg:rounded-3xl ${
@@ -247,7 +251,7 @@ function Sidebar({ health, open, can, user }) {
             className={({ isActive }) =>
               `group flex items-center gap-3 rounded-full px-4 py-2.5 text-sm font-semibold transition ${
                 isActive
-                  ? 'bg-accent text-noir shadow-[0_8px_20px_-10px_rgba(255,116,72,0.95)]'
+                  ? 'bg-accent text-noir shadow-[0_8px_22px_-10px_rgba(255,255,255,0.75)]'
                   : 'text-white/65 hover:bg-white/10 hover:text-white'
               }`
             }
@@ -270,12 +274,6 @@ function Sidebar({ health, open, can, user }) {
           </NavLink>
         </div>
       )}
-      {user?.role !== 'OFFICER' && (
-        <div className="mt-4 space-y-3">
-          <RoleCard user={user} />
-          <HealthBadge health={health} />
-        </div>
-      )}
     </aside>
   );
 }
@@ -296,93 +294,6 @@ function useHealth() {
     };
   }, []);
   return health;
-}
-
-function healthTone(health) {
-  if (!health)
-    return { dot: 'bg-ink-faint', label: '…', tone: 'text-ink-faint', toneDark: 'text-white/50' };
-  if (!health.ok)
-    return {
-      dot: 'bg-inconclusive',
-      label: 'API down',
-      tone: 'text-inconclusive',
-      toneDark: 'text-inconclusive-bright',
-    };
-  if (health.warnings?.length)
-    return {
-      dot: 'bg-probable',
-      label: 'Degraded',
-      tone: 'text-probable',
-      toneDark: 'text-probable-bright',
-    };
-  return {
-    dot: 'bg-attributed',
-    label: 'All systems go',
-    tone: 'text-attributed-deep',
-    toneDark: 'text-attributed-bright',
-  };
-}
-
-function HealthChip({ health }) {
-  const { dot, label, tone } = healthTone(health);
-  return (
-    <span className="hidden items-center gap-2 rounded-full border border-line bg-white px-3 py-2 text-xs font-bold sm:inline-flex">
-      <span className={`h-2 w-2 rounded-full ${dot}`} />
-      <span className={tone}>{label}</span>
-    </span>
-  );
-}
-
-function HealthBadge({ health }) {
-  if (!health) return null;
-  const { dot, label, toneDark } = healthTone(health);
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-3.5">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs font-semibold">
-          <span className={`h-2.5 w-2.5 rounded-full ${dot} animate-pulse`} />
-          <span className={toneDark}>{label}</span>
-        </div>
-        <span className="mono rounded bg-white/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-white/50">
-          NODE TELEMETRY
-        </span>
-      </div>
-      {health.ok && (
-        <dl className="mono mt-2.5 space-y-1.5 divide-y divide-white/10 text-[11px] text-white/60">
-          <div className="pt-1">
-            <Row k="DATABASE" v={health.db?.toUpperCase() || 'UP'} good={health.db === 'up'} />
-          </div>
-          <div className="pt-1">
-            <Row
-              k="LEDGER"
-              v={health.chainMode === 'sepolia' ? 'SEPOLIA (ETH)' : health.chainMode?.toUpperCase()}
-              good={health.chain?.connected}
-            />
-          </div>
-          <div className="pt-1 flex items-center justify-between">
-            <dt className="text-white/45">PQC ALGO</dt>
-            <dd className="font-semibold text-attributed-bright">ML-KEM / DSA</dd>
-          </div>
-          {health.warnings?.length > 0 && (
-            <div className="pt-1 text-[10px] font-medium text-probable-bright">
-              {health.warnings.length} warning(s) flagged
-            </div>
-          )}
-        </dl>
-      )}
-    </div>
-  );
-}
-
-function Row({ k, v, good }) {
-  return (
-    <div className="flex items-center justify-between">
-      <dt className="text-ink-faint">{k}</dt>
-      <dd className={good ? 'font-semibold text-attributed' : 'font-semibold text-inconclusive'}>
-        {v}
-      </dd>
-    </div>
-  );
 }
 
 /* -------------------------------------------------------------- account --- */
@@ -594,30 +505,6 @@ function AccountMenu({ user }) {
   );
 }
 
-/** The role reminder pinned above the health badge in the sidebar. */
-function RoleCard({ user }) {
-  if (!user) return null;
-  const meta = ROLE_UI[user.role] ?? {};
-  return (
-    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.06] p-3.5 text-white">
-      <div className="flex items-center justify-between gap-2">
-        <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-accent/90">
-          <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
-          Enclave Session
-        </span>
-        <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent">
-          {meta.short || user.role}
-        </span>
-      </div>
-      <div className="mt-2 truncate text-xs font-bold text-white tracking-wide">{user.name}</div>
-      <div className="flex items-center justify-between text-[11px] text-white/60 mt-0.5">
-        <span className="truncate">{user.dept || 'HQ Operations'}</span>
-        <span className="mono text-[10px] text-white/40 font-semibold">U-00{user.id}</span>
-      </div>
-    </div>
-  );
-}
-
 /* ------------------------------------------------------------- wallet ----- */
 
 const short = (a) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '');
@@ -629,6 +516,7 @@ function WalletButton({ health }) {
   const [busy, setBusy] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [switchError, setSwitchError] = useState(null);
 
   useEffect(() => {
     const eth = window.ethereum;
@@ -676,8 +564,8 @@ function WalletButton({ health }) {
             method: 'wallet_switchEthereumChain',
             params: [{ chainId: '0x7a69' }], // 31337 in hex
           });
-        } catch (switchError) {
-          if (switchError.code === 4902) {
+        } catch (err) {
+          if (err?.code === 4902) {
             await eth.request({
               method: 'wallet_addEthereumChain',
               params: [
@@ -699,28 +587,53 @@ function WalletButton({ health }) {
     }
   }
 
+  /**
+   * Ask the wallet to change network.
+   *
+   * Three things this has to get right. It must not ask to switch to the
+   * chain the wallet is already on — that is a no-op the extension can choke
+   * on. It must only offer to *add* a chain the wallet genuinely does not
+   * know: Sepolia ships with MetaMask, and adding a built-in network is
+   * refused. And it must not swallow the result, or a refusal looks
+   * identical to success.
+   */
   async function switchToChain(targetHex, name, rpc) {
     const eth = window.ethereum;
     if (!eth) return;
+    setSwitchError(null);
+
+    if (chainId && chainId.toLowerCase() === targetHex.toLowerCase()) return;
+
     try {
       await eth.request({
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: targetHex }],
       });
     } catch (err) {
-      if (err.code === 4902 && rpc) {
-        await eth.request({
-          method: 'wallet_addEthereumChain',
-          params: [
-            {
-              chainId: targetHex,
-              chainName: name,
-              rpcUrls: [rpc],
-              nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
-            },
-          ],
-        });
+      // 4902 means the wallet has never heard of this chain, which for us
+      // only ever happens with a local dev node.
+      if (err?.code === 4902 && rpc) {
+        try {
+          await eth.request({
+            method: 'wallet_addEthereumChain',
+            params: [
+              {
+                chainId: targetHex,
+                chainName: name,
+                rpcUrls: [rpc],
+                nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+              },
+            ],
+          });
+        } catch (addErr) {
+          if (addErr?.code !== 4001) {
+            setSwitchError(addErr?.message || `Could not add ${name}.`);
+          }
+        }
+        return;
       }
+      if (err?.code === 4001) return; // the user declined; not an error
+      setSwitchError(err?.message || `Could not switch to ${name}.`);
     }
   }
 
@@ -838,6 +751,11 @@ function WalletButton({ health }) {
                   <div className="text-[10px] font-bold uppercase tracking-wider text-ink-faint">
                     Switch Network
                   </div>
+                  {switchError && (
+                    <p className="rounded-xl bg-danger-tint px-2.5 py-2 text-[11px] leading-relaxed text-danger-deep">
+                      {switchError}
+                    </p>
+                  )}
                   <div className="flex gap-2">
                     <button
                       type="button"
@@ -854,9 +772,7 @@ function WalletButton({ health }) {
                     </button>
                     <button
                       type="button"
-                      onClick={() =>
-                        switchToChain('0xaa36a7', 'Sepolia Testnet', 'https://rpc.sepolia.org')
-                      }
+                      onClick={() => switchToChain('0xaa36a7', 'Sepolia', null)}
                       className={`flex-1 rounded-xl py-1.5 text-xs font-semibold border transition ${
                         isSepolia
                           ? 'border-accent bg-accent/10 text-ink'
@@ -885,65 +801,6 @@ function WalletButton({ health }) {
 
 /* ----------------------------------------------------- notifications ------ */
 
-/** Bell with a popover of live system status / warnings. */
-function NotificationsBell({ health }) {
-  const [open, setOpen] = useState(false);
-  const warnings = health?.warnings ?? [];
-  const count = warnings.length;
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        className="btn-icon relative"
-        aria-label="Notifications"
-        onClick={() => setOpen((o) => !o)}
-      >
-        <BellIcon />
-        {count > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 grid h-4 w-4 place-items-center rounded-full bg-probable text-[9px] font-bold text-white">
-            {count}
-          </span>
-        )}
-      </button>
-
-      {open && (
-        <>
-          <button
-            type="button"
-            aria-label="Close"
-            className="fixed inset-0 z-40 cursor-default"
-            onClick={() => setOpen(false)}
-          />
-          <div className="absolute right-0 z-50 mt-2 w-72 rounded-2xl border border-line bg-white p-3 shadow-panel">
-            <div className="mb-2 px-1 text-xs font-bold uppercase tracking-wide text-ink-faint">
-              System status
-            </div>
-            {count === 0 ? (
-              <div className="flex items-center gap-2 rounded-xl bg-attributed/10 px-3 py-2.5 text-sm text-attributed">
-                <span className="h-2 w-2 rounded-full bg-attributed" />
-                All systems operational
-              </div>
-            ) : (
-              <ul className="space-y-1.5">
-                {warnings.map((w, i) => (
-                  <li
-                    key={i}
-                    className="flex items-start gap-2 rounded-xl bg-probable/10 px-3 py-2 text-xs text-ink"
-                  >
-                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-probable" />
-                    <span>{w}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
 /* ----------------------------------------------------------------- icons -- */
 const S = {
   stroke: 'currentColor',
@@ -966,6 +823,16 @@ function NavIcon({ children }) {
     >
       {children}
     </svg>
+  );
+}
+function FingerprintIcon(p) {
+  return (
+    <NavIcon {...p}>
+      <path d="M5 12a7 7 0 0 1 14 0" {...S} />
+      <path d="M8 12.4a4 4 0 0 1 8 0c0 2.2-.3 4.3-.9 6.3" {...S} />
+      <path d="M11 12.6a1 1 0 0 1 2 0c0 3-.5 5.9-1.4 8.6" {...S} />
+      <path d="M5.4 16.5c.4 1.4.5 2.6.4 3.9" {...S} />
+    </NavIcon>
   );
 }
 function DocIcon(p) {
@@ -1027,13 +894,6 @@ function MenuIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path d="M4 6h16M4 12h16M4 18h16" {...S} />
-    </svg>
-  );
-}
-function BellIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6ZM9.5 20a2.5 2.5 0 0 0 5 0" {...S} />
     </svg>
   );
 }

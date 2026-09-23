@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { getAssets, getAudit, toggleUserActive, shortHash } from '../lib/api.js';
 import { Header, Notice } from './Assets.jsx';
 import { BanIcon, ExternalLinkIcon, UnlockIcon, WarningIcon } from '../components/icons.jsx';
+import Select from '../components/Select.jsx';
 
 /**
  * Per-asset audit trail: who opened a document, when, from which device,
@@ -53,19 +54,14 @@ export default function Timeline() {
       <Header
         eyebrow="Audit"
         title="Audit timeline & Anomaly Forensics"
-        subtitle="Every decryption of a document, in order — with automated velocity burst, off-hours, device anomaly tracking, and zero-trust revocation."
         action={
-          <select
-            className="input w-56"
+          <Select
+            className="w-56"
+            ariaLabel="Document"
             value={assetId}
-            onChange={(e) => setAssetId(e.target.value)}
-          >
-            {assets.map((a) => (
-              <option key={a.assetId} value={a.assetId}>
-                {a.title}
-              </option>
-            ))}
-          </select>
+            onChange={setAssetId}
+            options={assets.map((a) => ({ value: a.assetId, label: a.title }))}
+          />
         }
       />
 

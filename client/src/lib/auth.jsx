@@ -84,7 +84,7 @@ export const ROLE_UI = {
     short: 'Admin',
     blurb: 'Full custody — uploads, releases, investigations and the audit trail.',
     badge: 'bg-noir text-accent',
-    tint: 'bg-noir',
+    tint: 'bg-white',
     demo: { email: 'admin@example.gov', password: 'admin123' },
   },
   OFFICER: {

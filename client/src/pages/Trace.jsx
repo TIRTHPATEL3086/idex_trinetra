@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { traceFile, getInvestigations, shortHash } from '../lib/api.js';
 import { Header, Notice } from './Assets.jsx';
+import Select from '../components/Select.jsx';
 
 /**
  * Upload a leaked file; the register returns a confidence band, never a bare
@@ -94,11 +95,7 @@ export default function Trace() {
 
   return (
     <section className="space-y-6">
-      <Header
-        eyebrow="Investigation"
-        title="Trace a leaked file"
-        subtitle="The watermark says which receipt; the perceptual hashes say which file; the chain confirms both. Court-admissible forensic dossiers can be exported for any inquiry."
-      />
+      <Header eyebrow="Investigation" title="Trace a leaked file" />
 
       {/* dropzone with smooth drag & drop feedback */}
       <div
@@ -218,17 +215,20 @@ export default function Trace() {
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1.5">
               <span className="text-[11px] font-bold text-ink-faint">Sort:</span>
-              <select
+              <Select
+                className="w-44"
+                ariaLabel="Sort investigations"
+                buttonClassName="!py-1.5 !text-xs !font-semibold"
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="input !h-8 !py-1 !text-xs font-semibold bg-white border-line shadow-xs rounded-xl"
-              >
-                <option value="newest">Newest First</option>
-                <option value="oldest">Oldest First</option>
-                <option value="confidence-desc">Highest Confidence</option>
-                <option value="confidence-asc">Lowest Confidence</option>
-                <option value="verdict">By Verdict</option>
-              </select>
+                onChange={setSortBy}
+                options={[
+                  { value: 'newest', label: 'Newest First' },
+                  { value: 'oldest', label: 'Oldest First' },
+                  { value: 'confidence-desc', label: 'Highest Confidence' },
+                  { value: 'confidence-asc', label: 'Lowest Confidence' },
+                  { value: 'verdict', label: 'By Verdict' },
+                ]}
+              />
             </div>
 
             <input

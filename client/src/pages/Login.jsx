@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { CheckIcon } from '../components/icons.jsx';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { CheckIcon, ChevronLeftIcon } from '../components/icons.jsx';
 
 import Logo from '../components/Logo.jsx';
-import { useAuth, ROLE_UI, ROLE_ORDER, DEMO_ACCOUNTS } from '../lib/auth.jsx';
+import { useAuth, DEMO_ACCOUNTS } from '../lib/auth.jsx';
 
 /**
  * Sign-in.
@@ -49,13 +49,23 @@ export default function Login() {
   };
 
   return (
-    <div className="grid min-h-[100dvh] w-full place-items-center bg-canvas p-3 sm:p-5 lg:p-6">
+    <div className="relative grid min-h-[100dvh] w-full place-items-center bg-canvas p-3 sm:p-5 lg:p-6">
+      {/* A real route home, not history.back() — someone who opened /login
+          directly, or followed a stale link, has no history to go back to. */}
+      <Link
+        to="/"
+        className="absolute left-4 top-4 z-10 inline-flex items-center gap-1.5 rounded-full border border-line bg-white px-3.5 py-2 text-[13px] font-medium text-ink-muted shadow-sm transition hover:border-ink-faint hover:text-ink focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 sm:left-6 sm:top-6"
+      >
+        <ChevronLeftIcon size={14} />
+        Back
+      </Link>
+
       <main className="w-full max-w-[1080px] overflow-hidden rounded-2xl bg-white shadow-app sm:rounded-3xl lg:grid lg:grid-cols-[1.02fr_1fr]">
         <BrandPanel />
 
         {/* ------------------------------------------------------ the form -- */}
         <section className="flex flex-col justify-center px-5 py-8 sm:px-8 sm:py-10 lg:px-11 lg:py-12">
-          {/* Mobile-only brand row — the panel above is hidden at this width. */}
+          {/* Mobile-only brand row — the panel beside it is hidden at this width. */}
           <div className="mb-7 lg:hidden">
             <Logo size="sm" />
           </div>
@@ -147,9 +157,66 @@ export default function Login() {
  * Hidden below `lg`. On a phone the form is the whole job, and a tall
  * decorative panel above it just pushes the fields off the first screen.
  */
+/** The three things this system does, in the order it does them. */
+const SUMMARY = [
+  {
+    title: 'Release',
+    body: 'A copy is marked for its recipient before it is handed over.',
+    dot: 'bg-chromia-purple-500',
+  },
+  {
+    title: 'Anchor',
+    body: 'Its receipt is written to a public ledger, ahead of the copy existing.',
+    dot: 'bg-chromia-green-500',
+  },
+  {
+    title: 'Trace',
+    body: 'A leaked file is matched back to the release it came from.',
+    dot: 'bg-chromia-yellow-500',
+  },
+];
+
 function BrandPanel() {
   return (
     <aside className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-[#0d1117] to-noir p-11 text-white lg:flex">
+      {/* The artwork is merged into the panel rather than placed on it.
+          `screen` is what does the work: the render's near-black background
+          becomes nothing against the panel, so only its glow survives and
+          there is no rectangle edge to see. A radial mask then dissolves what
+          is left toward the top-left, where the heading needs a clean field. */}
+      <img
+        src="/secure-document.png"
+        alt=""
+        aria-hidden="true"
+        className="pointer-events-none absolute -bottom-16 -right-[30%] w-[135%] max-w-none select-none opacity-[0.88] mix-blend-screen"
+        style={{
+          maskImage:
+            'radial-gradient(82% 74% at 46% 60%, #000 34%, rgba(0,0,0,0.72) 62%, transparent 88%)',
+          WebkitMaskImage:
+            'radial-gradient(82% 74% at 46% 60%, #000 34%, rgba(0,0,0,0.72) 62%, transparent 88%)',
+        }}
+      />
+
+      {/* Two soft washes rather than one hard edge: the first keeps the
+          wordmark and headline dark at the top, the second holds the reading
+          column on the left clear of the glow. Neither draws a visible line. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-noir-deep via-noir-deep/40 to-transparent"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-gradient-to-r from-noir-deep/95 via-noir-deep/30 to-transparent"
+      />
+
+      {/* The seam. Without this the dark panel simply stops against the white
+          form and the card reads as two boxes; fading the edge to the form's
+          own colour lets the halves meet instead of abut. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-y-0 right-0 z-[5] w-40 bg-gradient-to-r from-transparent via-white/45 to-white"
+      />
+
       {/* soft accent bloom, purely atmospheric */}
       <div
         aria-hidden="true"
@@ -160,45 +227,38 @@ function BrandPanel() {
         className="pointer-events-none absolute -bottom-28 -left-20 h-72 w-72 rounded-full bg-accent/10 blur-3xl"
       />
 
-      <div className="relative">
-        <div className="flex items-center gap-2.5">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[30%] bg-accent">
-            <FingerprintGlyph />
-          </span>
-          <span
-            className="font-display leading-none"
-            style={{ fontSize: 21, fontWeight: 800, letterSpacing: '-0.02em' }}
-          >
-            Provenance<span className="text-accent">.</span>
-          </span>
-        </div>
+      <div className="relative z-10">
+        <Logo size="md" onDark />
 
-        <h2 className="mt-10 font-display text-[30px] font-extrabold leading-[1.15] tracking-tight">
-          Three roles,
+        {/* What the product is, in three lines. Someone at a sign-in screen
+            wants to know what they are signing in to — not how the roles are
+            split, which only matters once they are inside. */}
+        <h2 className="mt-10 font-display text-[32px] leading-[1.08] text-white">
+          The register for
           <br />
-          on purpose.
+          <span className="text-accent">released documents.</span>
         </h2>
-        <p className="mt-3 max-w-[38ch] text-sm leading-relaxed text-white/60">
-          The analyst who examines a leak cannot release a marked copy. The officer who holds
-          clearance cannot investigate their own. Nobody holds both halves by accident.
+        <p className="mt-4 max-w-[40ch] text-sm leading-relaxed text-white/65">
+          Every protected file that leaves this system is marked for the person who opened it and
+          receipted on a public ledger — so a copy that surfaces somewhere it should not can be
+          traced back to a single release.
         </p>
       </div>
 
-      <ul className="relative mt-9 space-y-3">
-        {ROLE_ORDER.map((role) => (
-          <li key={role} className="flex items-start gap-3">
-            <span className={`mt-[7px] h-2 w-2 shrink-0 rounded-full ${ROLE_UI[role].tint}`} />
+      <ul className="relative z-10 mt-9 space-y-4">
+        {SUMMARY.map((item) => (
+          <li key={item.title} className="flex items-start gap-3">
+            <span className={`mt-[6px] h-2 w-2 shrink-0 rounded-full ${item.dot}`} />
             <div className="min-w-0">
-              <div className="text-[13px] font-bold">{ROLE_UI[role].label}</div>
-              <div className="text-xs leading-relaxed text-white/50">{ROLE_UI[role].blurb}</div>
+              <div className="text-[13px] font-bold text-white">{item.title}</div>
+              <div className="text-xs leading-relaxed text-white/55">{item.body}</div>
             </div>
           </li>
         ))}
       </ul>
 
-      <p className="relative mt-9 text-[11px] leading-relaxed text-white/35">
-        No name, department or device label ever reaches the blockchain — only keccak256(userId ‖
-        salt).
+      <p className="relative z-10 mt-6 text-[11px] leading-relaxed text-white/40">
+        No name, department or device ever reaches the ledger — only a salted hash of the account.
       </p>
     </aside>
   );
@@ -345,17 +405,3 @@ function ChevronIcon({ open }) {
 }
 
 /** The logo glyph, drawn here so the panel does not depend on Logo's layout. */
-function FingerprintGlyph() {
-  const p = { fill: 'none', stroke: '#0f151d', strokeWidth: 1.7, strokeLinecap: 'round' };
-  return (
-    <svg width="21" height="21" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M4.5 13.2A7.5 7.5 0 0 1 19 10.5" {...p} />
-      <path d="M19.6 13.5A7.6 7.6 0 0 1 18.9 17" {...p} />
-      <path d="M7 12.4A5 5 0 0 1 16.9 12.1c0 1.6-.15 3.1-.5 4.6" {...p} />
-      <path d="M7.2 15.8c.35 1.5.4 2.4.3 3.4" {...p} />
-      <path d="M9.6 12a2.5 2.5 0 0 1 4.9.6c0 2.3-.3 4.6-1 6.8" {...p} />
-      <path d="M10.7 19.9c.3-.9.5-1.7.7-2.6" {...p} />
-      <circle cx="12" cy="12.3" r="1.15" fill="#0f151d" />
-    </svg>
-  );
-}

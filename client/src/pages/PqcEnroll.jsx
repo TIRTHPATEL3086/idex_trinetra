@@ -84,12 +84,6 @@ export default function PqcEnroll() {
     }
   };
 
-  const setPresetPassphrase = (preset) => {
-    setPassphrase(preset);
-    setConfirmPassphrase(preset);
-    setModalError(null);
-  };
-
   // Passphrase strength estimation
   const getStrength = (p) => {
     if (!p) return { label: 'None', width: '0%', color: 'bg-line' };
@@ -108,17 +102,13 @@ export default function PqcEnroll() {
 
   return (
     <section className="space-y-6">
-      <Header
-        eyebrow="Key management"
-        title="Post-Quantum Cryptography Enrollment"
-        subtitle="Provision NIST FIPS 203 (ML-KEM-768) and FIPS 204 (ML-DSA-65) quantum-resistant identity keypairs for authorized officers."
-      />
+      <Header eyebrow="Key management" title="Post-Quantum Cryptography Enrollment" />
 
       {error && <Notice tone="error">{error}</Notice>}
 
       {/* KPI Overview Tiles */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-xl border border-line bg-card/60 p-5 backdrop-blur-sm">
+        <div className="rounded-xl border border-line bg-white p-5 backdrop-blur-sm">
           <div className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
             Total Officers
           </div>
@@ -128,7 +118,7 @@ export default function PqcEnroll() {
           <p className="mt-1 text-xs text-ink-muted">Registered in authorization directory</p>
         </div>
 
-        <div className="rounded-xl border border-line bg-card/60 p-5 backdrop-blur-sm">
+        <div className="rounded-xl border border-line bg-white p-5 backdrop-blur-sm">
           <div className="text-xs font-semibold uppercase tracking-wider text-accent">
             PQC Enrolled
           </div>
@@ -138,7 +128,7 @@ export default function PqcEnroll() {
           <p className="mt-1 text-xs text-ink-muted">ML-KEM-768 & ML-DSA-65 active</p>
         </div>
 
-        <div className="rounded-xl border border-line bg-card/60 p-5 backdrop-blur-sm">
+        <div className="rounded-xl border border-line bg-white p-5 backdrop-blur-sm">
           <div className="text-xs font-semibold uppercase tracking-wider text-probable">
             Pending Keys
           </div>
@@ -150,7 +140,7 @@ export default function PqcEnroll() {
       </div>
 
       {/* Main Roster Table */}
-      <div className="overflow-hidden rounded-xl border border-line bg-card">
+      <div className="overflow-hidden rounded-xl border border-line bg-white">
         <div className="border-b border-line px-6 py-4">
           <h2 className="text-base font-semibold text-ink">Officer Cryptographic Roster</h2>
           <p className="text-xs text-ink-muted">
@@ -243,7 +233,7 @@ export default function PqcEnroll() {
       {/* Enhanced Enrollment Modal with Passphrase Controls */}
       {enrollingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-line bg-card p-6 shadow-2xl">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-line bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between border-b border-line/60 pb-4">
               <div>
                 <h3 className="text-lg font-semibold text-ink">Set Officer PQC Passphrase</h3>
@@ -315,20 +305,6 @@ export default function PqcEnroll() {
                     private keys. The private key is unlocked strictly in the client's browser
                     during decryption.
                   </p>
-                </div>
-
-                {/* Quick Presets helper bar */}
-                <div className="flex items-center justify-between gap-2 pt-1">
-                  <span className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider">
-                    Quick Preset:
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setPresetPassphrase('officer123')}
-                    className="rounded-lg border border-line bg-white px-2.5 py-1 text-[11px] font-medium text-ink hover:border-accent/50 hover:text-accent transition"
-                  >
-                    Default Demo (<span className="mono">officer123</span>)
-                  </button>
                 </div>
 
                 {modalError && (

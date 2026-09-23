@@ -67,7 +67,7 @@ export default function History() {
   if (!can('audit:read')) {
     return (
       <section className="space-y-6">
-        <Header title="Audit History" subtitle="Immutable global decryption provenance record." />
+        <Header title="Audit History" />
         <Notice tone="error">Your role does not have access to the global audit history.</Notice>
       </section>
     );
@@ -75,18 +75,10 @@ export default function History() {
 
   return (
     <section className="space-y-6">
-      <Header
-        eyebrow="Audit"
-        title="Global Audit History"
-        subtitle={
-          data
-            ? `${data.total.toLocaleString()} decryption events on permanent record — stored in PostgreSQL, never resets.`
-            : 'Every decryption ever recorded, permanently stored in PostgreSQL.'
-        }
-      />
+      <Header eyebrow="Audit" title="Global Audit History" />
 
       {/* ── Filters ─────────────────────────────────────────────────────── */}
-      <div className="card p-4 flex flex-wrap gap-3 items-end">
+      <div className="card grid grid-cols-2 items-end gap-3 p-4 sm:grid-cols-3 lg:grid-cols-6">
         <FilterField
           label="User ID"
           value={filters.userId}
@@ -111,11 +103,11 @@ export default function History() {
           onChange={(v) => setFilters((f) => ({ ...f, to: v }))}
           type="date"
         />
-        <button className="btn-accent" onClick={() => load(1)} disabled={loading}>
+        <button className="btn-accent w-full" onClick={() => load(1)} disabled={loading}>
           {loading ? 'Loading…' : 'Apply'}
         </button>
         <button
-          className="rounded-xl border border-line px-4 py-2 text-sm text-ink-muted hover:bg-surface"
+          className="w-full rounded-full border border-line px-4 py-2.5 text-sm font-semibold text-ink-muted transition hover:bg-muted hover:text-ink"
           onClick={() => {
             setFilters({ userId: '', assetId: '', from: '', to: '' });
           }}
@@ -128,12 +120,11 @@ export default function History() {
 
       {/* ── Stats strip ─────────────────────────────────────────────────── */}
       {data && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {[
             { label: 'Total Events', value: data.total.toLocaleString() },
             { label: 'This Page', value: `${data.events.length} of ${data.limit}` },
             { label: 'Page', value: `${data.page} / ${data.pages || 1}` },
-            { label: 'Storage', value: 'PostgreSQL (permanent)' },
           ].map(({ label, value }) => (
             <div key={label} className="card p-4">
               <div className="text-[11px] uppercase tracking-wide text-ink-faint">{label}</div>
@@ -262,7 +253,7 @@ function FilterField({ label, value, onChange, type = 'text' }) {
       </span>
       <input
         type={type}
-        className="input w-36 text-sm"
+        className="input w-full min-w-0 text-sm"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />

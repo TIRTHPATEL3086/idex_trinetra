@@ -1,81 +1,122 @@
 /** @type {import('tailwindcss').Config} */
 
 /**
- * Design tokens ported from the nomu.store reference.
+ * Design tokens taken from the Chromia identity system.
  *
- * The values below are the ones the reference actually ships in its
- * `:root` block — warm cream canvas, coral primary, deep navy ink, a
- * hairline grey border and a very large corner radius. Only the verdict
- * colours are ours: they stay semantic, and never coral, so an accent
- * button can never read as a forensic conclusion.
+ * The eight hue ramps below are that system's own published values, each with
+ * a 500 and an 800 step. The semantic names above them (canvas, ink, accent,
+ * and the verdict colours) are ours, and they point into those ramps — so a
+ * screen asks for `bg-accent` or `text-attributed` and never for a raw hue.
+ * That indirection is what let this palette replace the previous one without
+ * touching the eight app screens.
  */
+
+// The published Chromia ramps, kept verbatim so they can be checked against
+// the source at a glance.
+const chromia = {
+  black: { 500: '#1f1a23', 800: '#17111b' },
+  white: { 500: '#fff8f8', 800: '#f5eeee' },
+  purple: { 500: '#cc91f0', 800: '#9e5ecf' },
+  pink: { 500: '#ffb0c2', 800: '#ff87a6' },
+  green: { 500: '#93f091', 800: '#4fcd4c' },
+  yellow: { 500: '#ffb500', 800: '#ff9100' },
+  orange: { 500: '#ff702b', 800: '#eb4521' },
+  red: { 500: '#ff405e', 800: '#d41a45' },
+};
+
 export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: {
     extend: {
       colors: {
-        // Coral primary — the signature colour (reference: --primary #ff7448).
+        // The raw ramps, for the places that genuinely want a named hue —
+        // sticker chips, the accent cards, the multicolour rows.
+        chromia,
+
+        // Accent — purple is the identity's lead colour.
         accent: {
-          DEFAULT: '#ff7448',
-          bright: '#ff8d69', // --highlight-1
-          warm: '#ffa88d', // --highlight-2
-          soft: '#ffc8b7', // --highlight-3
-          tint: '#fff0ea', // palest wash for pills / active rows
-          deep: '#e85c2e', // hover / pressed
-          fg: '#fbfbfb', // --primary-foreground
+          DEFAULT: chromia.purple[500],
+          bright: '#ddb3f5',
+          soft: '#e9d2fa',
+          tint: '#f6ecfd', // palest wash behind pills and active rows
+          deep: chromia.purple[800],
+          fg: chromia.white[500],
         },
-        // Warm cream page canvas (reference: --background #fff9f6).
+        // The page itself.
         canvas: {
-          DEFAULT: '#fff9f6',
-          paper: '#f7f5ee', // --paper-cream
+          DEFAULT: chromia.white[500],
+          paper: chromia.white[800],
         },
-        // Deep navy-black used for dark surfaces and solid buttons.
+        // Dark surfaces: panels, the navigation rail, solid buttons.
         noir: {
-          DEFAULT: '#0f151d', // --foreground / --background-dark-ish
-          deep: '#0d1117', // --background-dark
-          soft: '#1b232e', // --dark-surface
+          DEFAULT: chromia.black[500],
+          deep: chromia.black[800],
+          soft: '#2a2430',
         },
         ink: {
-          DEFAULT: '#0f151d', // headings
-          muted: '#737373', // --muted-foreground
-          faint: '#a1a1a1', // --ring, tertiary text
+          DEFAULT: chromia.black[500], // headings and body
+          muted: '#6e6472', // secondary text
+          faint: '#a99fad', // tertiary text
         },
-        line: '#e5e5e5', // --border / --input
-        muted: '#f5f5f5', // --muted surface
-        // Pale blue secondary, used sparingly for informational states.
-        info: {
-          DEFAULT: '#d3e1ff', // --secondary
-          ink: '#2f4d8f',
+        line: '#e7dde0', // hairline borders on white
+        muted: chromia.white[800], // quiet fill
+
+        info: { DEFAULT: chromia.purple[500], ink: chromia.purple[800] },
+
+        // Verdict colours stay semantic and keep their four cuts: DEFAULT for
+        // text on white, `deep` for text on a tint, `bright` for a dark
+        // surface, `tint` for the fill behind them.
+        attributed: {
+          DEFAULT: chromia.green[800],
+          deep: '#2e8a2c',
+          bright: chromia.green[500],
+          tint: '#e4fbe3',
         },
-        // Verdict colours stay semantic (never coral, never red).
-        //
-        // Each carries three cuts: DEFAULT for text on white, `bright` for the
-        // same meaning on a dark surface (where DEFAULT would go muddy), and
-        // `tint` for the pale fill behind it.
-        attributed: { DEFAULT: '#00bb7f', deep: '#007956', bright: '#5ee9b5', tint: '#d0fae5' },
-        probable: { DEFAULT: '#a16207', deep: '#6b3f05', bright: '#e8b04b', tint: '#fef3c6' },
-        inconclusive: { DEFAULT: '#737373', deep: '#4a4a4a', bright: '#c4c4c4', tint: '#f5f5f5' },
-        pending: { DEFAULT: '#4a6fc4', deep: '#2f4d8f', bright: '#9dbcff', tint: '#d3e1ff' },
+        probable: {
+          DEFAULT: chromia.yellow[800],
+          deep: '#a85e00',
+          bright: chromia.yellow[500],
+          tint: '#fff1d6',
+        },
+        inconclusive: {
+          DEFAULT: '#6e6472',
+          deep: '#463f4b',
+          bright: '#c3b9c7',
+          tint: '#f2ecf933',
+        },
+        pending: {
+          DEFAULT: chromia.purple[800],
+          deep: '#6f3ba0',
+          bright: chromia.purple[500],
+          tint: '#f6ecfd',
+        },
         // Destructive actions and hard failures only — never a verdict.
-        danger: { DEFAULT: '#e40014', deep: '#a3000f', bright: '#ff7b86', tint: '#ffe5e7' },
+        danger: {
+          DEFAULT: chromia.red[800],
+          deep: '#a81236',
+          bright: chromia.red[500],
+          tint: '#ffe3e9',
+        },
       },
       fontFamily: {
         sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        display: ['"Bricolage Grotesque"', 'Inter', 'ui-sans-serif', 'sans-serif'],
+        // Chromia sets its headlines in a heavy, soft-serifed display face.
+        display: ['Fraunces', 'ui-serif', 'Georgia', 'serif'],
+        wordmark: ['Sniglet', 'ui-rounded', 'Inter', 'sans-serif'],
         mono: ['"JetBrains Mono"', 'ui-monospace', 'Menlo', 'Consolas', 'monospace'],
       },
       boxShadow: {
-        card: '0 1px 2px rgba(15, 21, 29, 0.04), 0 10px 30px -18px rgba(15, 21, 29, 0.22)',
-        panel: '0 20px 60px -30px rgba(15, 21, 29, 0.45)',
-        app: '0 30px 90px -45px rgba(15, 21, 29, 0.35)',
+        card: '0 1px 2px rgba(31, 26, 35, 0.04), 0 10px 30px -18px rgba(31, 26, 35, 0.22)',
+        panel: '0 20px 60px -30px rgba(31, 26, 35, 0.45)',
+        app: '0 30px 90px -45px rgba(31, 26, 35, 0.35)',
       },
       borderRadius: {
         xl: '0.875rem',
         '2xl': '1.25rem',
         '3xl': '1.75rem',
-        // The reference's signature radius: 1.5rem on mobile, 3.125rem up.
-        panel: '1.5rem',
-        'panel-lg': '3.125rem',
+        // Chromia rounds hard: panels and cards sit well above the usual scale.
+        panel: '1.75rem',
+        'panel-lg': '2.5rem',
       },
       letterSpacing: {
         tight: '-0.025em',

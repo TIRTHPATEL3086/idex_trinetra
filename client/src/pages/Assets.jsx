@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getAssets, uploadAsset, getUsers } from '../lib/api.js';
+import { getAssets, uploadAsset, getUsers, revealAllotment } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
-import { CloseIcon } from '../components/icons.jsx';
+import { CheckIcon, CloseIcon, CopyIcon, EyeIcon, EyeOffIcon } from '../components/icons.jsx';
+import Select from '../components/Select.jsx';
 
 /**
  * The document register.
@@ -47,7 +48,6 @@ export default function Assets() {
       <Header
         eyebrow="Registry"
         title="Protected documents"
-        subtitle="Encrypted at rest with NIST ML-KEM-768 broadcast encryption. Every decryption is watermarked and anchored on-chain."
         action={
           mayUpload ? (
             <button
@@ -278,7 +278,7 @@ function UploadModal({ initialFile, onClose, onDone }) {
   useEffect(() => {
     getUsers()
       .then((data) => {
-        const eligible = (data.users || []).filter((u) => u.active);
+        const eligible = (data.users || []).filter((u) => u.active && u.role === 'OFFICER');
         setAvailableUsers(eligible);
         setSelectedUserIds(eligible.map((u) => u.userId));
       })
@@ -342,15 +342,16 @@ function UploadModal({ initialFile, onClose, onDone }) {
           <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-faint">
             Classification
           </span>
-          <select
-            className="input"
+          <Select
+            ariaLabel="Classification"
             value={classification}
-            onChange={(e) => setClassification(e.target.value)}
-          >
-            <option value="RESTRICTED">RESTRICTED</option>
-            <option value="CONFIDENTIAL">CONFIDENTIAL</option>
-            <option value="SECRET">SECRET</option>
-          </select>
+            onChange={setClassification}
+            options={[
+              { value: 'RESTRICTED', label: 'RESTRICTED' },
+              { value: 'CONFIDENTIAL', label: 'CONFIDENTIAL' },
+              { value: 'SECRET', label: 'SECRET' },
+            ]}
+          />
         </label>
 
         <DragDropInput
@@ -441,11 +442,6 @@ function Overview({ assets }) {
           <div className="font-display mt-1.5 text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight">
             {documents} <span className="text-white/40 font-normal">protected documents</span>
           </div>
-          <p className="mt-2 max-w-xl text-xs sm:text-sm text-white/70 leading-relaxed">
-            Every document is encrypted with AES-256-GCM. Content keys are encapsulated per
-            recipient with NIST ML-KEM-768. Decryptions embed invisible Haar-DWT watermarks and
-            anchor immutable receipts on the Ethereum blockchain.
-          </p>
         </div>
 
         <div className="grid grid-cols-3 gap-2.5 sm:gap-3.5 shrink-0 w-full xl:w-auto">
@@ -483,6 +479,11 @@ function StatTile({ label, value, highlight }) {
 /* -- document list: cards on mobile, table on sm+ --------------------------- */
 
 function DocumentList({ assets, user, classificationFilter, setClassificationFilter }) {
+  // The passphrase column is for the person the copy was released to. An
+  // administrator sets these when dispatching, so repeating them against every
+  // document here is noise — and one more place a clearance secret can sit on
+  // an unattended screen.
+  const showPassphrase = user?.role !== 'ADMIN';
   return (
     <div className="space-y-3">
       {/* Classification filter header */}
@@ -496,17 +497,19 @@ function DocumentList({ assets, user, classificationFilter, setClassificationFil
           <label htmlFor="classification-select" className="text-xs font-semibold text-ink-muted">
             Classification:
           </label>
-          <select
-            id="classification-select"
+          <Select
+            className="w-52"
+            ariaLabel="Filter by classification"
+            buttonClassName="!py-1.5 !text-xs !font-semibold"
             value={classificationFilter}
-            onChange={(e) => setClassificationFilter(e.target.value)}
-            className="rounded-xl border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink shadow-sm hover:border-accent focus:border-accent focus:outline-none"
-          >
-            <option value="ALL">All Classifications</option>
-            <option value="RESTRICTED">RESTRICTED</option>
-            <option value="CONFIDENTIAL">CONFIDENTIAL</option>
-            <option value="SECRET">SECRET</option>
-          </select>
+            onChange={setClassificationFilter}
+            options={[
+              { value: 'ALL', label: 'All Classifications' },
+              { value: 'RESTRICTED', label: 'RESTRICTED' },
+              { value: 'CONFIDENTIAL', label: 'CONFIDENTIAL' },
+              { value: 'SECRET', label: 'SECRET' },
+            ]}
+          />
         </div>
       </div>
 
@@ -542,7 +545,9 @@ function DocumentList({ assets, user, classificationFilter, setClassificationFil
             <tr className="border-b border-line bg-noir/[0.02] text-left text-xs uppercase tracking-wider text-ink-muted">
               <th className="px-5 py-3.5 font-bold">Document</th>
               <th className="px-4 py-3.5 font-bold">Classification</th>
-              <th className="px-4 py-3.5 font-bold">PQC Broadcast Encryption</th>
+              {showPassphrase && (
+                <th className="px-4 py-3.5 font-bold">PQC Broadcast Encryption</th>
+              )}
               <th className="px-4 py-3.5 font-bold">Created</th>
               <th className="px-5 py-3.5 text-right font-bold">Decryptions</th>
             </tr>
@@ -554,12 +559,11 @@ function DocumentList({ assets, user, classificationFilter, setClassificationFil
                 <td className="px-4 py-4">
                   <ClassificationBadge value={a.classification} />
                 </td>
-                <td className="px-4 py-4">
-                  <span className="pill !bg-attributed-tint !text-attributed-deep text-xs font-semibold whitespace-nowrap">
-                    {a.encapsulationCount ?? a.authorizedUserIds?.length ?? 0} Recipients
-                    (ML-KEM-768)
-                  </span>
-                </td>
+                {showPassphrase && (
+                  <td className="px-4 py-4">
+                    <PassphraseCell asset={a} />
+                  </td>
+                )}
                 <td className="mono px-4 py-4 text-xs text-ink-muted whitespace-nowrap">
                   {new Date(a.createdAt).toLocaleString()}
                 </td>
@@ -571,6 +575,130 @@ function DocumentList({ assets, user, classificationFilter, setClassificationFil
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The recipient passphrase for a document, kept masked until its owner proves
+ * they are still at the keyboard.
+ *
+ * The dots are not a rendered secret behind a CSS mask — nothing is fetched
+ * until the password check passes, so the value is never in the page for a
+ * screenshot or the dev tools to pick up. Revealing re-locks on unmount and
+ * can be re-locked by hand, because leaving a clearance secret on screen is
+ * the same exposure as never masking it.
+ */
+function PassphraseCell({ asset }) {
+  const [stage, setStage] = useState('locked'); // locked | asking | shown
+  const [password, setPassword] = useState('');
+  const [secret, setSecret] = useState('');
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  async function unlock(e) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await revealAllotment(asset.assetId, password);
+      setSecret(r.passphrase);
+      setStage('shown');
+      setPassword('');
+    } catch (err) {
+      setError(err.message || 'Could not verify that password.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function relock() {
+    setSecret('');
+    setStage('locked');
+    setError(null);
+  }
+
+  function copy() {
+    navigator.clipboard.writeText(secret);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  }
+
+  if (stage === 'shown') {
+    return (
+      <div className="flex items-center gap-1.5">
+        <span className="mono rounded-lg bg-accent-tint px-2.5 py-1 text-xs font-semibold text-ink">
+          {secret}
+        </span>
+        <button
+          type="button"
+          onClick={copy}
+          title="Copy passphrase"
+          className="btn-icon !h-7 !w-7"
+          aria-label="Copy passphrase"
+        >
+          {copied ? <CheckIcon size={12} /> : <CopyIcon size={12} />}
+        </button>
+        <button
+          type="button"
+          onClick={relock}
+          title="Hide again"
+          className="btn-icon !h-7 !w-7"
+          aria-label="Hide passphrase"
+        >
+          <EyeOffIcon size={12} />
+        </button>
+      </div>
+    );
+  }
+
+  if (stage === 'asking') {
+    return (
+      <form onSubmit={unlock} className="flex items-center gap-1.5">
+        <input
+          type="password"
+          autoFocus
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Your login password"
+          aria-label="Your login password"
+          className="input !w-44 !py-1.5 text-xs"
+        />
+        <button type="submit" className="btn-accent !px-3 !py-1.5 !text-xs" disabled={busy}>
+          {busy ? '…' : 'Unlock'}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setStage('locked');
+            setPassword('');
+            setError(null);
+          }}
+          className="btn-icon !h-7 !w-7"
+          aria-label="Cancel"
+        >
+          <CloseIcon size={12} />
+        </button>
+        {error && <span className="text-[11px] font-semibold text-danger-deep">{error}</span>}
+      </form>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="mono select-none text-sm tracking-[0.2em] text-ink-faint" aria-hidden="true">
+        ••••••••••
+      </span>
+      <button
+        type="button"
+        onClick={() => setStage('asking')}
+        title="Reveal passphrase"
+        className="btn-icon !h-7 !w-7"
+        aria-label="Reveal passphrase"
+      >
+        <EyeIcon size={12} />
+      </button>
     </div>
   );
 }
