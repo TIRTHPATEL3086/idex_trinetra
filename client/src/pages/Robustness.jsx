@@ -39,7 +39,7 @@ export default function Robustness() {
   const live = metrics?.live;
 
   return (
-    <section className="space-y-3.5">
+    <section className="space-y-6">
       <Header
         eyebrow="Metrics"
         title="Watermark Invisibility & Robustness"
@@ -67,53 +67,53 @@ export default function Robustness() {
 
       {/* Production Telemetry KPI Tiles */}
       {live && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
-          <div className="card p-3 sm:p-3.5 shadow-xs">
-            <div className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-ink-muted">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
+          <div className="card p-5 shadow-xs">
+            <div className="text-xs font-bold uppercase tracking-wider text-ink-muted">
               Live Decryptions
             </div>
-            <div className="mt-1 text-xl sm:text-2xl font-extrabold tracking-tight text-ink">
+            <div className="mt-2 text-2xl sm:text-3xl font-extrabold tracking-tight text-ink">
               {live.totalDecryptions ?? 0}
             </div>
-            <p className="mt-0.5 text-[11px] text-ink-muted">Anchored & watermarked</p>
+            <p className="mt-1 text-xs text-ink-muted">Anchored & watermarked</p>
           </div>
 
           <div className="card p-5 shadow-xs">
             <div className="text-xs font-bold uppercase tracking-wider text-accent-deep">
               Mean PSNR
             </div>
-            <div className="mt-1 text-xl sm:text-2xl font-extrabold tracking-tight text-ink">
+            <div className="mt-2 text-2xl sm:text-3xl font-extrabold tracking-tight text-ink">
               {live.avgPsnr > 0 ? `${live.avgPsnr} dB` : '—'}
             </div>
-            <p className="mt-0.5 text-[11px] text-ink-muted">&gt;40 dB threshold: Imperceptible</p>
+            <p className="mt-1 text-xs text-ink-muted">&gt;40 dB threshold: Imperceptible</p>
           </div>
 
-          <div className="card p-3 sm:p-3.5 shadow-xs">
-            <div className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-ink-muted">
+          <div className="card p-5 shadow-xs">
+            <div className="text-xs font-bold uppercase tracking-wider text-ink-muted">
               PSNR Range
             </div>
-            <div className="mt-1 text-xl sm:text-2xl font-extrabold tracking-tight text-ink">
+            <div className="mt-2 text-2xl sm:text-3xl font-extrabold tracking-tight text-ink">
               {live.minPsnr !== null ? `${live.minPsnr} – ${live.maxPsnr} dB` : '—'}
             </div>
-            <p className="mt-0.5 text-[11px] text-ink-muted">Min / Max observed</p>
+            <p className="mt-1 text-xs text-ink-muted">Min / Max observed</p>
           </div>
 
-          <div className="card p-3 sm:p-3.5 shadow-xs">
-            <div className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-ink-muted">
+          <div className="card p-5 shadow-xs">
+            <div className="text-xs font-bold uppercase tracking-wider text-ink-muted">
               QIM Delta (Δ)
             </div>
-            <div className="mt-1 text-xl sm:text-2xl font-extrabold tracking-tight text-ink">
+            <div className="mt-2 text-2xl sm:text-3xl font-extrabold tracking-tight text-ink">
               16 – 24
             </div>
-            <p className="mt-0.5 text-[11px] text-ink-muted">Adaptive DWT-DCT quantization</p>
+            <p className="mt-1 text-xs text-ink-muted">Adaptive DWT-DCT quantization</p>
           </div>
         </div>
       )}
 
       {/* Live Decryption PSNR History (if records exist) */}
       {live?.history?.length > 0 && (
-        <div className="card p-3.5 sm:p-4 shadow-sm">
-          <div className="flex items-center justify-between pb-2.5">
+        <div className="card p-5 shadow-sm">
+          <div className="flex items-center justify-between pb-3">
             <div>
               <h3 className="text-sm font-bold text-ink">
                 Real-time Production Decryption Fidelity
@@ -124,7 +124,7 @@ export default function Robustness() {
               </p>
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={200}>
+          <ResponsiveContainer width="100%" height={220}>
             <LineChart data={live.history} margin={{ left: -18, right: 8, top: 10 }}>
               <CartesianGrid
                 strokeDasharray="3 3"
@@ -175,8 +175,8 @@ export default function Robustness() {
 
       {/* Attack Suite Benchmark Charts */}
       {metrics && !notRun ? (
-        <div className="grid gap-3.5 grid-cols-1 xl:grid-cols-2">
-          <div className="card p-3.5 sm:p-4">
+        <div className="grid gap-5 grid-cols-1 xl:grid-cols-2">
+          <div className="card p-5">
             <h3 className="text-sm font-bold text-ink">Attack Survival (Empirical)</h3>
             <p className="mb-4 text-xs text-ink-muted">
               Bits recovered out of 48 (detection threshold: 40+).
@@ -196,7 +196,7 @@ export default function Robustness() {
                   tickLine={{ stroke: '#e7dde0' }}
                   angle={-25}
                   textAnchor="end"
-                  height={50}
+                  height={54}
                   interval={0}
                 />
                 <YAxis
@@ -223,13 +223,13 @@ export default function Robustness() {
             </ResponsiveContainer>
           </div>
 
-          <div className="card p-3.5 sm:p-4">
+          <div className="card p-5">
             <h3 className="text-sm font-bold text-ink">PSNR vs. Strength (Δ)</h3>
             <p className="mb-4 text-xs text-ink-muted">
               Higher Δ improves attack survivability at the cost of PSNR. &gt;40 dB is humanly
               imperceptible.
             </p>
-            <ResponsiveContainer width="100%" height={240}>
+            <ResponsiveContainer width="100%" height={280}>
               <LineChart data={metrics.psnrCurve} margin={{ left: -18, right: 8 }}>
                 <CartesianGrid
                   strokeDasharray="3 3"

@@ -126,9 +126,9 @@ export default function History() {
             { label: 'This Page', value: `${data.events.length} of ${data.limit}` },
             { label: 'Page', value: `${data.page} / ${data.pages || 1}` },
           ].map(({ label, value }) => (
-            <div key={label} className="card p-2.5 sm:p-3">
-              <div className="text-[10px] uppercase tracking-wide text-ink-faint font-semibold">{label}</div>
-              <div className="mt-0.5 text-base sm:text-lg font-bold text-ink">{value}</div>
+            <div key={label} className="card p-4">
+              <div className="text-[11px] uppercase tracking-wide text-ink-faint">{label}</div>
+              <div className="mt-1 text-lg font-bold text-ink">{value}</div>
             </div>
           ))}
         </div>
@@ -212,71 +212,26 @@ export default function History() {
                       )}
                     </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-line/60">
-                  {data.events.map((e) => (
-                    <tr key={e.id} className="hover:bg-line/25 transition-colors">
-                      <td className="px-3.5 py-2.5 mono text-xs text-ink-muted whitespace-nowrap">
-                        {new Date(e.at).toLocaleString()}
-                      </td>
-                      <td className="px-3.5 py-2.5 font-bold text-ink text-sm">{e.userName}</td>
-                      <td className="px-3.5 py-2.5 text-ink-muted text-xs font-medium">{e.department}</td>
-                      <td className="px-3.5 py-2.5 text-ink text-sm font-medium max-w-[180px] truncate" title={e.assetTitle}>
-                        {e.assetTitle}
-                        {e.assetClassification && (
-                          <span className="ml-1.5 rounded bg-surface px-1.5 py-0.5 text-[10px] font-bold text-ink-muted">
-                            {e.assetClassification}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3.5 py-2.5 mono text-xs text-ink-muted">{e.device}</td>
-                      <td className="px-3.5 py-2.5 mono text-xs text-ink-muted">
-                        {shortHash(e.receiptId, 6, 4)}
-                      </td>
-                      <td className="px-3.5 py-2.5 mono text-xs">
-                        {e.etherscanUrl ? (
-                          <a href={e.etherscanUrl} target="_blank" rel="noreferrer"
-                            className="font-semibold text-attributed hover:underline">
-                            {shortHash(e.txHash, 6, 4)} ↗
-                          </a>
-                        ) : (
-                          <span className="text-ink-muted">{shortHash(e.txHash, 6, 4)}</span>
-                        )}
-                      </td>
-                      <td className="px-3.5 py-2.5 mono text-xs font-semibold text-ink">
-                        {e.psnrDb != null ? `${Number(e.psnrDb).toFixed(1)} dB` : '—'}
-                      </td>
-                      <td className="px-3.5 py-2.5">
-                        {e.signatureAlgorithm ? (
-                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
-                            ✓ PQC
-                          </span>
-                        ) : (
-                          <span className="text-xs text-ink-faint">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
 
           {/* Pagination */}
           {data.pages > 1 && (
-            <div className="flex items-center justify-between pt-1">
+            <div className="flex items-center justify-between">
               <button
-                className="btn-dark !text-xs !py-1.5 !px-3"
+                className="btn-dark"
                 disabled={page <= 1 || loading}
                 onClick={() => load(page - 1)}
               >
                 <ChevronLeftIcon size={14} /> Previous
               </button>
-              <span className="text-xs text-ink-muted font-medium">
+              <span className="text-sm text-ink-muted">
                 Page {data.page} of {data.pages} ({data.total} total)
               </span>
               <button
-                className="btn-dark !text-xs !py-1.5 !px-3"
+                className="btn-dark"
                 disabled={page >= data.pages || loading}
                 onClick={() => load(page + 1)}
               >

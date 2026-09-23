@@ -209,7 +209,7 @@ export default function Decrypt() {
   const isBusy = status === 'working';
 
   return (
-    <section className="space-y-3.5">
+    <section className="space-y-6">
       <Header
         eyebrow="Release"
         title={isAdmin ? 'Decrypt & Multi-Officer Dispatch' : 'Decrypt protected document'}
@@ -222,7 +222,7 @@ export default function Decrypt() {
         >
           <form
             onSubmit={isAdmin ? submitAdminBatch : submitOfficerDecrypt}
-            className="card space-y-3.5 p-4 sm:p-5"
+            className="card space-y-5 p-5 sm:p-6"
           >
             {/* Document Selection */}
             <Field label="Protected Document (PDF / Image)">
@@ -245,7 +245,7 @@ export default function Decrypt() {
                   <span className="text-xs font-bold uppercase tracking-wide text-ink">
                     Select Recipient Officers ({selectedUserIds.length} selected)
                   </span>
-                  <div className="flex gap-1.5">
+                  <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={selectAllOfficers}
@@ -264,7 +264,7 @@ export default function Decrypt() {
                 </div>
 
                 {/* Recipient Checkboxes List */}
-                <div className="space-y-1.5 max-h-48 overflow-y-auto scroll-slim pr-1">
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                   {users
                     .filter((u) => u.role === 'OFFICER')
                     .map((u) => {
@@ -273,7 +273,7 @@ export default function Decrypt() {
                         <label
                           key={u.userId}
                           onClick={() => toggleUser(u.userId)}
-                          className={`flex items-center gap-2.5 rounded-xl border p-2 sm:p-2.5 cursor-pointer transition select-none ${
+                          className={`flex items-center gap-3 rounded-xl border p-2.5 sm:p-3 cursor-pointer transition select-none ${
                             isChecked
                               ? 'border-accent bg-accent/10 shadow-xs'
                               : 'border-line/60 bg-white hover:border-line'
@@ -292,7 +292,7 @@ export default function Decrypt() {
                                 {u.dept}
                               </span>
                             </div>
-                            <div className="mono text-[11px] text-ink-muted truncate mt-0.5">
+                            <div className="mono text-xs text-ink-muted truncate mt-0.5">
                               {u.email}
                             </div>
                           </div>
@@ -336,7 +336,7 @@ export default function Decrypt() {
               </div>
             ) : (
               /* ── OFFICER: Locked Single Identity & Mandatory Passphrase ── */
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <Field label="Authorized Recipient">
                   <div className="rounded-2xl border border-accent/40 bg-accent/10 px-4 py-3">
                     <div className="flex items-center justify-between">
@@ -376,7 +376,7 @@ export default function Decrypt() {
                   <div className="relative">
                     <input
                       type={showPass ? 'text' : 'password'}
-                      className="input pr-10 text-xs sm:text-sm font-mono !py-1.5"
+                      className="input pr-10 text-sm font-mono"
                       value={officerPassphrase}
                       onChange={(e) => setOfficerPassphrase(e.target.value)}
                       placeholder="Enter the passphrase allotted by Admin"
@@ -395,7 +395,7 @@ export default function Decrypt() {
             {/* Device Label */}
             <Field label="Device Label">
               <input
-                className="input text-xs !py-1.5"
+                className="input text-xs"
                 value={deviceLabel}
                 onChange={(e) => setDeviceLabel(e.target.value)}
                 placeholder="DESK-114"
@@ -448,10 +448,10 @@ export default function Decrypt() {
 
           {/* ── Admin Multi-Officer Dispatch Results ── */}
           {status === 'done' && batchResult && (
-            <div className="card p-4 sm:p-5 space-y-3.5 shadow-sm">
-              <div className="flex items-center justify-between border-b border-line pb-2.5">
+            <div className="card p-5 sm:p-6 space-y-4 shadow-sm">
+              <div className="flex items-center justify-between border-b border-line pb-3">
                 <div>
-                  <h3 className="text-sm sm:text-base font-extrabold text-ink">
+                  <h3 className="text-base font-extrabold text-ink">
                     Dispatch Completed Successfully
                   </h3>
                   <p className="text-xs text-ink-muted mt-0.5">
@@ -464,16 +464,16 @@ export default function Decrypt() {
                 </span>
               </div>
 
-              <div className="space-y-2.5 max-h-[460px] overflow-y-auto scroll-slim pr-1">
+              <div className="space-y-3">
                 {batchResult.dispatches.map((d) => (
                   <div
                     key={d.userId}
                     className="rounded-2xl border border-line bg-[#faf8f5] p-4 space-y-2.5 shadow-xs"
                   >
-                    <div className="flex flex-wrap items-center justify-between gap-1.5">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-extrabold text-xs sm:text-sm text-ink">{d.userName}</span>
-                        <span className="text-[11px] font-semibold text-ink-muted">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-extrabold text-sm text-ink">{d.userName}</span>
+                        <span className="text-xs font-semibold text-ink-muted">
                           [{d.department}]
                         </span>
                       </div>
@@ -482,12 +482,12 @@ export default function Decrypt() {
                       </span>
                     </div>
 
-                    <div className="mono text-[11px] text-ink-muted space-y-0.5">
+                    <div className="mono text-xs text-ink-muted space-y-1">
                       <div>Receipt: {shortHash(d.receiptId, 10, 6)}</div>
                       <div>Tx Hash: {shortHash(d.txHash, 10, 6)}</div>
                     </div>
 
-                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-line/50">
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-line/50">
                       {d.etherscanUrl ? (
                         <a
                           href={d.etherscanUrl}

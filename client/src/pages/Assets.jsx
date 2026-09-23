@@ -44,7 +44,7 @@ export default function Assets() {
       : officerAssets.filter((a) => a.classification === classificationFilter);
 
   return (
-    <section className="space-y-3.5">
+    <section className="space-y-6">
       <Header
         eyebrow="Registry"
         title="Protected documents"
@@ -91,7 +91,7 @@ export default function Assets() {
             setDroppedInitialFile(null);
             setUploadOpen(true);
           }}
-          className={`cursor-pointer rounded-2xl border-2 border-dashed p-3 sm:p-3.5 text-center transition-all duration-200 ${
+          className={`cursor-pointer rounded-3xl border-2 border-dashed p-5 text-center transition-all duration-200 ${
             pageDragging
               ? 'border-accent-deep bg-accent/20 scale-[1.01] shadow-lg ring-4 ring-accent/30'
               : 'border-line/80 bg-gradient-to-r from-[#faf8f5] to-white hover:border-accent-deep hover:bg-accent/5'
@@ -102,12 +102,12 @@ export default function Assets() {
               <PlusIcon />
             </div>
             <div className="text-center sm:text-left">
-              <div className="text-xs sm:text-sm font-bold text-ink">
+              <div className="text-sm sm:text-base font-bold text-ink">
                 {pageDragging
                   ? 'Release to upload & protect document!'
                   : 'Drag & drop PDF or Image here to protect, or click to upload'}
               </div>
-              <div className="text-[11px] text-ink-muted">
+              <div className="mt-0.5 text-xs text-ink-muted">
                 Post-quantum NIST ML-KEM-768 broadcast encryption · Instant perceptual hashing
               </div>
             </div>
@@ -439,12 +439,12 @@ function Overview({ assets }) {
             <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
             Registry overview
           </div>
-          <div className="font-display mt-1 text-xl sm:text-2xl font-extrabold tracking-tight">
+          <div className="font-display mt-1.5 text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight">
             {documents} <span className="text-white/40 font-normal">protected documents</span>
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 sm:gap-3 shrink-0 w-full xl:w-auto">
+        <div className="grid grid-cols-3 gap-2.5 sm:gap-3.5 shrink-0 w-full xl:w-auto">
           <StatTile label="Documents" value={documents} />
           <StatTile label="Secret" value={secret} />
           <StatTile label="Decryptions" value={decryptions} highlight />
@@ -461,7 +461,7 @@ function StatTile({ label, value, highlight }) {
         highlight ? 'bg-accent text-noir shadow-md' : 'bg-noir-soft text-white'
       }`}
     >
-      <div className="flex items-center justify-between gap-1">
+      <div className="flex items-center justify-between gap-1.5">
         <span
           className={`text-[11px] sm:text-xs font-bold uppercase tracking-wider ${
             highlight ? 'text-noir/80' : 'text-white/60'
@@ -471,7 +471,7 @@ function StatTile({ label, value, highlight }) {
         </span>
         <ArrowUpRight highlight={highlight} />
       </div>
-      <div className="font-display mt-1 sm:mt-1.5 text-xl sm:text-2xl font-extrabold">{value}</div>
+      <div className="font-display mt-2 sm:mt-3 text-2xl sm:text-3xl font-extrabold">{value}</div>
     </div>
   );
 }
@@ -571,31 +571,9 @@ function DocumentList({ assets, user, classificationFilter, setClassificationFil
                   {a.decryptCount}
                 </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-line/60">
-              {assets.map((a) => (
-                <tr
-                  key={a.assetId}
-                  className="transition hover:bg-line/30"
-                >
-                  <td className="px-5 py-3 font-bold text-ink text-sm">{a.title}</td>
-                  <td className="px-4 py-3">
-                    <ClassificationBadge value={a.classification} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="pill !bg-emerald-50 !text-emerald-700 text-xs font-semibold whitespace-nowrap">
-                      {a.encapsulationCount ?? a.authorizedUserIds?.length ?? 0} Recipients (ML-KEM-768)
-                    </span>
-                  </td>
-                  <td className="mono px-4 py-3 text-xs text-ink-muted whitespace-nowrap">
-                    {new Date(a.createdAt).toLocaleString()}
-                  </td>
-                  <td className="mono px-5 py-3 text-right font-extrabold text-sm text-ink">{a.decryptCount}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

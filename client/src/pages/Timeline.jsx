@@ -50,7 +50,7 @@ export default function Timeline() {
   }
 
   return (
-    <section className="space-y-3.5">
+    <section className="space-y-6">
       <Header
         eyebrow="Audit"
         title="Audit timeline & Anomaly Forensics"
@@ -73,7 +73,7 @@ export default function Timeline() {
       )}
 
       {data && data.timeline.length > 0 && (
-        <ol className="relative space-y-3 before:absolute before:left-[13px] before:top-2 before:h-[calc(100%-1rem)] before:w-px before:bg-line sm:before:left-[15px] max-h-[500px] overflow-y-auto scroll-slim pr-1.5">
+        <ol className="relative space-y-4 before:absolute before:left-[15px] before:top-2 before:h-[calc(100%-1rem)] before:w-px before:bg-line sm:before:left-[19px]">
           {data.timeline.map((e) => (
             <li key={e.receiptId} className="relative flex gap-4">
               <span
@@ -87,11 +87,11 @@ export default function Timeline() {
               >
                 <DotGlyph />
               </span>
-              <div className="card flex-1 p-3 sm:p-3.5">
+              <div className="card flex-1 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
-                    <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                      <span className="text-xs sm:text-sm font-bold text-ink">{e.userName}</span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm sm:text-base font-bold text-ink">{e.userName}</span>
                       {e.riskLevel === 'CRITICAL' && (
                         <span className="rounded-full bg-danger-tint px-2.5 py-0.5 text-xs font-bold text-danger-deep">
                           CRITICAL ANOMALY
@@ -114,14 +114,14 @@ export default function Timeline() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 sm:gap-3">
-                    <div className="text-right text-[11px] text-ink-muted font-mono">
+                  <div className="flex items-center gap-3">
+                    <div className="text-right text-xs text-ink-muted font-mono">
                       {new Date(e.at).toLocaleString()}
                     </div>
                     {e.userId && (
                       <button
                         onClick={() => handleToggle(e.userId)}
-                        className={`rounded-lg px-2 py-0.5 text-[11px] font-semibold transition ${
+                        className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
                           e.userActive === false
                             ? 'bg-line text-ink hover:bg-line'
                             : 'bg-danger-tint border border-danger-bright text-danger-deep hover:bg-danger-tint'
@@ -142,7 +142,7 @@ export default function Timeline() {
 
                 {/* Anomaly Badges */}
                 {e.anomalies && e.anomalies.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1">
+                  <div className="mt-2.5 flex flex-wrap gap-1.5">
                     {e.anomalies.map((a, i) => (
                       <span
                         key={i}
@@ -154,7 +154,7 @@ export default function Timeline() {
                   </div>
                 )}
 
-                <div className="mono mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-muted">
+                <div className="mono mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-muted">
                   <span>receipt {shortHash(e.receiptId, 8, 4)}</span>
                   {e.psnrDb != null && <span>PSNR {e.psnrDb.toFixed(1)} dB</span>}
                   {e.userRef && <span>on-chain {shortHash(e.userRef, 6, 4)}</span>}

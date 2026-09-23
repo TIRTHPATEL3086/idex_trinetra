@@ -103,7 +103,7 @@ function Shell() {
       {/* The reference's radius: 1.5rem on mobile, 3.125rem from lg up. */}
       <div className="mx-auto flex h-full w-full max-w-[1440px] flex-col overflow-hidden rounded-panel border border-line bg-white shadow-app lg:rounded-[3.125rem]">
         {/* ---- top bar (fixed) ---- */}
-        <header className="flex shrink-0 items-center gap-2.5 border-b border-line px-3.5 py-2.5 sm:px-6">
+        <header className="flex shrink-0 items-center gap-2.5 border-b border-line px-3.5 py-3 sm:px-6">
           <button
             type="button"
             aria-label="Open navigation"
@@ -142,7 +142,7 @@ function Shell() {
 
           <Sidebar open={navOpen} can={can} />
 
-          <main className="scroll-slim min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3.5 py-3 sm:px-5 sm:py-3.5 xl:px-6">
+          <main className="scroll-slim min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3.5 py-5 sm:px-6 sm:py-6 xl:px-8">
             <div className="mx-auto w-full max-w-6xl">
               <Routes>
                 {/* Land on the first screen this role can actually use. */}
