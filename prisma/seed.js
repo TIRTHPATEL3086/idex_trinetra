@@ -66,7 +66,13 @@ const USERS = [
     role: 'OFFICER',
     password: 'officer123',
   },
-  // INVESTIGATOR and AUDITOR demo users removed per project requirements.
+  {
+    name: 'Analyst A-004',
+    dept: 'Forensics',
+    email: 'a004@example.gov',
+    role: 'INVESTIGATOR',
+    password: 'analyst123',
+  },
   {
     name: 'Admin Desk',
     dept: 'HQ',

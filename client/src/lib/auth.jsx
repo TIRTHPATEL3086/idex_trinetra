@@ -95,17 +95,20 @@ export const ROLE_UI = {
     tint: 'bg-accent',
     demo: { email: 'u017@example.gov', password: 'officer123' },
   },
-  // INVESTIGATOR and AUDITOR demo roles removed per project requirements
+  INVESTIGATOR: {
+    label: 'Forensic Analyst',
+    short: 'Investigator',
+    blurb: 'Traces leaked files. Cannot decrypt, so cannot manufacture evidence.',
+    badge: 'bg-chromia-purple-500/20 text-chromia-purple-300 border border-chromia-purple-500/30',
+    tint: 'bg-chromia-purple-500',
+    demo: { email: 'a004@example.gov', password: 'analyst123' },
+  },
 };
 
-export const ROLE_ORDER = ['ADMIN', 'OFFICER'];
+export const ROLE_ORDER = ['ADMIN', 'OFFICER', 'INVESTIGATOR'];
 
 /**
  * Demo accounts for one-click evaluation.
- *
- * Only the roles this deployment actually ships: INVESTIGATOR and AUDITOR were
- * removed from ROLE_UI, so listing them here would hand the login page a role
- * it cannot render.
  */
 export const DEMO_ACCOUNTS = [
   {
@@ -118,6 +121,17 @@ export const DEMO_ACCOUNTS = [
     email: 'admin@example.gov',
     password: 'admin123',
     desc: 'Full custody & management',
+  },
+  {
+    role: 'INVESTIGATOR',
+    short: 'Investigator',
+    badge: 'bg-chromia-purple-500/20 text-chromia-purple-300 border border-chromia-purple-500/30',
+    title: 'Forensic Analyst',
+    name: 'Analyst A-004',
+    dept: 'Forensics Wing',
+    email: 'a004@example.gov',
+    password: 'analyst123',
+    desc: 'Leak detection & forensic tracing',
   },
   {
     role: 'OFFICER',
