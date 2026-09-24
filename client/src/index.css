@@ -420,3 +420,192 @@ h3 {
     transition: none;
   }
 }
+
+/* ==========================================================================
+   Intro curtain — the lock sequence shown before the landing page
+   ==========================================================================
+   A key arrives, turns half a revolution, the shackle springs open from its
+   left pivot, the wordmark rises, and the curtain parts. Everything below is
+   transform and opacity so the whole sequence stays on the compositor.
+   ========================================================================== */
+
+.intro {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+/* The two halves that part at the end. They overlap by a pixel: at 50vh each,
+   an odd viewport height rounds them apart and a hairline of the page shows
+   through the middle of the curtain. */
+.intro-panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  height: calc(50vh + 1px);
+  background: #17111b;
+  will-change: transform;
+}
+.intro-panel--top {
+  top: 0;
+}
+.intro-panel--bottom {
+  bottom: 0;
+}
+
+/* Each edge is lit only once it is moving. A shadow on a closed curtain is
+   cast onto the other half and reads as a seam across the middle of the
+   screen — which is the one thing a curtain must not show before it opens. */
+.intro--parting .intro-panel--top {
+  animation: intro-part-up 0.85s cubic-bezier(0.76, 0, 0.24, 1) forwards;
+  box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.6);
+}
+.intro--parting .intro-panel--bottom {
+  animation: intro-part-down 0.85s cubic-bezier(0.76, 0, 0.24, 1) forwards;
+  box-shadow: 0 -12px 40px -12px rgba(0, 0, 0, 0.6);
+}
+.intro--parting .intro-stage {
+  animation: intro-stage-out 0.36s ease-in forwards;
+}
+
+@keyframes intro-part-up {
+  to {
+    transform: translateY(-100%);
+  }
+}
+@keyframes intro-part-down {
+  to {
+    transform: translateY(100%);
+  }
+}
+@keyframes intro-stage-out {
+  to {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+
+/* -- the stage ------------------------------------------------------------ */
+
+.intro-stage {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 1.5rem;
+}
+
+/* The shield and body settle in first, so the key has something to arrive at. */
+.intro-lock {
+  animation: intro-rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes intro-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The key flies in from the right, seats in the keyhole, then turns half a
+   revolution. One animation rather than three, so the motion never stutters
+   between steps. */
+.intro-key {
+  transform-origin: 100px 126px; /* the keyhole */
+  animation: intro-key 1.5s cubic-bezier(0.5, 0, 0.2, 1) 0.4s both;
+}
+
+@keyframes intro-key {
+  0% {
+    opacity: 0;
+    transform: translate(120px, -10px) rotate(-14deg);
+  }
+  22% {
+    opacity: 1;
+    transform: translate(46px, 0) rotate(0deg);
+  }
+  42% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  48% {
+    transform: translate(0, 0) rotate(-8deg);
+  }
+  84%,
+  100% {
+    transform: translate(0, 0) rotate(180deg);
+  }
+}
+
+/* The shackle unlatches from its left pivot — the hinge stays down while the
+   right leg lifts clear, which is how a padlock actually opens. */
+.intro-shackle {
+  transform-origin: 76px 98px;
+  animation: intro-shackle 0.62s cubic-bezier(0.34, 1.56, 0.64, 1) 1.8s both;
+}
+
+@keyframes intro-shackle {
+  0% {
+    transform: rotate(0deg) translateY(0);
+  }
+  35% {
+    transform: rotate(0deg) translateY(-6px);
+  }
+  100% {
+    transform: rotate(-38deg) translateY(-6px);
+  }
+}
+
+/* A single pulse of light through the shield as it releases. */
+.intro-glow {
+  animation: intro-glow 0.8s ease-out 1.95s both;
+}
+
+@keyframes intro-glow {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  40% {
+    opacity: 0.55;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.45);
+  }
+}
+
+.intro-word {
+  animation: intro-word 0.6s cubic-bezier(0.16, 1, 0.3, 1) 2.1s both;
+}
+
+@keyframes intro-word {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Asked not to be moved: no sequence, no curtain — the page is simply there. */
+@media (prefers-reduced-motion: reduce) {
+  .intro,
+  .intro-panel,
+  .intro-stage,
+  .intro-lock,
+  .intro-key,
+  .intro-shackle,
+  .intro-glow,
+  .intro-word {
+    animation: none !important;
+  }
+}

@@ -305,7 +305,6 @@ function AccountMenu({ user }) {
   const { signOut } = useAuth();
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [confirmSignOut, setConfirmSignOut] = useState(false);
   const meta = ROLE_UI[user?.role] ?? {};
 
   if (!user) return null;
@@ -319,7 +318,6 @@ function AccountMenu({ user }) {
 
   function handleClose() {
     setOpen(false);
-    setConfirmSignOut(false);
   }
 
   return (
@@ -447,56 +445,21 @@ function AccountMenu({ user }) {
               </div>
             </div>
 
-            {/* Logout / Sign Out Action Box */}
-            <div className="pt-2 border-t border-line/80 space-y-2.5">
-              {!confirmSignOut ? (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setConfirmSignOut(true)}
-                    className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-danger-bright bg-danger-tint py-3 text-xs font-extrabold text-danger-deep hover:bg-danger-tint hover:border-danger-bright transition shadow-xs cursor-pointer"
-                  >
-                    <span>Sign out of session</span>
-                    <SignOutIcon size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleClose}
-                    className="rounded-2xl border border-line bg-white px-4 py-3 text-xs font-bold text-ink-muted hover:bg-noir/5 hover:text-ink transition cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <div className="rounded-2xl border border-danger-bright bg-danger-tint/90 p-4 space-y-3 animate-in fade-in">
-                  <div className="text-xs font-bold text-danger-deep">
-                    Are you sure you want to end your security session?
-                  </div>
-                  <p className="text-[11px] text-danger-deep">
-                    Signing out terminates your authenticated enclave session. You will need to
-                    re-enter your clearance credentials to access protected documents.
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleClose();
-                        signOut();
-                      }}
-                      className="flex-1 rounded-xl bg-danger-deep hover:bg-danger-deep text-white font-extrabold py-2.5 text-xs shadow-md transition hover:scale-[1.01] cursor-pointer"
-                    >
-                      Confirm Sign Out
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmSignOut(false)}
-                      className="rounded-xl border border-line bg-white px-4 py-2.5 text-xs font-bold text-ink hover:bg-noir/5 transition cursor-pointer"
-                    >
-                      Stay Signed In
-                    </button>
-                  </div>
-                </div>
-              )}
+            {/* Signing out is not destructive — you sign back in. A red
+                two-step confirmation made an ordinary action look alarming,
+                so this is one plain button. */}
+            <div className="border-t border-line/80 pt-3">
+              <button
+                type="button"
+                onClick={() => {
+                  handleClose();
+                  signOut();
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-line bg-white py-3 text-sm font-semibold text-ink transition hover:bg-muted"
+              >
+                <SignOutIcon size={15} />
+                Sign out
+              </button>
             </div>
           </div>
         </div>

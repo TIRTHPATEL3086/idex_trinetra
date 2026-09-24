@@ -21,11 +21,7 @@ import { PrismaClient } from '@prisma/client';
 import { env, masterKey } from '../server/lib/env.js';
 import { assetRef, userRef, hexToBuffer } from '../server/lib/refs.js';
 import { hashPassword } from '../server/lib/auth.js';
-import {
-  generatePqcKeyPair,
-  encryptKeyBundle,
-  encapsulateKey,
-} from '../server/core/pqc.js';
+import { generatePqcKeyPair, encryptKeyBundle, encapsulateKey } from '../server/core/pqc.js';
 
 const prisma = new PrismaClient();
 
@@ -66,7 +62,13 @@ const USERS = [
     role: 'OFFICER',
     password: 'officer123',
   },
-  // INVESTIGATOR and AUDITOR demo users removed per project requirements.
+  {
+    name: 'Analyst A-004',
+    dept: 'Intel Cell',
+    email: 'a004@example.gov',
+    role: 'INVESTIGATOR',
+    password: 'analyst123',
+  },
   {
     name: 'Admin Desk',
     dept: 'HQ',
@@ -121,7 +123,9 @@ async function main() {
     });
 
     userPqcMap.set(id, { u, pqc });
-    console.log(`  user  ${id}  ${u.name.padEnd(16)} ${u.role.padEnd(13)} ${u.dept} [PQC enrolled]`);
+    console.log(
+      `  user  ${id}  ${u.name.padEnd(16)} ${u.role.padEnd(13)} ${u.dept} [PQC enrolled]`
+    );
   }
   await prisma.$executeRawUnsafe(
     `SELECT setval(pg_get_serial_sequence('"User"','id'), ${USERS.length})`
