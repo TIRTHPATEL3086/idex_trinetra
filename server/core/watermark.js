@@ -21,6 +21,16 @@ import sharp from 'sharp';
 import crypto from 'node:crypto';
 import { env } from '../lib/env.js';
 import { psnr as computePsnr } from './psnr.js';
+import { parsePayload } from './payload.js';
+
+/** Whether extracted bits carry a valid CRC; malformed bits simply do not. */
+function crcOf(bits) {
+  try {
+    return parsePayload(bits).crcOk;
+  } catch {
+    return false;
+  }
+}
 
 /** How many scattered coefficients carry each bit (majority-voted on extract). */
 export const REPEAT_FACTOR = 21;
@@ -440,11 +450,7 @@ export async function extract(imageBuffer, delta = 12, { multiOrientation = true
   // Fast path: attempt standard 0° orientation
   const baseResult = await extractSingle(imageBuffer, delta);
 
-  let crcOk = false;
-  try {
-    const { parsePayload } = await import('./payload.js');
-    crcOk = parsePayload(baseResult.payloadBits).crcOk;
-  } catch {}
+  const crcOk = crcOf(baseResult.payloadBits);
 
   // If CRC is valid or orientation check is disabled, return immediately
   if (crcOk || !multiOrientation) {
@@ -461,13 +467,7 @@ export async function extract(imageBuffer, delta = 12, { multiOrientation = true
       const candidate = await extractSingle(rotated, delta);
       candidate.rotationAngle = angle;
 
-      let candidateCrc = false;
-      try {
-        const { parsePayload } = await import('./payload.js');
-        candidateCrc = parsePayload(candidate.payloadBits).crcOk;
-      } catch {}
-
-      if (candidateCrc) {
+      if (crcOf(candidate.payloadBits)) {
         return candidate; // Exact match found on rotation
       }
 

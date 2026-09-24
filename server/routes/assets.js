@@ -5,7 +5,7 @@ import path from 'node:path';
 import { z } from 'zod';
 
 import { prisma } from '../lib/prisma.js';
-import { env, masterKey } from '../lib/env.js';
+import { env } from '../lib/env.js';
 import { badInput, notFound } from '../lib/errors.js';
 import { assetRef, hexToBuffer, bufferToHex } from '../lib/refs.js';
 import { singleFile } from '../middleware/upload.js';
@@ -38,9 +38,13 @@ function parseAuthorizedIds(raw) {
   if (typeof raw === 'string') {
     try {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed.map(Number).filter((n) => Number.isInteger(n) && n > 0);
+      if (Array.isArray(parsed))
+        return parsed.map(Number).filter((n) => Number.isInteger(n) && n > 0);
     } catch {
-      return raw.split(',').map((s) => Number(s.trim())).filter((n) => Number.isInteger(n) && n > 0);
+      return raw
+        .split(',')
+        .map((s) => Number(s.trim()))
+        .filter((n) => Number.isInteger(n) && n > 0);
     }
   }
   return null;
@@ -112,7 +116,11 @@ router.post(
       for (const recipient of targetUsers) {
         if (!recipient.kemPublicKey) continue;
         const { sharedSecret, ciphertext: kemCiphertext } = encapsulateKey(recipient.kemPublicKey);
-        const { ciphertext: encKey, iv: keyIv, authTag: keyTag } = encrypt(contentKey, sharedSecret);
+        const {
+          ciphertext: encKey,
+          iv: keyIv,
+          authTag: keyTag,
+        } = encrypt(contentKey, sharedSecret);
 
         await prisma.assetKeyEncapsulation.create({
           data: {

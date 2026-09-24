@@ -91,6 +91,9 @@ npm run chain:deploy:local    # terminal 2, prints the address
 `CHAIN_MODE` selects `local`, `sepolia` or `off`. Sepolia gives a publicly
 verifiable Etherscan link; fund the wallet from a faucet well in advance.
 
+After redeploying, put the previous address in `SEPOLIA_LEGACY_CONTRACT_ADDRESS`
+so receipts written to the old contract still verify when a leak is traced.
+
 **Run**
 
 ```bash

@@ -64,11 +64,6 @@ const ROLE_CHIPS = [
     body: 'Full custody — uploads, releases, investigations and the audit trail.',
     fill: 'bg-chromia-pink-500',
   },
-  {
-    label: 'Forensic Analyst',
-    body: 'Traces a leaked file back to its release. Holds no decrypt rights at all.',
-    fill: 'bg-chromia-green-500',
-  },
 ];
 
 export default function Landing() {
@@ -96,7 +91,7 @@ export default function Landing() {
 function NavBar() {
   return (
     <header className="sticky top-0 z-30 px-3 pt-3 sm:px-6 sm:pt-5">
-      <nav className="mx-auto flex max-w-6xl items-center justify-between rounded-full bg-canvas px-4 py-3 shadow-[0_10px_30px_-12px_rgba(31,26,35,0.20)] sm:px-6 sm:py-3.5">
+      <nav className="mx-auto flex max-w-6xl items-center justify-between rounded-full border border-white bg-white px-4 py-3 shadow-[0_1px_2px_rgba(31,26,35,0.06),0_14px_34px_-14px_rgba(31,26,35,0.28)] sm:px-6 sm:py-3.5">
         <Logo size="sm" />
 
         <div className="hidden items-center gap-9 md:flex">
@@ -271,7 +266,7 @@ function Hero() {
           </Link>
           <a
             href="#release"
-            className="inline-flex items-center gap-2 rounded-full border-2 border-noir bg-canvas px-6 py-3.5 text-base font-semibold text-ink transition hover:bg-muted"
+            className="inline-flex items-center gap-2 rounded-full border-2 border-noir bg-white px-6 py-3.5 text-base font-semibold text-ink transition hover:bg-muted"
           >
             How it works
           </a>
@@ -293,10 +288,6 @@ function ReleaseSection() {
       <div className="mx-auto w-full max-w-6xl">
         <Reveal>
           <TwoToneHeading first="The receipt exists" second="before the copy does." onAccent />
-          <p className="mx-auto mt-6 max-w-[56ch] text-[15px] font-medium leading-relaxed text-noir/75 sm:text-base">
-            Order matters more than speed. The chain write happens first, so there is no window in
-            which a marked file exists without a record of who it was made for.
-          </p>
         </Reveal>
 
         <div className="mt-16 grid gap-5 text-left lg:grid-cols-3">
@@ -331,11 +322,6 @@ function ClosingSection() {
       <div className="relative mx-auto w-full max-w-3xl">
         <Reveal>
           <TwoToneHeading first="Three roles," second="on purpose." onDark />
-          <p className="mx-auto mt-6 max-w-[50ch] text-[15px] leading-relaxed text-canvas/65">
-            Nobody holds two halves by accident. The clearances are separated so that the person who
-            can release a copy is never the person who investigates where it went — and the analyst
-            who examines the evidence cannot decrypt anything to create it.
-          </p>
         </Reveal>
 
         <div className="mt-12 space-y-4 text-left">

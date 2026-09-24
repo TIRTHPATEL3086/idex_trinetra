@@ -41,6 +41,8 @@ export const env = {
   localPrivateKey: process.env.LOCAL_PRIVATE_KEY || '',
   sepoliaRpcUrl: process.env.SEPOLIA_RPC_URL || '',
   sepoliaContractAddress: process.env.SEPOLIA_CONTRACT_ADDRESS || '',
+  // A previous deployment whose receipts should still verify after a redeploy.
+  sepoliaLegacyContractAddress: process.env.SEPOLIA_LEGACY_CONTRACT_ADDRESS || '',
   sepoliaPrivateKey: process.env.SEPOLIA_PRIVATE_KEY || '',
 
   // ---------- storage ----------

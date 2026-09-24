@@ -37,7 +37,7 @@ export default function Logo({ size = 'md', iconOnly = false, onDark = false }) 
           className={`wordmark leading-none ${onDark ? 'text-white' : 'text-ink'}`}
           style={{ fontSize: word }}
         >
-          Provenance
+          provenance
           <span className={onDark ? 'text-accent' : 'text-accent-deep'}>.</span>
         </span>
       )}

@@ -182,6 +182,22 @@ export const getAudit = (assetId) => request(`/api/audit/${assetId}`);
 export const toggleUserActive = (userId) =>
   request(`/api/users/${userId}/toggle-active`, { method: 'POST' });
 
+/** Administrator: assign a new officer their login ID and password. */
+export const createOfficer = ({ name, dept, email, password }) =>
+  request('/api/users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, dept, email, password }),
+  });
+
+/** Administrator: assign a new password to an officer or analyst. */
+export const setUserPassword = (userId, password) =>
+  request(`/api/users/${userId}/password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  });
+
 export const getMetrics = (classification) =>
   request(
     `/api/metrics${classification && classification !== 'ALL' ? `?classification=${classification}` : ''}`

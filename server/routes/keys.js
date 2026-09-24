@@ -5,15 +5,8 @@ import { prisma } from '../lib/prisma.js';
 import { badInput, notFound, forbidden } from '../lib/errors.js';
 import { requireAuth } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
-import {
-  generatePqcKeyPair,
-  encryptKeyBundle,
-  decryptKeyBundle,
-  encapsulateKey,
-  decapsulateKey,
-  PQC_ALGORITHMS,
-} from '../core/pqc.js';
-import { decrypt as aesDecrypt, encrypt as aesEncrypt } from '../core/crypto.js';
+import { generatePqcKeyPair, PQC_ALGORITHMS } from '../core/pqc.js';
+import { encapsulateFor, keyColumns, recoverContentKey } from '../lib/keyring.js';
 import { bufferToHex } from '../lib/refs.js';
 
 /**
@@ -113,79 +106,28 @@ router.post('/generate', requireAuth, validate(GenerateBody), async (req, res, n
     const user = await prisma.user.findUnique({ where: { id: targetUserId } });
     if (!user) throw notFound(`User ${targetUserId} not found`);
 
-    const pqc = generatePqcKeyPair();
-    const encryptedPqcKeys = encryptKeyBundle(
-      { kemSecretKey: pqc.kemSecretKey, dsaSecretKey: pqc.dsaSecretKey },
-      req.valid.passphrase
-    );
+    // Recover every content key this user can currently open *before* their
+    // keys are replaced, so their documents can be re-encapsulated to the new
+    // pair. Recovery goes through the escrow; nothing is guessed.
+    const theirs = await prisma.assetKeyEncapsulation.findMany({
+      where: { userId: targetUserId },
+      select: { assetId: true },
+    });
+    const keysByAsset = new Map();
+    for (const { assetId } of theirs) {
+      const contentKey = await recoverContentKey(assetId, targetUserId);
+      if (contentKey) keysByAsset.set(assetId, contentKey);
+    }
 
-    await prisma.user.update({
+    const pqc = generatePqcKeyPair();
+    const updated = await prisma.user.update({
       where: { id: targetUserId },
-      data: {
-        kemPublicKey: Buffer.from(pqc.kemPublicKey),
-        dsaPublicKey: Buffer.from(pqc.dsaPublicKey),
-        encryptedPqcKeys,
-      },
+      data: keyColumns(pqc, req.valid.passphrase),
     });
 
-    // Re-encapsulate all assets for this user so they can decrypt immediately
-    const assets = await prisma.asset.findMany();
-    for (const a of assets) {
-      const allEncs = await prisma.assetKeyEncapsulation.findMany({ where: { assetId: a.id } });
-      let contentKey = null;
-      for (const enc of allEncs) {
-        if (enc.userId === targetUserId) continue;
-        const u = await prisma.user.findUnique({ where: { id: enc.userId } });
-        if (!u?.encryptedPqcKeys) continue;
-        for (const pw of [
-          'officer123',
-          'admin123',
-          'analyst123',
-          'auditor123',
-          'secret123',
-          u.email?.split('@')[0],
-        ].filter(Boolean)) {
-          try {
-            const k = decryptKeyBundle(u.encryptedPqcKeys, pw);
-            if (k?.kemSecretKey) {
-              const ss = decapsulateKey(enc.kemCiphertext, k.kemSecretKey);
-              contentKey = aesDecrypt(
-                enc.encryptedKey,
-                ss,
-                Buffer.from(enc.iv),
-                Buffer.from(enc.authTag)
-              );
-              break;
-            }
-          } catch {}
-        }
-        if (contentKey) break;
-      }
-
-      if (contentKey) {
-        const { sharedSecret, ciphertext: kemCiphertext } = encapsulateKey(pqc.kemPublicKey);
-        const { ciphertext: encKey, iv: keyIv, authTag: keyTag } = aesEncrypt(
-          contentKey,
-          sharedSecret
-        );
-        await prisma.assetKeyEncapsulation.upsert({
-          where: { assetId_userId: { assetId: a.id, userId: targetUserId } },
-          update: {
-            kemCiphertext: Buffer.from(kemCiphertext),
-            encryptedKey: encKey,
-            iv: keyIv,
-            authTag: keyTag,
-          },
-          create: {
-            assetId: a.id,
-            userId: targetUserId,
-            kemCiphertext: Buffer.from(kemCiphertext),
-            encryptedKey: encKey,
-            iv: keyIv,
-            authTag: keyTag,
-          },
-        });
-      }
+    // Re-encapsulate to the new public key; allotted passphrases are kept.
+    for (const [assetId, contentKey] of keysByAsset) {
+      await encapsulateFor(assetId, updated, contentKey);
     }
 
     res.json({

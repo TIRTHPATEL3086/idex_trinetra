@@ -23,8 +23,6 @@ const scrypt = scryptJs.scrypt ?? scryptJs?.default?.scrypt ?? scryptJs;
 
 // ---- AES-256-GCM constants (must match server/core/crypto.js) --------------
 const KEY_BYTES = 32;
-const IV_BYTES = 12;
-const TAG_BYTES = 16;
 
 // ---- scrypt params (must match server/core/crypto.js) ----------------------
 // crypto.scryptSync(pass, salt, 32, { N: 16384, r: 8, p: 1 })
@@ -89,27 +87,13 @@ export async function unlockKeyBundle(bundleJson, passphrase) {
   combined.set(ciphertext, 0);
   combined.set(authTag, ciphertext.length);
 
-  // Candidate passphrases: input first, then alias if secret123/officer123
-  const candidates = [passphrase];
-  if (passphrase?.toLowerCase() === 'secret123') candidates.push('officer123');
-  if (passphrase?.toLowerCase() === 'officer123') candidates.push('secret123');
-
-  let lastErr = null;
-  for (const pw of candidates) {
-    try {
-      const keyBytes = await deriveKeyFromPassphrase(pw, saltHex);
-      const plainBytes = await aesGcmDecrypt(combined, keyBytes, ivBytes);
-      const data = JSON.parse(new TextDecoder().decode(plainBytes));
-      return {
-        kemSecretKey: base64ToBytes(data.kemSecretKey),
-        dsaSecretKey: base64ToBytes(data.dsaSecretKey),
-      };
-    } catch (err) {
-      lastErr = err;
-    }
-  }
-
-  throw lastErr || new Error('Invalid passphrase');
+  const keyBytes = await deriveKeyFromPassphrase(passphrase, saltHex);
+  const plainBytes = await aesGcmDecrypt(combined, keyBytes, ivBytes);
+  const data = JSON.parse(new TextDecoder().decode(plainBytes));
+  return {
+    kemSecretKey: base64ToBytes(data.kemSecretKey),
+    dsaSecretKey: base64ToBytes(data.dsaSecretKey),
+  };
 }
 
 /**

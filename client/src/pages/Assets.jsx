@@ -129,7 +129,9 @@ export default function Assets() {
       )}
 
       {!error && filteredAssets.length === 0 && officerAssets.length > 0 && (
-        <Notice>No documents found with classification "{classificationFilter}".</Notice>
+        <Notice>
+          No documents found with classification &ldquo;{classificationFilter}&rdquo;.
+        </Notice>
       )}
 
       {!error && officerAssets.length > 0 && (
@@ -603,7 +605,7 @@ function PassphraseCell({ asset }) {
     setError(null);
     try {
       const r = await revealAllotment(asset.assetId, password);
-      setSecret(r.passphrase);
+      setSecret(r.passphrase || '');
       setStage('shown');
       setPassword('');
     } catch (err) {
@@ -623,6 +625,14 @@ function PassphraseCell({ asset }) {
     navigator.clipboard.writeText(secret);
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
+  }
+
+  if (stage === 'shown' && !secret) {
+    return (
+      <span className="text-xs font-semibold text-ink-muted">
+        None allotted — use your account password
+      </span>
+    );
   }
 
   if (stage === 'shown') {

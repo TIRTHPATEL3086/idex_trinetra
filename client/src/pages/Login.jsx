@@ -188,7 +188,7 @@ function BrandPanel() {
         src="/secure-document.png"
         alt=""
         aria-hidden="true"
-        className="pointer-events-none absolute -bottom-16 -right-[30%] w-[135%] max-w-none select-none opacity-[0.88] mix-blend-screen"
+        className="pointer-events-none absolute -bottom-16 -right-[48%] w-[135%] max-w-none select-none opacity-60 mix-blend-screen"
         style={{
           maskImage:
             'radial-gradient(82% 74% at 46% 60%, #000 34%, rgba(0,0,0,0.72) 62%, transparent 88%)',
@@ -206,7 +206,7 @@ function BrandPanel() {
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-gradient-to-r from-noir-deep/95 via-noir-deep/30 to-transparent"
+        className="pointer-events-none absolute inset-0 bg-gradient-to-r from-noir-deep from-0% via-noir-deep/85 via-55% to-transparent"
       />
 
       {/* The seam. Without this the dark panel simply stops against the white
@@ -227,7 +227,7 @@ function BrandPanel() {
         className="pointer-events-none absolute -bottom-28 -left-20 h-72 w-72 rounded-full bg-accent/10 blur-3xl"
       />
 
-      <div className="relative z-10">
+      <div className="relative z-10 [text-shadow:0_1px_14px_rgba(15,10,20,0.75)]">
         <Logo size="md" onDark />
 
         {/* What the product is, in three lines. Someone at a sign-in screen
@@ -238,26 +238,26 @@ function BrandPanel() {
           <br />
           <span className="text-accent">released documents.</span>
         </h2>
-        <p className="mt-4 max-w-[40ch] text-sm leading-relaxed text-white/65">
+        <p className="mt-4 max-w-[40ch] text-sm leading-relaxed text-white/85">
           Every protected file that leaves this system is marked for the person who opened it and
           receipted on a public ledger — so a copy that surfaces somewhere it should not can be
           traced back to a single release.
         </p>
       </div>
 
-      <ul className="relative z-10 mt-9 space-y-4">
+      <ul className="relative z-10 mt-9 space-y-4 [text-shadow:0_1px_14px_rgba(15,10,20,0.75)]">
         {SUMMARY.map((item) => (
           <li key={item.title} className="flex items-start gap-3">
             <span className={`mt-[6px] h-2 w-2 shrink-0 rounded-full ${item.dot}`} />
             <div className="min-w-0">
               <div className="text-[13px] font-bold text-white">{item.title}</div>
-              <div className="text-xs leading-relaxed text-white/55">{item.body}</div>
+              <div className="text-xs leading-relaxed text-white/75">{item.body}</div>
             </div>
           </li>
         ))}
       </ul>
 
-      <p className="relative z-10 mt-6 text-[11px] leading-relaxed text-white/40">
+      <p className="relative z-10 mt-6 text-[11px] leading-relaxed text-white/60">
         No name, department or device ever reaches the ledger — only a salted hash of the account.
       </p>
     </aside>

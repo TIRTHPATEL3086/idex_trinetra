@@ -104,7 +104,7 @@ export async function embedPdf(pdfBuffer, payloadBits, receiptIdHex) {
     const pages = doc.getPages();
 
     for (const page of pages) {
-      const { width, height } = page.getSize();
+      const { width } = page.getSize();
 
       // Draw the DWT-watermarked tile as a nearly-invisible overlay.
       // It is drawn at the bottom-right corner at 1% opacity so it is
@@ -156,7 +156,7 @@ export async function extractPdf(pdfBuffer) {
   try {
     const doc = await PDFDocument.load(pdfBuffer);
     const keywords = String(doc.getKeywords() || '');
-    const subject  = String(doc.getSubject()  || '');
+    const subject = String(doc.getSubject() || '');
 
     // ── Method 1: Keyword metadata ───────────────────────────────────────────
     const kwMatch = keywords.match(/payload:([01]{48})/);
@@ -180,9 +180,7 @@ export async function extractPdf(pdfBuffer) {
       const pages = doc.getPages();
 
       for (const page of pages) {
-        const xobjects = page.node.Resources()?.lookup(
-          page.doc.context.obj('XObject')
-        );
+        const xobjects = page.node.Resources()?.lookup(page.doc.context.obj('XObject'));
         if (!xobjects) continue;
 
         const keys = xobjects?.dict ? [...xobjects.dict.keys()] : [];
