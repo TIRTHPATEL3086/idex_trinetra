@@ -240,7 +240,7 @@ export default function Decrypt() {
 
             {/* ── ADMIN: Multi-choice Officer Selection & Passphrase Modes ── */}
             {isAdmin ? (
-              <div className="space-y-4 rounded-2xl border border-line bg-[#faf8f5] p-4 sm:p-4.5">
+              <div className="space-y-4 rounded-2xl border border-line bg-surface p-4 sm:p-4.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs font-bold uppercase tracking-wide text-ink">
                     Select Recipient Officers ({selectedUserIds.length} selected)
@@ -353,7 +353,7 @@ export default function Decrypt() {
                 </Field>
 
                 {/* Mandatory Allotted Passphrase */}
-                <div className="rounded-2xl border border-line bg-[#faf8f5] p-4 space-y-2">
+                <div className="rounded-2xl border border-line bg-surface p-4 space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold uppercase tracking-wide text-ink flex items-center gap-1.5">
                       <span className="flex items-center gap-1.5">
@@ -468,7 +468,7 @@ export default function Decrypt() {
                 {batchResult.dispatches.map((d) => (
                   <div
                     key={d.userId}
-                    className="rounded-2xl border border-line bg-[#faf8f5] p-4 space-y-2.5 shadow-xs"
+                    className="rounded-2xl border border-line bg-surface p-4 space-y-2.5 shadow-xs"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">

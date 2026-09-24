@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import Logo from '../components/Logo.jsx';
+import { useIntroDone } from '../lib/intro.js';
 
 /**
  * The public landing page, built to the Chromia identity system.
@@ -52,6 +53,11 @@ const ROLE_CHIPS = [
     label: 'Clearance Holder',
     body: 'Releases a marked copy to themselves and nothing more. Cannot investigate.',
     fill: 'bg-chromia-yellow-500',
+  },
+  {
+    label: 'Forensic Analyst',
+    body: 'Traces leaked files back to their receipt. Cannot decrypt, so cannot manufacture evidence.',
+    fill: 'bg-chromia-green-500',
   },
   {
     label: 'Registry Administrator',
@@ -137,8 +143,11 @@ function Sticker({ children, fill, rotate = -8, className = '', out, progress = 
   // it has landed the transition shortens, so scrolling still feels attached
   // to the finger rather than dragging a long ease behind it.
   const [phase, setPhase] = useState('out');
+  // Held off-stage until the opening loader lifts, so the entrance is seen.
+  const introDone = useIntroDone();
 
   useEffect(() => {
+    if (!introDone) return;
     const START = 260;
     const GLIDE = 1700;
     const enter = setTimeout(() => setPhase('arriving'), START + delay);
@@ -147,7 +156,7 @@ function Sticker({ children, fill, rotate = -8, className = '', out, progress = 
       clearTimeout(enter);
       clearTimeout(settle);
     };
-  }, [delay]);
+  }, [delay, introDone]);
 
   const travel = phase === 'out' ? 1 : progress;
   const [ox, oy] = out;
@@ -316,10 +325,10 @@ function ClosingSection() {
 
       <div className="relative mx-auto w-full max-w-3xl">
         <Reveal>
-          <TwoToneHeading first="Two roles," second="on purpose." onDark />
+          <TwoToneHeading first="Three roles," second="on purpose." onDark />
           <p className="mx-auto mt-6 max-w-[50ch] text-[15px] leading-relaxed text-canvas/65">
-            Nobody holds both halves by accident. The two clearances are separated so that the
-            person who can release a copy is never the person who investigates where it went.
+            Nobody holds both halves by accident. The clearances are separated so that the person
+            who can release a copy is never the person who investigates where it went.
           </p>
         </Reveal>
 
