@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import Logo from '../components/Logo.jsx';
-import IntroCurtain from '../components/IntroCurtain.jsx';
+import { useIntroDone } from '../lib/intro.js';
 
 /**
  * The public landing page, built to the Chromia identity system.
@@ -55,6 +55,11 @@ const ROLE_CHIPS = [
     fill: 'bg-chromia-yellow-500',
   },
   {
+    label: 'Forensic Analyst',
+    body: 'Traces leaked files back to their receipt. Cannot decrypt, so cannot manufacture evidence.',
+    fill: 'bg-chromia-green-500',
+  },
+  {
     label: 'Registry Administrator',
     body: 'Full custody — uploads, releases, investigations and the audit trail.',
     fill: 'bg-chromia-pink-500',
@@ -71,10 +76,6 @@ export default function Landing() {
 
   return (
     <div className="relative min-h-[100dvh] overflow-x-hidden">
-      {/* Plays once per page load, then parts to reveal what is already
-          rendered beneath it — the page is never held back waiting. */}
-      <IntroCurtain />
-
       <div className="site-background" aria-hidden="true">
         <div className="site-background__layer site-background__base" />
         <div className="site-background__layer site-background__grid" />
@@ -147,8 +148,11 @@ function Sticker({ children, fill, rotate = -8, className = '', out, progress = 
   // it has landed the transition shortens, so scrolling still feels attached
   // to the finger rather than dragging a long ease behind it.
   const [phase, setPhase] = useState('out');
+  // Held off-stage until the opening loader lifts, so the entrance is seen.
+  const introDone = useIntroDone();
 
   useEffect(() => {
+    if (!introDone) return;
     const START = 260;
     const GLIDE = 1700;
     const enter = setTimeout(() => setPhase('arriving'), START + delay);
@@ -157,7 +161,7 @@ function Sticker({ children, fill, rotate = -8, className = '', out, progress = 
       clearTimeout(enter);
       clearTimeout(settle);
     };
-  }, [delay]);
+  }, [delay, introDone]);
 
   const travel = phase === 'out' ? 1 : progress;
   const [ox, oy] = out;

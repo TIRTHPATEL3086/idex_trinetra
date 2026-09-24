@@ -168,7 +168,7 @@ export default function Trace() {
       {/* Past Investigations and Dossier Archive */}
       <div className="card overflow-hidden p-0 shadow-sm">
         {/* Top Header */}
-        <div className="border-b border-line px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-gradient-to-r from-white to-[#faf8f5]">
+        <div className="border-b border-line px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-gradient-to-r from-white to-surface">
           <div>
             <h3 className="text-sm font-bold text-ink">Forensic Investigation Dossiers</h3>
             <p className="text-xs text-ink-muted">

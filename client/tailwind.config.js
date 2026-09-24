@@ -58,8 +58,14 @@ export default {
           muted: '#6e6472', // secondary text
           faint: '#a99fad', // tertiary text
         },
-        line: '#e7dde0', // hairline borders on white
-        muted: chromia.white[800], // quiet fill
+        // Three light layers that stay distinct: the page behind the app card
+        // (shell), the white card itself, and the panels inside it (surface).
+        // All cool-leaning, so the purple accent sits on them cleanly instead
+        // of fighting a warm pink-cream.
+        shell: '#ebe7f0',
+        surface: '#f8f7fb',
+        line: '#e4e0ea', // hairline borders on white
+        muted: '#f3f1f6', // quiet fill
 
         info: { DEFAULT: chromia.purple[500], ink: chromia.purple[800] },
 

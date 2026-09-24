@@ -109,13 +109,14 @@ degraded in `warnings`.
 
 ## Roles
 
-Sign-in is required for everything except `/api/health`. Four roles, and the
+Sign-in is required for everything except `/api/health`. Three roles, and the
 split is the same separation-of-duties argument the verdict bands rest on:
 
 | Role           | Documents    | Decrypt       | Trace | Timeline   | Robustness |
 | -------------- | ------------ | ------------- | ----- | ---------- | ---------- |
 | `ADMIN`        | view, upload | anyone        | yes   | everyone's | yes        |
 | `OFFICER`      | view         | **self only** | no    | own only   | yes        |
+| `INVESTIGATOR` | view         | **no**        | yes   | everyone's | yes        |
 
 An investigator cannot decrypt, so the person who examines the evidence can
 never mint a marked copy and manufacture the leak they then "discover". An
@@ -135,6 +136,7 @@ control, and nothing in the client is trusted to make it.
 | -------------- | ------------------- | ------------ |
 | `ADMIN`        | `admin@example.gov` | `admin123`   |
 | `OFFICER`      | `u017@example.gov`  | `officer123` |
+| `INVESTIGATOR` | `a004@example.gov`  | `analyst123` |
 
 Sessions are an httpOnly, SameSite=Lax cookie holding an HMAC-signed token
 (`AUTH_SECRET`, 12 h by default). Passwords are scrypt. Both are built on
@@ -207,6 +209,7 @@ test/              smoke test, attack suite, contract tests
 ## Status
 
 All core modules are fully implemented and verified:
+
 - `server/core/watermark.js`: 2-level Haar DWT + QIM in HL/LH sub-bands with 21× redundancy.
 - `server/core/ecc.js`: Pure-JS Reed-Solomon (12, 6) error correction & CRC bit repair.
 - `server/core/phash.js`: pHash (2D-DCT), dHash, aHash perceptual hashing and 64-bit Hamming metric.

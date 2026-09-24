@@ -160,7 +160,7 @@ export const DEMO_ACCOUNTS = [
   },
   {
     role: 'INVESTIGATOR',
-    short: 'Analyst',
+    short: 'Investigator',
     badge: 'bg-attributed-tint text-attributed-deep',
     title: 'Forensic Analyst',
     name: 'Analyst A-004',

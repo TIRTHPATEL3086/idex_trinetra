@@ -30,7 +30,7 @@ export function RequireCap({ capability, children }) {
 
 function BootSplash() {
   return (
-    <div className="grid min-h-[100dvh] place-items-center bg-canvas px-6">
+    <div className="grid min-h-[100dvh] place-items-center bg-shell px-6">
       <div className="mono animate-pulse text-sm text-accent/70">Restoring session…</div>
     </div>
   );

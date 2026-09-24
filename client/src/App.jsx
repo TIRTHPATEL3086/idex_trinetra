@@ -1,10 +1,11 @@
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { getHealth, shortHash } from './lib/api.js';
 import { useAuth, ROLE_UI, initialsOf } from './lib/auth.jsx';
 import { RequireAuth, RequireCap } from './components/RequireAuth.jsx';
 import Logo from './components/Logo.jsx';
+import Preloader from './components/Preloader.jsx';
 import {
   CheckIcon,
   CloseIcon,
@@ -52,19 +53,33 @@ const NAV = [
 ];
 
 export default function App() {
+  // The intro plays on a fresh load of the landing page, not on in-app
+  // navigation back to it.
+  const [booting, setBooting] = useState(() => {
+    const show = window.location.pathname === '/';
+    // Mark the page as covered before anything renders, so no entrance on the
+    // landing page can start ahead of the loader's own effect.
+    if (show) document.documentElement.classList.add('is-preloading');
+    return show;
+  });
+  const finishBoot = useCallback(() => setBooting(false), []);
+
   return (
-    <Routes>
-      <Route path="/" element={<LandingGate />} />
-      <Route path="/login" element={<Login />} />
-      <Route
-        path="/*"
-        element={
-          <RequireAuth>
-            <Shell />
-          </RequireAuth>
-        }
-      />
-    </Routes>
+    <>
+      {booting && <Preloader onDone={finishBoot} />}
+      <Routes>
+        <Route path="/" element={<LandingGate />} />
+        <Route path="/login" element={<Login />} />
+        <Route
+          path="/*"
+          element={
+            <RequireAuth>
+              <Shell />
+            </RequireAuth>
+          }
+        />
+      </Routes>
+    </>
   );
 }
 
@@ -99,9 +114,9 @@ function Shell() {
   }, [navOpen]);
 
   return (
-    <div className="overflow-hidden bg-canvas p-1.5 [height:100dvh] sm:p-3 xl:p-4">
+    <div className="overflow-hidden bg-shell p-1.5 [height:100dvh] sm:p-3 xl:p-4">
       {/* The reference's radius: 1.5rem on mobile, 3.125rem from lg up. */}
-      <div className="mx-auto flex h-full w-full max-w-[1440px] flex-col overflow-hidden rounded-panel border border-line bg-white shadow-app lg:rounded-[3.125rem]">
+      <div className="mx-auto flex h-full w-full max-w-[1440px] flex-col overflow-hidden rounded-panel border border-white bg-white shadow-app lg:rounded-[3.125rem]">
         {/* ---- top bar (fixed) ---- */}
         <header className="flex shrink-0 items-center gap-2.5 border-b border-line px-3.5 py-3 sm:px-6">
           <button
@@ -375,7 +390,7 @@ function AccountMenu({ user }) {
             </div>
 
             {/* User Profile Overview */}
-            <div className="flex items-center gap-4 rounded-2xl bg-gradient-to-br from-[#fcfcf9] to-muted p-4 border border-line/80 shadow-xs">
+            <div className="flex items-center gap-4 rounded-2xl bg-gradient-to-br from-surface to-muted p-4 border border-line/80 shadow-xs">
               <div className="relative shrink-0">
                 <span className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-tr from-noir to-[#1b232e] text-base font-extrabold text-accent shadow-md ring-2 ring-accent/40">
                   {initialsOf(user.name)}
@@ -409,7 +424,7 @@ function AccountMenu({ user }) {
             )}
 
             {/* On-Chain Sepolia Identity Card */}
-            <div className="rounded-2xl border border-line/70 bg-gradient-to-br from-[#faf8f5] to-muted p-4 space-y-2 shadow-xs">
+            <div className="rounded-2xl border border-line/70 bg-gradient-to-br from-surface to-muted p-4 space-y-2 shadow-xs">
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
                   <span className="h-1.5 w-1.5 rounded-full bg-attributed" />
