@@ -37,13 +37,35 @@ export default function IntroCurtain({ onDone }) {
   const [phase, setPhase] = useState(() =>
     playedThisLoad || prefersReducedMotion() ? 'gone' : 'playing'
   );
-  const finished = useRef(false);
+  // Held in a ref so the schedule below never depends on the parent's render.
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
+  const timers = useRef([]);
 
+  // The whole schedule is set once, on mount. Depending on `phase` here would
+  // be the obvious thing to write and would quietly break it: entering
+  // `parting` would tear the effect down, clear the timer that removes the
+  // curtain, and start the pair again — so the panels would slide away on cue,
+  // the page would look right, and `overflow: hidden` would stay on the body
+  // with a dead layer still mounted over it.
   useEffect(() => {
+    const clear = () => {
+      timers.current.forEach(clearTimeout);
+      timers.current = [];
+    };
+
+    const finish = () => {
+      clear();
+      document.body.style.overflow = '';
+      setPhase('gone');
+      onDoneRef.current?.();
+    };
+
     if (phase === 'gone') {
+      // Nothing to play — reduced motion, or a second mount this page load.
       if (!playedThisLoad) {
         playedThisLoad = true;
-        onDone?.();
+        onDoneRef.current?.();
       }
       return undefined;
     }
@@ -51,32 +73,28 @@ export default function IntroCurtain({ onDone }) {
     playedThisLoad = true;
     document.body.style.overflow = 'hidden';
 
-    const part = setTimeout(() => setPhase('parting'), TOTAL_MS);
-    const end = setTimeout(() => {
-      finished.current = true;
-      setPhase('gone');
-      onDone?.();
-    }, TOTAL_MS + PART_MS);
+    const part = () => {
+      clear();
+      setPhase('parting');
+      timers.current.push(setTimeout(finish, PART_MS));
+    };
+
+    timers.current.push(setTimeout(part, TOTAL_MS));
+
+    // Skipping cuts to the parting rather than snapping the page in: a curtain
+    // that vanishes is a flash, one that opens early is still an opening.
+    window.addEventListener('keydown', part);
+    window.addEventListener('pointerdown', part);
 
     return () => {
-      clearTimeout(part);
-      clearTimeout(end);
+      clear();
+      window.removeEventListener('keydown', part);
+      window.removeEventListener('pointerdown', part);
       document.body.style.overflow = '';
     };
-  }, [phase, onDone]);
-
-  // Let anyone skip it — a held keypress or a click should not be ignored
-  // because an animation is mid-flight.
-  useEffect(() => {
-    if (phase === 'gone') return undefined;
-    const skip = () => setPhase('parting');
-    window.addEventListener('keydown', skip);
-    window.addEventListener('pointerdown', skip);
-    return () => {
-      window.removeEventListener('keydown', skip);
-      window.removeEventListener('pointerdown', skip);
-    };
-  }, [phase]);
+    // Mount-only by design — see the note above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (phase === 'gone') return null;
 
