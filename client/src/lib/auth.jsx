@@ -41,10 +41,12 @@ export function AuthProvider({ children }) {
   // every panel quietly failing.
   useEffect(() => onSessionLost(() => setUser(null)), []);
 
-  const signIn = useCallback(async (email, password) => {
-    const r = await apiLogin(email, password);
-    setUser(r.user);
-    return r.user;
+  const signIn = useCallback(async (email, password, extra = {}) => {
+    const r = await apiLogin(email, password, extra);
+    if (r.user) {
+      setUser(r.user);
+    }
+    return r;
   }, []);
 
   const signOut = useCallback(async () => {

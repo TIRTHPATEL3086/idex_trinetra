@@ -54,11 +54,11 @@ export const getHealth = () => request('/api/health');
 
 // ------------------------------------------------------------------ auth ---
 
-export const login = (email, password) =>
+export const login = (email, password, extra = {}) =>
   request('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, ...extra }),
   });
 
 export const logout = () => request('/api/auth/logout', { method: 'POST' });
@@ -107,6 +107,9 @@ export const decryptAsset = ({
   passphrase,
   clientSignature,
   challengeId,
+  securityAnswer,
+  newSecurityQuestion,
+  newSecurityAnswer,
 }) =>
   request('/api/decrypt', {
     method: 'POST',
@@ -118,7 +121,19 @@ export const decryptAsset = ({
       passphrase,
       clientSignature,
       challengeId,
+      securityAnswer,
+      newSecurityQuestion,
+      newSecurityAnswer,
     }),
+  });
+
+export const getSecurityQuestion = () => request('/api/users/security-question');
+
+export const setSecurityQuestion = ({ securityQuestion, securityAnswer }) =>
+  request('/api/users/security-question', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ securityQuestion, securityAnswer }),
   });
 
 export const batchDecryptAsset = ({
