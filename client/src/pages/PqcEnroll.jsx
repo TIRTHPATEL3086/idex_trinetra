@@ -295,18 +295,6 @@ export default function PqcEnroll() {
               </div>
             ) : (
               <form onSubmit={handleEnroll} className="mt-5 space-y-4">
-                {/* Security explainer badge */}
-                <div className="rounded-xl border border-accent/30 bg-accent/10 p-3 text-xs text-ink">
-                  <div className="font-semibold text-accent flex items-center gap-1.5">
-                    <ShieldIcon size={14} /> Post-Quantum Private Key Protection
-                  </div>
-                  <p className="mt-1 text-ink-muted text-[11px] leading-relaxed">
-                    This passphrase derives an AES-256-GCM key via scrypt to seal the officer's
-                    private keys. The private key is unlocked strictly in the client's browser
-                    during decryption.
-                  </p>
-                </div>
-
                 {modalError && (
                   <div className="rounded-lg bg-danger/10 border border-danger/20 p-3 text-xs text-danger-bright">
                     {modalError}

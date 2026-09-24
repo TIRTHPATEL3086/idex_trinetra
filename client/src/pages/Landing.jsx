@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import Logo from '../components/Logo.jsx';
+import IntroCurtain from '../components/IntroCurtain.jsx';
 
 /**
  * The public landing page, built to the Chromia identity system.
@@ -58,6 +59,11 @@ const ROLE_CHIPS = [
     body: 'Full custody — uploads, releases, investigations and the audit trail.',
     fill: 'bg-chromia-pink-500',
   },
+  {
+    label: 'Forensic Analyst',
+    body: 'Traces a leaked file back to its release. Holds no decrypt rights at all.',
+    fill: 'bg-chromia-green-500',
+  },
 ];
 
 export default function Landing() {
@@ -65,6 +71,10 @@ export default function Landing() {
 
   return (
     <div className="relative min-h-[100dvh] overflow-x-hidden">
+      {/* Plays once per page load, then parts to reveal what is already
+          rendered beneath it — the page is never held back waiting. */}
+      <IntroCurtain />
+
       <div className="site-background" aria-hidden="true">
         <div className="site-background__layer site-background__base" />
         <div className="site-background__layer site-background__grid" />
@@ -316,10 +326,11 @@ function ClosingSection() {
 
       <div className="relative mx-auto w-full max-w-3xl">
         <Reveal>
-          <TwoToneHeading first="Two roles," second="on purpose." onDark />
+          <TwoToneHeading first="Three roles," second="on purpose." onDark />
           <p className="mx-auto mt-6 max-w-[50ch] text-[15px] leading-relaxed text-canvas/65">
-            Nobody holds both halves by accident. The two clearances are separated so that the
-            person who can release a copy is never the person who investigates where it went.
+            Nobody holds two halves by accident. The clearances are separated so that the person who
+            can release a copy is never the person who investigates where it went — and the analyst
+            who examines the evidence cannot decrypt anything to create it.
           </p>
         </Reveal>
 
