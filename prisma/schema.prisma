@@ -61,6 +61,10 @@ model User {
   kemPublicKey     Bytes? // ML-KEM-768 public key (1184 bytes)
   dsaPublicKey     Bytes? // ML-DSA-65 public key (1952 bytes)
   encryptedPqcKeys String? // AES-256-GCM encrypted private key bundle for backup/restore
+  // The same secret keys wrapped with the server master key (MASTER_KEY_HEX), so
+  // the server can open a document it is releasing without knowing, or guessing,
+  // the user's passphrase. Never leaves the server.
+  escrowedPqcKeys  String?
 
   events         DecryptionEvent[]
   encapsulations AssetKeyEncapsulation[]

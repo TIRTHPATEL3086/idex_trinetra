@@ -1,11 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getUsers, getPqcPublicKey, generatePqcKeys, shortHash } from '../lib/api.js';
-import { useAuth } from '../lib/auth.jsx';
 import { Header, Notice } from './Assets.jsx';
-import { CheckIcon, CloseIcon, EyeIcon, EyeOffIcon, ShieldIcon } from '../components/icons.jsx';
+import { CheckIcon, CloseIcon, EyeIcon, EyeOffIcon } from '../components/icons.jsx';
 
 export default function PqcEnroll() {
-  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState([]);
   const [keyStatuses, setKeyStatuses] = useState({});
   const [loading, setLoading] = useState(true);

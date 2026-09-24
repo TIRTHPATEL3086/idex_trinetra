@@ -103,9 +103,11 @@ export default function Robustness() {
               QIM Delta (Δ)
             </div>
             <div className="mt-2 text-2xl sm:text-3xl font-extrabold tracking-tight text-ink">
-              16 – 24
+              {live.minDelta === live.maxDelta
+                ? live.minDelta
+                : `${live.minDelta} – ${live.maxDelta}`}
             </div>
-            <p className="mt-1 text-xs text-ink-muted">Adaptive DWT-DCT quantization</p>
+            <p className="mt-1 text-xs text-ink-muted">Quantization step used when marking</p>
           </div>
         </div>
       )}

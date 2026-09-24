@@ -60,7 +60,6 @@ export default function Decrypt() {
   const [error, setError] = useState(null);
   const [singleResult, setSingleResult] = useState(null);
   const [batchResult, setBatchResult] = useState(null);
-  const [sigStatus, setSigStatus] = useState(null); // null | 'signing' | 'ok' | 'skipped'
   useEffect(() => {
     Promise.all([getAssets(), getUsers()])
       .then(([a, u]) => {
@@ -148,10 +147,9 @@ export default function Decrypt() {
       e.preventDefault();
       setError(null);
       setSingleResult(null);
-      setSigStatus(null);
 
       if (!officerPassphrase.trim()) {
-        setError('You must enter your allotted clearance passphrase to decrypt this document.');
+        setError('Enter your allotted passphrase, or your account password if none was allotted.');
         return;
       }
 
@@ -163,7 +161,6 @@ export default function Decrypt() {
 
       // Client-side PQC signing if enrolled
       try {
-        setSigStatus('signing');
         const bundleRes = await getPqcKeyBundle();
         if (bundleRes?.encryptedPqcKeys) {
           const challenge = await requestDecryptChallenge({ assetId: aId, userId: uId });
@@ -174,16 +171,15 @@ export default function Decrypt() {
           );
           clientSignature = sig;
           challengeId = challenge.challengeId;
-          setSigStatus('ok');
-        } else {
-          setSigStatus('skipped');
         }
       } catch (sigErr) {
-        console.warn('[pqc] Client signing failed or incorrect passphrase:', sigErr.message);
-        setError('Decryption passphrase incorrect or invalid key bundle.');
-        setStatus('error');
-        setSigStatus('error');
-        return;
+        // The key bundle opens with the officer's account password, which is not
+        // always the passphrase allotted for this document. Signing in the
+        // browser is then skipped and the server signs with the officer's own
+        // key; whether the passphrase clears the document is the server's call.
+        console.info('[pqc] in-browser signing skipped:', sigErr.message);
+        clientSignature = undefined;
+        challengeId = undefined;
       }
 
       setStatus('working');
@@ -379,14 +375,14 @@ export default function Decrypt() {
                       className="input pr-10 text-sm font-mono"
                       value={officerPassphrase}
                       onChange={(e) => setOfficerPassphrase(e.target.value)}
-                      placeholder="Enter the passphrase allotted by Admin"
+                      placeholder="Allotted passphrase, or your account password"
                       required
                     />
                   </div>
 
                   <div className="text-[11px] text-ink-faint">
-                    Without your exact allotted passphrase, cryptographic decapsulation will
-                    strictly fail.
+                    Enter the passphrase your administrator allotted for this document. If none was
+                    allotted, enter your account password instead.
                   </div>
                 </div>
               </div>
@@ -525,7 +521,6 @@ export default function Decrypt() {
               officer={users.find((x) => x.userId === user?.userId) || user}
               asset={selectedAsset}
               device={deviceLabel}
-              sigStatus={sigStatus}
             />
           )}
         </div>
@@ -535,8 +530,7 @@ export default function Decrypt() {
 }
 
 // ─── Receipt Component ───────────────────────────────────────────────────────
-function Receipt({ result, officer, asset, device, sigStatus }) {
-  const clientSigned = sigStatus === 'ok';
+function Receipt({ result, officer, asset, device }) {
   return (
     <div className="space-y-4">
       {/* On-chain receipt banner */}

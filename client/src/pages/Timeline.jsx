@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { getAssets, getAudit, toggleUserActive, shortHash } from '../lib/api.js';
 import { Header, Notice } from './Assets.jsx';
 import { BanIcon, ExternalLinkIcon, UnlockIcon, WarningIcon } from '../components/icons.jsx';
@@ -16,12 +16,12 @@ export default function Timeline() {
   const [error, setError] = useState(null);
   const [actionNotice, setActionNotice] = useState(null);
 
-  function reloadTimeline() {
+  const reloadTimeline = useCallback(() => {
     if (!assetId) return;
     getAudit(Number(assetId))
       .then(setData)
       .catch((e) => setError(e.message));
-  }
+  }, [assetId]);
 
   useEffect(() => {
     getAssets()
@@ -36,7 +36,7 @@ export default function Timeline() {
     if (!assetId) return;
     setData(null);
     reloadTimeline();
-  }, [assetId]);
+  }, [assetId, reloadTimeline]);
 
   async function handleToggle(userId) {
     try {

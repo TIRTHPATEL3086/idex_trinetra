@@ -446,7 +446,7 @@ function Verdict({ result }) {
               </div>
               <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
                 <Mt k="Officer Name" v={result.match.userName} />
-                <Mt k="Officer ID" v={`U-00${result.match.userId || '—'}`} />
+                <Mt k="Account" v={`#${result.match.userId}`} />
                 <Mt k="Department" v={result.match.department} />
                 <Mt k="Document" v={result.match.assetTitle} />
                 <Mt k="Device" v={result.match.deviceLabel} />
@@ -584,7 +584,7 @@ function Verdict({ result }) {
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-bold text-ink">{s.userName}</span>
                           <span className="rounded bg-muted px-1.5 py-0.2 text-[10px] font-mono text-ink-muted">
-                            ID: U-00{s.userId}
+                            Account #{s.userId}
                           </span>
                           <span
                             className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${

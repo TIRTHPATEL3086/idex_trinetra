@@ -150,7 +150,6 @@ test('rsDecode recovers from byte corruption in 96-bit RS codeword', () => {
 });
 
 test('rsDecode corrects single flipped bit in 48-bit extracted payload', () => {
-  const corrupted48 = (bits[5] === '0' ? '1' : '0') + bits.slice(1, 5) + (bits[0] === '0' ? '1' : '0') + bits.slice(6);
   // corrupted 1 bit at index 0
   const singleFlip = (bits[0] === '0' ? '1' : '0') + bits.slice(1);
   const res = ecc.rsDecode(singleFlip);
@@ -179,12 +178,18 @@ test('ML-KEM-768 encapsulate and decapsulate roundtrip matches shared secret', (
 
 test('ML-DSA-65 signs and verifies receipt data successfully', () => {
   const keys = pqc.generatePqcKeyPair();
-  const message = Buffer.from('receipt:0x7f2c8b41e93ad6570c1f2b8e4a97d3510fbc62e8a4d17395c0e8b2f61a4d9037');
+  const message = Buffer.from(
+    'receipt:0x7f2c8b41e93ad6570c1f2b8e4a97d3510fbc62e8a4d17395c0e8b2f61a4d9037'
+  );
   const sig = pqc.signDecryptionReceipt(keys.dsaSecretKey, message);
   eq(sig.length, 3309, 'DSA signature len');
   const valid = pqc.verifyDecryptionSignature(keys.dsaPublicKey, message, sig);
   eq(valid, true, 'DSA signature valid');
-  const invalid = pqc.verifyDecryptionSignature(keys.dsaPublicKey, Buffer.from('tampered message'), sig);
+  const invalid = pqc.verifyDecryptionSignature(
+    keys.dsaPublicKey,
+    Buffer.from('tampered message'),
+    sig
+  );
   eq(invalid, false, 'tampered message rejected');
 });
 
@@ -228,7 +233,11 @@ test('Complete PQC broadcast encryption and ML-DSA-65 non-repudiation pipeline',
     .digest();
 
   const signature = pqc.signDecryptionReceipt(receiptDigest, officerKeys.dsaSecretKey);
-  const verified = pqc.verifyDecryptionSignature(signature, receiptDigest, officerKeys.dsaPublicKey);
+  const verified = pqc.verifyDecryptionSignature(
+    signature,
+    receiptDigest,
+    officerKeys.dsaPublicKey
+  );
   eq(verified, true, 'ML-DSA-65 signature verified on receipt digest');
 });
 

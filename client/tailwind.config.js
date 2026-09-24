@@ -108,7 +108,7 @@ export default {
         sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         // Chromia sets its headlines in a heavy, soft-serifed display face.
         display: ['Fraunces', 'ui-serif', 'Georgia', 'serif'],
-        wordmark: ['Sniglet', 'ui-rounded', 'Inter', 'sans-serif'],
+        wordmark: ['Comfortaa', 'ui-rounded', 'Inter', 'sans-serif'],
         mono: ['"JetBrains Mono"', 'ui-monospace', 'Menlo', 'Consolas', 'monospace'],
       },
       boxShadow: {

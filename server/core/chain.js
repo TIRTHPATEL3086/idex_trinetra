@@ -146,13 +146,7 @@ export async function logDecryption({
         );
       }
     } else {
-      tx = await c.contract.logDecryption(
-        receiptId,
-        assetRef,
-        userRef,
-        contentSha,
-        payloadCommit
-      );
+      tx = await c.contract.logDecryption(receiptId, assetRef, userRef, contentSha, payloadCommit);
     }
 
     const receipt = await tx.wait();
@@ -174,28 +168,57 @@ export async function logDecryption({
  * Cross-check during /api/trace. Never throws — an unreachable RPC simply
  * means `verified: false`, which lowers confidence rather than breaking trace.
  */
+/**
+ * Receipts as returned by the first deployment, before `signatureCommit` was
+ * added. A contract deployed from that version returns six fields, which the
+ * current ABI cannot decode, so reads fall back to this shape.
+ */
+const LEGACY_READ_ABI = [
+  'function getReceipt(bytes32 receiptId) external view returns (tuple(bytes32 assetRef, bytes32 userRef, bytes32 contentSha, bytes32 payloadCommit, uint64 timestamp, bool exists))',
+  'function hasReceipt(bytes32 receiptId) external view returns (bool)',
+];
+
+async function readReceipt(contract, receiptId) {
+  if (!(await contract.hasReceipt(receiptId))) return null;
+  const r = await contract.getReceipt(receiptId);
+  return {
+    assetRef: r.assetRef,
+    userRef: r.userRef,
+    contentSha: r.contentSha,
+    payloadCommit: r.payloadCommit,
+    timestamp: Number(r.timestamp),
+    signatureCommit: r.signatureCommit ?? null,
+  };
+}
+
+/** The contracts a receipt may live on: the current one, then a legacy one. */
+function readTargets(c) {
+  const targets = [c.contract, new Contract(c.address, LEGACY_READ_ABI, c.provider)];
+  const legacy = c.mode === 'sepolia' ? env.sepoliaLegacyContractAddress : '';
+  if (legacy && legacy.toLowerCase() !== c.address.toLowerCase()) {
+    targets.push(new Contract(legacy, LEGACY_READ_ABI, c.provider));
+  }
+  return targets;
+}
+
 export async function getReceipt(receiptId) {
   const c = getContract();
   if (!c) return { verified: false, receipt: null, reason: 'chain unavailable' };
 
-  try {
-    const exists = await c.contract.hasReceipt(receiptId);
-    if (!exists) return { verified: false, receipt: null, reason: 'no such receipt on chain' };
-
-    const r = await c.contract.getReceipt(receiptId);
-    return {
-      verified: true,
-      receipt: {
-        assetRef: r.assetRef,
-        userRef: r.userRef,
-        contentSha: r.contentSha,
-        payloadCommit: r.payloadCommit,
-        timestamp: Number(r.timestamp),
-      },
-    };
-  } catch (err) {
-    return { verified: false, receipt: null, reason: err.shortMessage || err.message };
+  let lastError = null;
+  for (const contract of readTargets(c)) {
+    try {
+      const receipt = await readReceipt(contract, receiptId);
+      if (receipt) return { verified: true, receipt };
+    } catch (err) {
+      lastError = err; // wrong shape for this deployment — try the next
+    }
   }
+  return {
+    verified: false,
+    receipt: null,
+    reason: lastError ? lastError.shortMessage || lastError.message : 'no such receipt on chain',
+  };
 }
 
 export async function receiptsOfAsset(assetRefHex) {

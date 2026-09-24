@@ -25,7 +25,8 @@ export const deviceRef = (deviceLabel) => salted('device', deviceLabel ?? 'unkno
 export const payloadCommit = (payloadBits) => salted('payload', payloadBits);
 
 /** keccak256(decryptionSignature) — anchors post-quantum non-repudiation proof on chain. */
-export const signatureCommit = (sigBytes) => keccak256(Buffer.isBuffer(sigBytes) ? sigBytes : Buffer.from(sigBytes));
+export const signatureCommit = (sigBytes) =>
+  keccak256(Buffer.isBuffer(sigBytes) ? sigBytes : Buffer.from(sigBytes));
 
 /**
  * receiptId = keccak256(assetRef || userRef || contentSha || nonce)

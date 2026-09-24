@@ -57,7 +57,7 @@ export function score(sig) {
   // When visual distance is high (>28) due to phone/laptop borders, status bars,
   // or window frames, but watermark bit agreement is elevated (>= 0.65, meaning >= 31/48 bits),
   // the frequency-domain Haar DWT watermark is the primary forensic identifier.
-  const isScreenshotTransformed = (pHashDist > 28 && dHashDist > 28) && bitConfidence >= 0.65;
+  const isScreenshotTransformed = pHashDist > 28 && dHashDist > 28 && bitConfidence >= 0.65;
 
   if (isScreenshotTransformed) {
     // Watermark carries primary weight under screenshot transformation
@@ -65,7 +65,9 @@ export function score(sig) {
       0.72 * bitConfidence +
       0.13 * (1 - Math.min(pHashDist, dHashDist) / 64) +
       0.15 * (chainVerified ? 1 : 0);
-    reasons.push('Display frame / screenshot transformation detected — watermark frequency content preserved');
+    reasons.push(
+      'Display frame / screenshot transformation detected — watermark frequency content preserved'
+    );
   } else {
     scoreValue =
       WEIGHTS.bitAgreement * bitConfidence +
@@ -90,7 +92,9 @@ export function score(sig) {
   else reasons.push(`pHash distance ${pHashDist}/64 — different frequency content`);
 
   // Chain reasoning
-  if (chainVerified) reasons.push(`On-chain receipt verified`);
+  // null means there was no receipt to look up, which is not a failure.
+  if (chainVerified === null) reasons.push('No receipt identified to verify on chain');
+  else if (chainVerified) reasons.push(`On-chain receipt verified`);
   else reasons.push(`Chain verification unavailable or failed`);
 
   return { score: scoreValue, verdict, reasons };

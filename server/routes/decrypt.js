@@ -6,7 +6,7 @@ import sharp from 'sharp';
 import { z } from 'zod';
 
 import { prisma } from '../lib/prisma.js';
-import { env, masterKey } from '../lib/env.js';
+import { env } from '../lib/env.js';
 import { notFound, badInput } from '../lib/errors.js';
 import {
   assetRef as makeAssetRef,
@@ -21,13 +21,13 @@ import {
 } from '../lib/refs.js';
 import { validate } from '../middleware/validate.js';
 import { verifyPassword } from '../lib/auth.js';
+import { encapsulateFor, recoverContentKey, userKeys } from '../lib/keyring.js';
 import { requireAuth, requireAnyCap, forbidden } from '../middleware/auth.js';
 import { can } from '../lib/permissions.js';
 import * as chain from '../core/chain.js';
 import * as bktree from '../core/bktree.js';
 import {
   decrypt as aesDecrypt,
-  encrypt as aesEncrypt,
   sha256,
   md5,
   embed,
@@ -44,14 +44,7 @@ import {
   bitsMatching,
   PAYLOAD_BITS,
 } from '../core/payload.js';
-import {
-  decapsulateKey,
-  encapsulateKey,
-  signDecryptionReceipt,
-  verifyDecryptionSignature,
-  decryptKeyBundle,
-  PQC_ALGORITHMS,
-} from '../core/pqc.js';
+import { signDecryptionReceipt, verifyDecryptionSignature } from '../core/pqc.js';
 
 /**
  * The orchestrator: decrypt, anchor, mark, index, record — in that order.
@@ -147,142 +140,59 @@ export async function executeDecryption({
   if (!user) throw notFound(`No user ${userId}`);
   if (!user.active) {
     throw forbidden(
-      `Officer ${user.name} access has been REVOKED/FROZEN by Administrator under Zero-Trust policy.`
+      `${user.name}’s access has been REVOKED/FROZEN by Administrator under Zero-Trust policy.`
     );
   }
   if (!asset.cipherPath || !asset.iv || !asset.authTag) {
     throw badInput(`Asset ${assetId} has no encrypted blob — re-upload it.`);
   }
 
-  // --- 2. Mandatory Allotted Passphrase Enforcement for Officers -----------
-  // When an officer decrypts, they MUST supply their allotted clearance passphrase!
+  // --- 2. Clearance check for officers -------------------------------------
+  // An officer must be a recipient of the document, and must present the
+  // passphrase their administrator allotted for it — or, when none was
+  // allotted, their own account password. There is no default passphrase.
   const isOfficer = callerRole === 'OFFICER';
-  const expectedPassphrase = (encapsulation?.allottedPassphrase || 'officer123').trim();
-
   if (isOfficer) {
-    if (!passphrase || passphrase.trim() !== expectedPassphrase) {
+    if (!encapsulation) {
+      throw forbidden('This document was not released to you.', { reason: 'NOT_A_RECIPIENT' });
+    }
+    const given = passphrase?.trim();
+    const allotted = encapsulation.allottedPassphrase?.trim();
+    const cleared =
+      Boolean(given) && (allotted ? given === allotted : verifyPassword(given, user.passwordHash));
+    if (!cleared) {
       throw forbidden(
-        'Decryption failed: The provided passphrase does not match your allotted clearance key. You cannot access or download this watermarked document.',
+        allotted
+          ? 'Decryption failed: the passphrase does not match the one allotted to you for this document.'
+          : 'Decryption failed: no passphrase was allotted for this document, so enter your account password.',
         { reason: 'INVALID_PASSPHRASE' }
       );
     }
   }
 
-  // --- 3. Recover user's PQC keys if enrolled ------------------------------
-  let pqcKeys = null;
-  if (user.encryptedPqcKeys) {
-    const pw = (passphrase || expectedPassphrase).trim();
-    try {
-      pqcKeys = decryptKeyBundle(user.encryptedPqcKeys, pw);
-    } catch {}
-    if (!pqcKeys) {
-      try {
-        pqcKeys = decryptKeyBundle(user.encryptedPqcKeys, 'officer123');
-      } catch {}
-    }
-  }
+  // --- 3. The recipient's PQC keys, from the server escrow --------------------
+  const pqcKeys = userKeys(user);
 
-  // --- 4. Decrypt content --------------------------------------------------
-  const ciphertext = await fs.readFile(asset.cipherPath);
-  let plaintext = null;
-
-  if (encapsulation) {
-    let contentKey = null;
-
-    if (pqcKeys?.kemSecretKey) {
-      try {
-        const sharedSecret = decapsulateKey(encapsulation.kemCiphertext, pqcKeys.kemSecretKey);
-        contentKey = aesDecrypt(
-          encapsulation.encryptedKey,
-          sharedSecret,
-          Buffer.from(encapsulation.iv),
-          Buffer.from(encapsulation.authTag)
-        );
-      } catch {}
-    }
-
-    if (!contentKey) {
-      const siblingEncs = await prisma.assetKeyEncapsulation.findMany({
-        where: { assetId, userId: { not: userId } },
-      });
-
-      for (const sib of siblingEncs) {
-        const sibUser = await prisma.user.findUnique({ where: { id: sib.userId } });
-        if (!sibUser?.encryptedPqcKeys) continue;
-        for (const pw of [
-          sib.allottedPassphrase,
-          'officer123',
-          'admin123',
-          'analyst123',
-          sibUser.email?.split('@')[0],
-        ].filter(Boolean)) {
-          try {
-            const k = decryptKeyBundle(sibUser.encryptedPqcKeys, pw);
-            if (k?.kemSecretKey) {
-              const ss = decapsulateKey(sib.kemCiphertext, k.kemSecretKey);
-              contentKey = aesDecrypt(
-                sib.encryptedKey,
-                ss,
-                Buffer.from(sib.iv),
-                Buffer.from(sib.authTag)
-              );
-              break;
-            }
-          } catch {}
-        }
-        if (contentKey) break;
-      }
-    }
-
-    if (!contentKey) {
-      try {
-        plaintext = aesDecrypt(
-          ciphertext,
-          masterKey(),
-          Buffer.from(asset.iv),
-          Buffer.from(asset.authTag)
-        );
-      } catch {}
-    }
-
-    if (!contentKey && !plaintext) {
-      throw badInput(
-        `Asset ${assetId} content key could not be recovered. Recipient's PQC keys could not be decapsulated.`
-      );
-    }
-
-    if (contentKey && user.kemPublicKey) {
-      try {
-        const { sharedSecret: newSs, ciphertext: newKemCt } = encapsulateKey(user.kemPublicKey);
-        const { ciphertext: newEncKey, iv: newIv, authTag: newTag } = aesEncrypt(contentKey, newSs);
-        await prisma.assetKeyEncapsulation.update({
-          where: { assetId_userId: { assetId, userId } },
-          data: {
-            kemCiphertext: Buffer.from(newKemCt),
-            encryptedKey: newEncKey,
-            iv: newIv,
-            authTag: newTag,
-          },
-        });
-      } catch {}
-    }
-
-    if (!plaintext) {
-      plaintext = aesDecrypt(
-        ciphertext,
-        contentKey,
-        Buffer.from(asset.iv),
-        Buffer.from(asset.authTag)
-      );
-    }
-  } else {
-    plaintext = aesDecrypt(
-      ciphertext,
-      masterKey(),
-      Buffer.from(asset.iv),
-      Buffer.from(asset.authTag)
+  // --- 4. Recover the content key and decrypt -------------------------------
+  // From the recipient's own encapsulation when it opens, otherwise from any
+  // other recipient's; an administrator releasing to someone not yet on the
+  // document then gets a real encapsulation made for them.
+  const contentKey = await recoverContentKey(assetId, userId);
+  if (!contentKey) {
+    throw badInput(
+      `Asset ${assetId}: the content key could not be recovered — none of its recipients has escrowed keys.`
     );
   }
+  if (!encapsulation && user.kemPublicKey) {
+    await encapsulateFor(assetId, user, contentKey);
+  }
+  const ciphertext = await fs.readFile(asset.cipherPath);
+  const plaintext = aesDecrypt(
+    ciphertext,
+    contentKey,
+    Buffer.from(asset.iv),
+    Buffer.from(asset.authTag)
+  );
 
   // --- 5. contentSha & receiptId -------------------------------------------
   const contentSha = sha256(plaintext);
@@ -325,7 +235,10 @@ export async function executeDecryption({
         sigCommitHex = makeSignatureCommit(decryptionSignature);
         console.info(`[pqc] Client ML-DSA-65 signature VERIFIED for user ${user.id}`);
       }
-    } catch {}
+    } catch (err) {
+      // A malformed client signature is not fatal: the server signs below instead.
+      console.warn(`[pqc] client signature rejected for user ${user.id}: ${err.message}`);
+    }
   }
 
   if (!decryptionSignature && pqcKeys?.dsaSecretKey) {
@@ -468,7 +381,7 @@ const BatchDecryptBody = z.object({
   assetId: z.coerce.number().int().positive(),
   userIds: z.array(z.coerce.number().int().positive()).min(1),
   passphraseMode: z.enum(['common', 'individual']).optional().default('common'),
-  commonPassphrase: z.string().optional().default('officer123'),
+  commonPassphrase: z.string().optional(),
   individualPassphrases: z.record(z.string(), z.string()).optional(),
   deviceLabel: z.string().trim().min(1).max(100).optional().default('ADMIN-DISPATCH-01'),
   delta: z.coerce.number().int().min(2).max(48).optional(),
@@ -493,6 +406,14 @@ router.post(
       const asset = await prisma.asset.findUnique({ where: { id: assetId } });
       if (!asset) throw notFound(`No asset ${assetId}`);
 
+      // One content key for the whole batch, recovered through the escrow.
+      const contentKey = await recoverContentKey(assetId);
+      if (!contentKey) {
+        throw badInput(
+          `Asset ${assetId}: the content key could not be recovered — none of its recipients has escrowed keys.`
+        );
+      }
+
       const dispatches = [];
 
       for (const uid of userIds) {
@@ -501,33 +422,29 @@ router.post(
 
         const targetPassphrase = (
           passphraseMode === 'individual'
-            ? individualPassphrases?.[String(uid)] || commonPassphrase || 'officer123'
-            : commonPassphrase || 'officer123'
+            ? individualPassphrases?.[String(uid)] || commonPassphrase || ''
+            : commonPassphrase || ''
         ).trim();
-
-        // Upsert AssetKeyEncapsulation with the allotted passphrase
-        const existingEncap = await prisma.assetKeyEncapsulation.findUnique({
-          where: { assetId_userId: { assetId, userId: uid } },
-        });
-
-        if (existingEncap) {
-          await prisma.assetKeyEncapsulation.update({
-            where: { assetId_userId: { assetId, userId: uid } },
-            data: { allottedPassphrase: targetPassphrase },
+        const refuse = (error) =>
+          dispatches.push({
+            userId: targetUser.id,
+            userName: targetUser.name,
+            department: targetUser.dept,
+            role: targetUser.role,
+            success: false,
+            error,
           });
-        } else {
-          await prisma.assetKeyEncapsulation.create({
-            data: {
-              assetId,
-              userId: uid,
-              kemCiphertext: Buffer.alloc(1088),
-              encryptedKey: Buffer.alloc(32),
-              iv: Buffer.alloc(12),
-              authTag: Buffer.alloc(16),
-              allottedPassphrase: targetPassphrase,
-            },
-          });
+        if (!targetPassphrase) {
+          refuse('No passphrase was given for this officer.');
+          continue;
         }
+        if (!targetUser.kemPublicKey) {
+          refuse('This officer has no post-quantum keys enrolled yet.');
+          continue;
+        }
+
+        // A real encapsulation for this officer, carrying their allotted passphrase.
+        await encapsulateFor(assetId, targetUser, contentKey, targetPassphrase);
 
         // Execute release for this officer
         try {
@@ -646,7 +563,13 @@ router.post('/allotments/:assetId/reveal', guard, validate(RevealBody), async (r
     });
     if (!encap) return next(notFound('No encapsulation for that recipient.'));
 
-    return res.json({ userId: requested, passphrase: encap.allottedPassphrase || 'officer123' });
+    // No passphrase allotted means the recipient clears with their own account
+    // password; say so rather than inventing a default.
+    return res.json({
+      userId: requested,
+      passphrase: encap.allottedPassphrase || null,
+      usesAccountPassword: !encap.allottedPassphrase,
+    });
   } catch (err) {
     return next(err);
   }
