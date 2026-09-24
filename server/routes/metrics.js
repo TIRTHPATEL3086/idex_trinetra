@@ -2,7 +2,7 @@ import { Router } from 'express';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { ROOT } from '../lib/env.js';
+import { ROOT, env } from '../lib/env.js';
 import { prisma } from '../lib/prisma.js';
 import { requireCap } from '../middleware/auth.js';
 
@@ -64,6 +64,14 @@ router.get('/', requireCap('metrics:read'), async (req, res, next) => {
       avgPsnr,
       minPsnr,
       maxPsnr,
+      // The quantization step actually used, not a nominal range: the spread
+      // over recent releases, or the configured value before there are any.
+      minDelta: recentEvents.length
+        ? Math.min(...recentEvents.map((e) => e.deltaUsed))
+        : env.watermarkDelta,
+      maxDelta: recentEvents.length
+        ? Math.max(...recentEvents.map((e) => e.deltaUsed))
+        : env.watermarkDelta,
       history: recentEvents
         .map((e, idx) => ({
           index: recentEvents.length - idx,

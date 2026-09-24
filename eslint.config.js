@@ -26,7 +26,7 @@ export default [
 
   // ---- Node, ESM: server, prisma, test ------------------------------------
   {
-    files: ['server/**/*.js', 'prisma/**/*.js', 'test/**/*.{js,mjs}'],
+    files: ['server/**/*.js', 'prisma/**/*.js', 'test/**/*.{js,mjs}', 'scripts/**/*.mjs'],
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: 'module',

@@ -41,10 +41,12 @@ export function AuthProvider({ children }) {
   // every panel quietly failing.
   useEffect(() => onSessionLost(() => setUser(null)), []);
 
-  const signIn = useCallback(async (email, password) => {
-    const r = await apiLogin(email, password);
-    setUser(r.user);
-    return r.user;
+  const signIn = useCallback(async (email, password, extra = {}) => {
+    const r = await apiLogin(email, password, extra);
+    if (r.user) {
+      setUser(r.user);
+    }
+    return r;
   }, []);
 
   const signOut = useCallback(async () => {
@@ -99,8 +101,8 @@ export const ROLE_UI = {
     label: 'Forensic Analyst',
     short: 'Investigator',
     blurb: 'Traces leaked files. Cannot decrypt, so cannot manufacture evidence.',
-    badge: 'bg-chromia-purple-500/20 text-chromia-purple-300 border border-chromia-purple-500/30',
-    tint: 'bg-chromia-purple-500',
+    badge: 'bg-attributed-tint text-attributed-deep',
+    tint: 'bg-attributed-bright',
     demo: { email: 'a004@example.gov', password: 'analyst123' },
   },
 };
@@ -109,6 +111,9 @@ export const ROLE_ORDER = ['ADMIN', 'OFFICER', 'INVESTIGATOR'];
 
 /**
  * Demo accounts for one-click evaluation.
+ *
+ * Only the roles this deployment actually ships, so the picker can never hand
+ * the login page a role that ROLE_UI cannot render.
  */
 export const DEMO_ACCOUNTS = [
   {
@@ -165,6 +170,17 @@ export const DEMO_ACCOUNTS = [
     email: 'u041@example.gov',
     password: 'officer123',
     desc: 'Defense Logistics clearance',
+  },
+  {
+    role: 'INVESTIGATOR',
+    short: 'Investigator',
+    badge: 'bg-attributed-tint text-attributed-deep',
+    title: 'Forensic Analyst',
+    name: 'Analyst A-004',
+    dept: 'Intel Cell',
+    email: 'a004@example.gov',
+    password: 'analyst123',
+    desc: 'Leak attribution, no decrypt rights',
   },
 ];
 

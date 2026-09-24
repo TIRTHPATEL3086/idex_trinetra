@@ -30,12 +30,12 @@ const router = Router();
  * It lives in PostgreSQL and is the authoritative forensic record.
  */
 const GlobalQuery = z.object({
-  page:    z.coerce.number().int().min(1).optional().default(1),
-  limit:   z.coerce.number().int().min(1).max(200).optional().default(50),
-  userId:  z.coerce.number().int().positive().optional(),
+  page: z.coerce.number().int().min(1).optional().default(1),
+  limit: z.coerce.number().int().min(1).max(200).optional().default(50),
+  userId: z.coerce.number().int().positive().optional(),
   assetId: z.coerce.number().int().positive().optional(),
-  from:    z.string().datetime({ offset: true }).optional(),
-  to:      z.string().datetime({ offset: true }).optional(),
+  from: z.string().datetime({ offset: true }).optional(),
+  to: z.string().datetime({ offset: true }).optional(),
 });
 
 router.get(
@@ -48,13 +48,13 @@ router.get(
       const skip = (page - 1) * limit;
 
       const where = {
-        ...(userId  ? { userId }  : {}),
+        ...(userId ? { userId } : {}),
         ...(assetId ? { assetId } : {}),
         ...(from || to
           ? {
               createdAt: {
                 ...(from ? { gte: new Date(from) } : {}),
-                ...(to   ? { lte: new Date(to)   } : {}),
+                ...(to ? { lte: new Date(to) } : {}),
               },
             }
           : {}),
@@ -80,24 +80,24 @@ router.get(
           const txHash = bufferToHex(e.txHash);
           return {
             id: e.id,
-            receiptId:       bufferToHex(e.receiptId),
-            shortId:         e.shortId ? e.shortId.toString() : null,
-            userName:        e.user?.name,
-            department:      e.user?.dept,
-            role:            e.user?.role,
-            assetTitle:      e.asset?.title,
+            receiptId: bufferToHex(e.receiptId),
+            shortId: e.shortId ? e.shortId.toString() : null,
+            userName: e.user?.name,
+            department: e.user?.dept,
+            role: e.user?.role,
+            assetTitle: e.asset?.title,
             assetClassification: e.asset?.classification,
-            at:              e.createdAt.toISOString(),
-            device:          e.deviceLabel,
+            at: e.createdAt.toISOString(),
+            device: e.deviceLabel,
             txHash,
-            etherscanUrl:    chain.buildEtherscanUrl(txHash),
-            blockNumber:     e.blockNumber !== null ? Number(e.blockNumber) : null,
-            chainMode:       e.chainMode,
-            psnrDb:          e.psnrDb,
-            deltaUsed:       e.deltaUsed,
+            etherscanUrl: chain.buildEtherscanUrl(txHash),
+            blockNumber: e.blockNumber !== null ? Number(e.blockNumber) : null,
+            chainMode: e.chainMode,
+            psnrDb: e.psnrDb,
+            deltaUsed: e.deltaUsed,
             signatureAlgorithm: e.signatureAlgorithm,
             signatureCommit: bufferToHex(e.signatureCommit),
-            userRef:         bufferToHex(e.user?.userRef),
+            userRef: bufferToHex(e.user?.userRef),
           };
         }),
       });
@@ -146,7 +146,9 @@ router.get(
         let burstGapSec = null;
         for (let j = index + 1; j < events.length; j++) {
           if (events[j].userId === e.userId) {
-            const gap = Math.round((eventDate.getTime() - new Date(events[j].createdAt).getTime()) / 1000);
+            const gap = Math.round(
+              (eventDate.getTime() - new Date(events[j].createdAt).getTime()) / 1000
+            );
             if (gap >= 0 && gap <= 600) {
               isBurst = true;
               burstGapSec = gap;
@@ -157,13 +159,18 @@ router.get(
 
         // 3. Device anomaly: unverified/unknown hardware or un-enrolled endpoint
         const dev = (e.deviceLabel || '').toUpperCase();
-        const isDeviceAnomaly = !dev || dev.includes('UNKNOWN') || dev.includes('EXTERNAL') || dev.includes('MOBILE');
+        const isDeviceAnomaly =
+          !dev || dev.includes('UNKNOWN') || dev.includes('EXTERNAL') || dev.includes('MOBILE');
 
         // Anomaly warnings list
         const anomalies = [];
-        if (isOffHours) anomalies.push(`Off-hours access (${String(hour).padStart(2, '0')}:${String(eventDate.getMinutes()).padStart(2, '0')})`);
+        if (isOffHours)
+          anomalies.push(
+            `Off-hours access (${String(hour).padStart(2, '0')}:${String(eventDate.getMinutes()).padStart(2, '0')})`
+          );
         if (isBurst) anomalies.push(`Mass exfiltration burst (${burstGapSec}s gap)`);
-        if (isDeviceAnomaly) anomalies.push(`Unverified endpoint hardware (${e.deviceLabel || 'UNKNOWN'})`);
+        if (isDeviceAnomaly)
+          anomalies.push(`Unverified endpoint hardware (${e.deviceLabel || 'UNKNOWN'})`);
 
         let riskLevel = 'LOW';
         if (anomalies.length >= 2 || (isBurst && isOffHours)) riskLevel = 'CRITICAL';

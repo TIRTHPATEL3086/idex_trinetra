@@ -105,7 +105,7 @@ export function rsDecode(bits) {
 
     // Try single-bit error correction across the 44 protected bits
     for (let i = 0; i < 44; i++) {
-      const flipped = (bits[i] === '0' ? '1' : '0');
+      const flipped = bits[i] === '0' ? '1' : '0';
       const candidate = bits.slice(0, i) + flipped + bits.slice(i + 1);
       const candId = candidate.slice(0, 36);
       const candCrc = candidate.slice(36, 44);
@@ -137,4 +137,3 @@ export function rsDecode(bits) {
 
   return { bits: bits.slice(0, 48), corrected: false };
 }
-

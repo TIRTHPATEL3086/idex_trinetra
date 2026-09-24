@@ -103,20 +103,34 @@ export default function Robustness() {
               QIM Delta (Δ)
             </div>
             <div className="mt-2 text-2xl sm:text-3xl font-extrabold tracking-tight text-ink">
-              16 – 24
+              {live.minDelta === live.maxDelta
+                ? live.minDelta
+                : `${live.minDelta} – ${live.maxDelta}`}
             </div>
-            <p className="mt-1 text-xs text-ink-muted">Adaptive DWT-DCT quantization</p>
+            <p className="mt-1 text-xs text-ink-muted">Quantization step used when marking</p>
           </div>
         </div>
       )}
 
       {/* Live Decryption PSNR History (if records exist) */}
+      {live && live.history.length === 0 && (
+        <Notice>
+          No documents classified {classification === 'ALL' ? 'at all' : classification} have been
+          released yet, so there is no production telemetry to plot for this selection.
+        </Notice>
+      )}
+
       {live?.history?.length > 0 && (
         <div className="card p-5 shadow-sm">
           <div className="flex items-center justify-between pb-3">
             <div>
               <h3 className="text-sm font-bold text-ink">
                 Real-time Production Decryption Fidelity
+                {classification !== 'ALL' && (
+                  <span className="ml-2 text-[11px] font-semibold text-accent-deep">
+                    {classification}
+                  </span>
+                )}
               </h3>
               <p className="text-xs text-ink-muted">
                 PSNR (dB) across the last {live.history.length} watermarked document decryptions in
@@ -174,6 +188,15 @@ export default function Robustness() {
       )}
 
       {/* Attack Suite Benchmark Charts */}
+      <div className="pt-2">
+        <span className="eyebrow">Algorithm benchmark</span>
+        <p className="mt-1 text-[13px] text-ink-muted">
+          Measured offline against the watermark itself, so these two do not change with the
+          classification above — a document&rsquo;s label does not alter how the mark survives
+          compression or a crop.
+        </p>
+      </div>
+
       {metrics && !notRun ? (
         <div className="grid gap-5 grid-cols-1 xl:grid-cols-2">
           <div className="card p-5">

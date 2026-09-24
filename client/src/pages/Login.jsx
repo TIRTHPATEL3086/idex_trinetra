@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { CheckIcon, ChevronLeftIcon } from '../components/icons.jsx';
 
@@ -34,8 +34,9 @@ export default function Login() {
     setStatus('working');
     setError(null);
     try {
-      const signedIn = await signIn(form.email.trim(), form.password);
-      navigate(from || signedIn.landing || '/assets', { replace: true });
+      const res = await signIn(form.email.trim(), form.password);
+      const targetUser = res?.user || res;
+      navigate(from || targetUser?.landing || '/assets', { replace: true });
     } catch (err) {
       setError(err.message || 'Could not sign in.');
       setStatus('error');
@@ -49,9 +50,8 @@ export default function Login() {
   };
 
   return (
-    <div className="relative grid min-h-[100dvh] w-full place-items-center bg-canvas p-3 sm:p-5 lg:p-6">
-      {/* A real route home, not history.back() — someone who opened /login
-          directly, or followed a stale link, has no history to go back to. */}
+    <div className="relative grid min-h-[100dvh] w-full place-items-center bg-shell p-3 sm:p-5 lg:p-6">
+      {/* Real route home */}
       <Link
         to="/"
         className="absolute left-4 top-4 z-10 inline-flex items-center gap-1.5 rounded-full border border-line bg-white px-3.5 py-2 text-[13px] font-medium text-ink-muted shadow-sm transition hover:border-ink-faint hover:text-ink focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 sm:left-6 sm:top-6"
@@ -60,12 +60,12 @@ export default function Login() {
         Back
       </Link>
 
-      <main className="w-full max-w-[1080px] overflow-hidden rounded-2xl bg-white shadow-app sm:rounded-3xl lg:grid lg:grid-cols-[1.02fr_1fr]">
+      <main className="w-full max-w-[1080px] rounded-2xl bg-white shadow-app sm:rounded-3xl lg:grid lg:grid-cols-[1.02fr_1fr]">
         <BrandPanel />
 
         {/* ------------------------------------------------------ the form -- */}
         <section className="flex flex-col justify-center px-5 py-8 sm:px-8 sm:py-10 lg:px-11 lg:py-12">
-          {/* Mobile-only brand row — the panel beside it is hidden at this width. */}
+          {/* Mobile-only brand row */}
           <div className="mb-7 lg:hidden">
             <Logo size="sm" />
           </div>
@@ -178,7 +178,7 @@ const SUMMARY = [
 
 function BrandPanel() {
   return (
-    <aside className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-[#0d1117] to-noir p-11 text-white lg:flex">
+    <aside className="relative hidden flex-col justify-between overflow-hidden rounded-l-3xl bg-gradient-to-br from-[#0d1117] to-noir p-11 text-white lg:flex">
       {/* The artwork is merged into the panel rather than placed on it.
           `screen` is what does the work: the render's near-black background
           becomes nothing against the panel, so only its glow survives and
@@ -188,7 +188,7 @@ function BrandPanel() {
         src="/secure-document.png"
         alt=""
         aria-hidden="true"
-        className="pointer-events-none absolute -bottom-16 -right-[30%] w-[135%] max-w-none select-none opacity-[0.88] mix-blend-screen"
+        className="pointer-events-none absolute -bottom-16 -right-[48%] w-[135%] max-w-none select-none opacity-60 mix-blend-screen"
         style={{
           maskImage:
             'radial-gradient(82% 74% at 46% 60%, #000 34%, rgba(0,0,0,0.72) 62%, transparent 88%)',
@@ -206,7 +206,7 @@ function BrandPanel() {
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-gradient-to-r from-noir-deep/95 via-noir-deep/30 to-transparent"
+        className="pointer-events-none absolute inset-0 bg-gradient-to-r from-noir-deep from-0% via-noir-deep/85 via-55% to-transparent"
       />
 
       {/* The seam. Without this the dark panel simply stops against the white
@@ -227,7 +227,7 @@ function BrandPanel() {
         className="pointer-events-none absolute -bottom-28 -left-20 h-72 w-72 rounded-full bg-accent/10 blur-3xl"
       />
 
-      <div className="relative z-10">
+      <div className="relative z-10 [text-shadow:0_1px_14px_rgba(15,10,20,0.75)]">
         <Logo size="md" onDark />
 
         {/* What the product is, in three lines. Someone at a sign-in screen
@@ -238,26 +238,26 @@ function BrandPanel() {
           <br />
           <span className="text-accent">released documents.</span>
         </h2>
-        <p className="mt-4 max-w-[40ch] text-sm leading-relaxed text-white/65">
+        <p className="mt-4 max-w-[40ch] text-sm leading-relaxed text-white/85">
           Every protected file that leaves this system is marked for the person who opened it and
           receipted on a public ledger — so a copy that surfaces somewhere it should not can be
           traced back to a single release.
         </p>
       </div>
 
-      <ul className="relative z-10 mt-9 space-y-4">
+      <ul className="relative z-10 mt-9 space-y-4 [text-shadow:0_1px_14px_rgba(15,10,20,0.75)]">
         {SUMMARY.map((item) => (
           <li key={item.title} className="flex items-start gap-3">
             <span className={`mt-[6px] h-2 w-2 shrink-0 rounded-full ${item.dot}`} />
             <div className="min-w-0">
               <div className="text-[13px] font-bold text-white">{item.title}</div>
-              <div className="text-xs leading-relaxed text-white/55">{item.body}</div>
+              <div className="text-xs leading-relaxed text-white/75">{item.body}</div>
             </div>
           </li>
         ))}
       </ul>
 
-      <p className="relative z-10 mt-6 text-[11px] leading-relaxed text-white/40">
+      <p className="relative z-10 mt-6 text-[11px] leading-relaxed text-white/60">
         No name, department or device ever reaches the ledger — only a salted hash of the account.
       </p>
     </aside>
@@ -268,26 +268,54 @@ function BrandPanel() {
 
 /**
  * Demo accounts selector.
- * Clicking 'Use' automatically closes the list smoothly and highlights
- * the selected role chip (Admin, Officer, or Investigator) right beside the label.
+ *
+ * A drop-up: the list floats over the form above the trigger rather than
+ * opening inside the card, so the sign-in box keeps its size. Picking an
+ * account fills the form and closes the menu; a click outside or Escape
+ * closes it too.
  */
 function DemoAccounts({ onPick, currentEmail }) {
   const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const buttonRef = useRef(null);
 
   const activeAccount = DEMO_ACCOUNTS.find(
     (a) => a.email.toLowerCase() === (currentEmail || '').trim().toLowerCase()
   );
 
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (e) => {
+      if (!rootRef.current?.contains(e.target)) setOpen(false);
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        setOpen(false);
+        buttonRef.current?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
   return (
-    <div className="mt-6 rounded-2xl border border-line bg-[#faf8f5] transition-all">
+    <div ref={rootRef} className="relative mt-6">
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left transition hover:bg-line/20 rounded-2xl"
+        aria-haspopup="true"
+        className={`flex w-full items-center justify-between gap-2 rounded-2xl border bg-surface px-4 py-3 text-left transition hover:bg-line/20 focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 ${
+          open ? 'border-accent' : 'border-line'
+        }`}
       >
-        <div className="flex flex-wrap items-center gap-2 min-w-0">
-          <span className="text-xs font-bold uppercase tracking-wide text-ink-faint shrink-0">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <span className="shrink-0 text-xs font-bold uppercase tracking-wide text-ink-faint">
             Demo accounts
           </span>
           {activeAccount && (
@@ -299,63 +327,72 @@ function DemoAccounts({ onPick, currentEmail }) {
             </span>
           )}
         </div>
-        <span className="flex items-center gap-1.5 text-xs font-semibold text-ink-muted shrink-0">
-          {open ? 'Hide' : activeAccount ? 'Change' : 'Show'}
-          <ChevronIcon open={open} />
+        <span className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-ink-muted">
+          {activeAccount ? 'Change' : 'Choose'}
+          {/* Points the way the list opens: up, then down to close. */}
+          <ChevronIcon open={!open} />
         </span>
       </button>
 
-      {open && (
-        <ul className="space-y-1.5 px-2.5 pb-2.5">
-          {DEMO_ACCOUNTS.map((acc) => {
-            const isSelected = activeAccount?.email === acc.email;
-            return (
-              <li key={acc.email}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onPick(acc);
-                    setOpen(false); // Automatically close dropdown on click!
-                  }}
-                  className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+      {/* Kept mounted so it can animate both ways; hidden from focus and
+          assistive tech while closed. */}
+      <ul
+        aria-hidden={!open}
+        inert={open ? undefined : ''}
+        className={`absolute inset-x-0 bottom-full z-30 mb-2 max-h-[min(60vh,360px)] origin-bottom space-y-1.5 overflow-y-auto rounded-2xl border border-line bg-white p-2 shadow-panel transition-[opacity,transform,visibility] duration-200 ease-out ${
+          open
+            ? 'visible translate-y-0 scale-100 opacity-100'
+            : 'invisible translate-y-2 scale-[0.97] opacity-0'
+        }`}
+      >
+        {DEMO_ACCOUNTS.map((acc) => {
+          const isSelected = activeAccount?.email === acc.email;
+          return (
+            <li key={acc.email}>
+              <button
+                type="button"
+                onClick={() => {
+                  onPick(acc);
+                  setOpen(false);
+                }}
+                className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                  isSelected
+                    ? 'bg-line/60 shadow-sm ring-1 ring-accent/70'
+                    : 'bg-white hover:bg-line/40 hover:shadow-sm'
+                }`}
+              >
+                <span
+                  className={`pill shrink-0 ${acc.badge}`}
+                  style={{ minWidth: 80, justifyContent: 'center' }}
+                >
+                  {acc.short}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="mono truncate text-[12px] font-bold text-ink">{acc.email}</div>
+                  <div className="truncate text-[11px] text-ink-muted">
+                    {acc.name} · <span className="font-semibold text-ink-faint">{acc.dept}</span>
+                  </div>
+                </div>
+                <span
+                  className={`shrink-0 rounded-md px-2.5 py-1 text-[11px] font-bold transition ${
                     isSelected
-                      ? 'bg-line/60 ring-1 ring-accent/70 shadow-sm'
-                      : 'bg-white hover:bg-line/40 hover:shadow-sm'
+                      ? 'bg-accent font-extrabold text-noir shadow-xs'
+                      : 'border border-line bg-surface text-ink-muted group-hover:border-accent group-hover:bg-accent group-hover:text-noir'
                   }`}
                 >
-                  <span
-                    className={`pill shrink-0 ${acc.badge}`}
-                    style={{ minWidth: 80, justifyContent: 'center' }}
-                  >
-                    {acc.short}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="mono truncate text-[12px] font-bold text-ink">{acc.email}</div>
-                    <div className="truncate text-[11px] text-ink-muted">
-                      {acc.name} · <span className="font-semibold text-ink-faint">{acc.dept}</span>
-                    </div>
-                  </div>
-                  <span
-                    className={`shrink-0 rounded-md px-2.5 py-1 text-[11px] font-bold transition ${
-                      isSelected
-                        ? 'bg-accent text-noir font-extrabold shadow-xs'
-                        : 'border border-line bg-[#faf8f5] text-ink-muted group-hover:border-accent group-hover:bg-accent group-hover:text-noir'
-                    }`}
-                  >
-                    {isSelected ? (
-                      <span className="flex items-center gap-1">
-                        In Use <CheckIcon size={11} />
-                      </span>
-                    ) : (
-                      'Use'
-                    )}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                  {isSelected ? (
+                    <span className="flex items-center gap-1">
+                      In Use <CheckIcon size={11} />
+                    </span>
+                  ) : (
+                    'Use'
+                  )}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

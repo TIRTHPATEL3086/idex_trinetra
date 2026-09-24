@@ -27,6 +27,9 @@ const router = Router();
 const LoginBody = z.object({
   email: z.string().trim().toLowerCase().email('Enter a valid email address'),
   password: z.string().min(1, 'Enter your password'),
+  securityAnswer: z.string().optional(),
+  newSecurityQuestion: z.string().optional(),
+  newSecurityAnswer: z.string().optional(),
 });
 
 /** The shape the frontend stores as "the current session". */
@@ -42,13 +45,15 @@ function publicUser(user) {
     capabilities: capabilitiesOf(user.role),
     landing: LANDING[user.role] ?? '/assets',
     lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
+    hasSecurityQuestion: Boolean(user.securityQuestion),
+    securityQuestion: user.securityQuestion ?? null,
   };
 }
 
 // ------------------------------------------------ POST /api/auth/login ------
 router.post('/login', validate(LoginBody), async (req, res, next) => {
   try {
-    const { email, password } = req.valid;
+    const { email, password, securityAnswer, newSecurityQuestion, newSecurityAnswer } = req.valid;
     const user = await prisma.user.findUnique({ where: { email } });
 
     // One message, one timing profile: hash against a dummy when the account

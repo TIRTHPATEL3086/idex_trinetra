@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import Logo from '../components/Logo.jsx';
+import { useIntroDone } from '../lib/intro.js';
 
 /**
  * The public landing page, built to the Chromia identity system.
@@ -54,6 +55,11 @@ const ROLE_CHIPS = [
     fill: 'bg-chromia-yellow-500',
   },
   {
+    label: 'Forensic Analyst',
+    body: 'Traces leaked files back to their receipt. Cannot decrypt, so cannot manufacture evidence.',
+    fill: 'bg-chromia-green-500',
+  },
+  {
     label: 'Registry Administrator',
     body: 'Full custody — uploads, releases, investigations and the audit trail.',
     fill: 'bg-chromia-pink-500',
@@ -85,7 +91,7 @@ export default function Landing() {
 function NavBar() {
   return (
     <header className="sticky top-0 z-30 px-3 pt-3 sm:px-6 sm:pt-5">
-      <nav className="mx-auto flex max-w-6xl items-center justify-between rounded-full bg-canvas px-4 py-3 shadow-[0_10px_30px_-12px_rgba(31,26,35,0.20)] sm:px-6 sm:py-3.5">
+      <nav className="mx-auto flex max-w-6xl items-center justify-between rounded-full border border-white bg-white px-4 py-3 shadow-[0_1px_2px_rgba(31,26,35,0.06),0_14px_34px_-14px_rgba(31,26,35,0.28)] sm:px-6 sm:py-3.5">
         <Logo size="sm" />
 
         <div className="hidden items-center gap-9 md:flex">
@@ -137,8 +143,11 @@ function Sticker({ children, fill, rotate = -8, className = '', out, progress = 
   // it has landed the transition shortens, so scrolling still feels attached
   // to the finger rather than dragging a long ease behind it.
   const [phase, setPhase] = useState('out');
+  // Held off-stage until the opening loader lifts, so the entrance is seen.
+  const introDone = useIntroDone();
 
   useEffect(() => {
+    if (!introDone) return;
     const START = 260;
     const GLIDE = 1700;
     const enter = setTimeout(() => setPhase('arriving'), START + delay);
@@ -147,7 +156,7 @@ function Sticker({ children, fill, rotate = -8, className = '', out, progress = 
       clearTimeout(enter);
       clearTimeout(settle);
     };
-  }, [delay]);
+  }, [delay, introDone]);
 
   const travel = phase === 'out' ? 1 : progress;
   const [ox, oy] = out;
@@ -257,7 +266,7 @@ function Hero() {
           </Link>
           <a
             href="#release"
-            className="inline-flex items-center gap-2 rounded-full border-2 border-noir bg-canvas px-6 py-3.5 text-base font-semibold text-ink transition hover:bg-muted"
+            className="inline-flex items-center gap-2 rounded-full border-2 border-noir bg-white px-6 py-3.5 text-base font-semibold text-ink transition hover:bg-muted"
           >
             How it works
           </a>
@@ -279,10 +288,6 @@ function ReleaseSection() {
       <div className="mx-auto w-full max-w-6xl">
         <Reveal>
           <TwoToneHeading first="The receipt exists" second="before the copy does." onAccent />
-          <p className="mx-auto mt-6 max-w-[56ch] text-[15px] font-medium leading-relaxed text-noir/75 sm:text-base">
-            Order matters more than speed. The chain write happens first, so there is no window in
-            which a marked file exists without a record of who it was made for.
-          </p>
         </Reveal>
 
         <div className="mt-16 grid gap-5 text-left lg:grid-cols-3">
@@ -316,11 +321,7 @@ function ClosingSection() {
 
       <div className="relative mx-auto w-full max-w-3xl">
         <Reveal>
-          <TwoToneHeading first="Two roles," second="on purpose." onDark />
-          <p className="mx-auto mt-6 max-w-[50ch] text-[15px] leading-relaxed text-canvas/65">
-            Nobody holds both halves by accident. The two clearances are separated so that the
-            person who can release a copy is never the person who investigates where it went.
-          </p>
+          <TwoToneHeading first="Three roles," second="on purpose." onDark />
         </Reveal>
 
         <div className="mt-12 space-y-4 text-left">

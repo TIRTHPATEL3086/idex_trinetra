@@ -39,7 +39,7 @@ model Asset {
 enum Role {
   ADMIN // Registry administrator — uploads, releases, investigations, audits.
   OFFICER // Clearance holder — may release a copy to themselves only.
-  INVESTIGATOR // Forensic Analyst — traces leaked files, cannot decrypt.
+  INVESTIGATOR // Forensic analyst — traces leaks, and cannot decrypt anything.
 }
 
 
@@ -53,15 +53,21 @@ model User {
   email   String? @unique
 
   // ---- authentication. None of this ever reaches the chain either. ----
-  role         Role      @default(OFFICER)
-  passwordHash String? // scrypt: <salt-hex>:<key-hex>. Null = cannot sign in.
-  active       Boolean   @default(true)
-  lastLoginAt  DateTime?
+  role             Role      @default(OFFICER)
+  passwordHash     String? // scrypt: <salt-hex>:<key-hex>. Null = cannot sign in.
+  active           Boolean   @default(true)
+  lastLoginAt      DateTime?
+  securityQuestion String? // Custom security challenge question set by officer
+  securityAnswer   String? // Secret exact answer (case-sensitive with spaces)
 
   // ---- Post-Quantum Cryptography (NIST FIPS 203 & FIPS 204) ----
   kemPublicKey     Bytes? // ML-KEM-768 public key (1184 bytes)
   dsaPublicKey     Bytes? // ML-DSA-65 public key (1952 bytes)
   encryptedPqcKeys String? // AES-256-GCM encrypted private key bundle for backup/restore
+  // The same secret keys wrapped with the server master key (MASTER_KEY_HEX), so
+  // the server can open a document it is releasing without knowing, or guessing,
+  // the user's passphrase. Never leaves the server.
+  escrowedPqcKeys  String?
 
   events         DecryptionEvent[]
   encapsulations AssetKeyEncapsulation[]

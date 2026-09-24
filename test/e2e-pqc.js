@@ -1,8 +1,12 @@
 import { PrismaClient } from '@prisma/client';
 import fs from 'node:fs/promises';
-import { hashPassword, issueToken } from '../server/lib/auth.js';
 import { decrypt as aesDecrypt } from '../server/core/crypto.js';
-import { decapsulateKey, signDecryptionReceipt, verifyDecryptionSignature, decryptKeyBundle } from '../server/core/pqc.js';
+import {
+  decapsulateKey,
+  signDecryptionReceipt,
+  verifyDecryptionSignature,
+  decryptKeyBundle,
+} from '../server/core/pqc.js';
 import { sha256 } from '../server/core/crypto.js';
 
 const prisma = new PrismaClient();
@@ -39,7 +43,9 @@ async function run() {
     where: { assetId_userId: { assetId: asset.id, userId: officer.id } },
   });
   if (!encap) throw new Error('Asset key encapsulation not found for officer');
-  console.log(`✔ Found AssetKeyEncapsulation record (KEM Ciphertext: ${encap.kemCiphertext.length} bytes)`);
+  console.log(
+    `✔ Found AssetKeyEncapsulation record (KEM Ciphertext: ${encap.kemCiphertext.length} bytes)`
+  );
 
   // 4. Decapsulate content key using officer ML-KEM secret key
   const sharedSecret = decapsulateKey(encap.kemCiphertext, keys.kemSecretKey);
@@ -64,10 +70,7 @@ async function run() {
   // 6. Sign decryption receipt with officer ML-DSA-65 secret key
   const receiptId = '0x99887766554433221100aabbccddeeff99887766554433221100aabbccddeeff';
   const receiptDigest = sha256(
-    Buffer.concat([
-      Buffer.from(receiptId.slice(2), 'hex'),
-      Buffer.from(officer.userRef),
-    ])
+    Buffer.concat([Buffer.from(receiptId.slice(2), 'hex'), Buffer.from(officer.userRef)])
   );
 
   const sig = signDecryptionReceipt(keys.dsaSecretKey, receiptDigest);

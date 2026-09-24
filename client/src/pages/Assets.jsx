@@ -94,7 +94,7 @@ export default function Assets() {
           className={`cursor-pointer rounded-3xl border-2 border-dashed p-5 text-center transition-all duration-200 ${
             pageDragging
               ? 'border-accent-deep bg-accent/20 scale-[1.01] shadow-lg ring-4 ring-accent/30'
-              : 'border-line/80 bg-gradient-to-r from-[#faf8f5] to-white hover:border-accent-deep hover:bg-accent/5'
+              : 'border-line/80 bg-gradient-to-r from-surface to-white hover:border-accent-deep hover:bg-accent/5'
           }`}
         >
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5">
@@ -129,7 +129,9 @@ export default function Assets() {
       )}
 
       {!error && filteredAssets.length === 0 && officerAssets.length > 0 && (
-        <Notice>No documents found with classification "{classificationFilter}".</Notice>
+        <Notice>
+          No documents found with classification &ldquo;{classificationFilter}&rdquo;.
+        </Notice>
       )}
 
       {!error && officerAssets.length > 0 && (
@@ -226,7 +228,7 @@ function DragDropInput({ file, onFileChange }) {
           className={`cursor-pointer rounded-2xl border-2 border-dashed p-6 text-center transition-all duration-200 ${
             isOver
               ? 'border-accent-deep bg-accent/15 scale-[1.01] shadow-inner'
-              : 'border-line hover:border-accent-deep bg-[#faf8f5] hover:bg-accent/5'
+              : 'border-line hover:border-accent-deep bg-surface hover:bg-accent/5'
           }`}
         >
           <input
@@ -482,8 +484,8 @@ function DocumentList({ assets, user, classificationFilter, setClassificationFil
   // The passphrase column is for the person the copy was released to. An
   // administrator sets these when dispatching, so repeating them against every
   // document here is noise — and one more place a clearance secret can sit on
-  // an unattended screen.
-  const showPassphrase = user?.role !== 'ADMIN';
+  // an unattended screen. An investigator cannot decrypt, so has no use for one.
+  const showPassphrase = user?.role === 'OFFICER';
   return (
     <div className="space-y-3">
       {/* Classification filter header */}
@@ -542,7 +544,7 @@ function DocumentList({ assets, user, classificationFilter, setClassificationFil
       <div className="card hidden overflow-x-auto scroll-slim sm:block shadow-sm">
         <table className="w-full min-w-[720px] text-sm">
           <thead>
-            <tr className="border-b border-line bg-noir/[0.02] text-left text-xs uppercase tracking-wider text-ink-muted">
+            <tr className="border-b border-line bg-surface text-left text-xs uppercase tracking-wider text-ink-muted">
               <th className="px-5 py-3.5 font-bold">Document</th>
               <th className="px-4 py-3.5 font-bold">Classification</th>
               {showPassphrase && (
@@ -603,7 +605,7 @@ function PassphraseCell({ asset }) {
     setError(null);
     try {
       const r = await revealAllotment(asset.assetId, password);
-      setSecret(r.passphrase);
+      setSecret(r.passphrase || '');
       setStage('shown');
       setPassword('');
     } catch (err) {
@@ -623,6 +625,14 @@ function PassphraseCell({ asset }) {
     navigator.clipboard.writeText(secret);
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
+  }
+
+  if (stage === 'shown' && !secret) {
+    return (
+      <span className="text-xs font-semibold text-ink-muted">
+        None allotted — use your account password
+      </span>
+    );
   }
 
   if (stage === 'shown') {

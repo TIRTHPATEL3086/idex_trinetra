@@ -37,7 +37,6 @@ export const CAPABILITIES = {
   'users:write': ['ADMIN'],
 };
 
-
 /** Human labels, reused by the login screen and the role badge. */
 export const ROLE_META = {
   ADMIN: {
@@ -50,10 +49,9 @@ export const ROLE_META = {
   },
   INVESTIGATOR: {
     label: 'Forensic Analyst',
-    blurb: 'Traces leaked files. Cannot decrypt, so cannot manufacture evidence.',
+    blurb: 'Traces a leaked file back to the copy it came from. Holds no decrypt capability.',
   },
 };
-
 
 /** @returns {boolean} */
 export function can(role, capability) {
@@ -74,6 +72,7 @@ export function capabilitiesOf(role) {
 export const LANDING = {
   ADMIN: '/assets',
   OFFICER: '/decrypt',
+  // An analyst has no decrypt capability at all, so /decrypt would be an empty
+  // screen; tracing is the whole of the job, so that is where they open.
   INVESTIGATOR: '/trace',
 };
-

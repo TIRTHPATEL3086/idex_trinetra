@@ -1,14 +1,14 @@
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
-import { getHealth, shortHash } from './lib/api.js';
+import { getHealth } from './lib/api.js';
 import { useAuth, ROLE_UI, initialsOf } from './lib/auth.jsx';
 import { RequireAuth, RequireCap } from './components/RequireAuth.jsx';
 import Logo from './components/Logo.jsx';
+import Preloader from './components/Preloader.jsx';
 import {
   CheckIcon,
   CloseIcon,
-  CopyIcon,
   ShieldIcon as ShieldGlyph,
   SignOutIcon,
 } from './components/icons.jsx';
@@ -22,6 +22,7 @@ import Robustness from './pages/Robustness.jsx';
 import History from './pages/History.jsx';
 import PqcEnroll from './pages/PqcEnroll.jsx';
 import Inspect from './pages/Inspect.jsx';
+import Officers from './pages/Officers.jsx';
 
 /**
  * Application shell — a white, large-radius app panel on a warm cream canvas,
@@ -49,22 +50,37 @@ const NAV = [
   { to: '/history', label: 'History', icon: HistoryIcon, cap: 'audit:read' },
   { to: '/enroll', label: 'PQC Enroll', icon: ShieldIcon, cap: 'assets:upload' },
   { to: '/robustness', label: 'Robustness', icon: ChartIcon, cap: 'metrics:read' },
+  { to: '/officers', label: 'Officers', icon: UsersIcon, cap: 'users:write' },
 ];
 
 export default function App() {
+  // The intro plays on a fresh load of the landing page, not on in-app
+  // navigation back to it.
+  const [booting, setBooting] = useState(() => {
+    const show = window.location.pathname === '/';
+    // Mark the page as covered before anything renders, so no entrance on the
+    // landing page can start ahead of the loader's own effect.
+    if (show) document.documentElement.classList.add('is-preloading');
+    return show;
+  });
+  const finishBoot = useCallback(() => setBooting(false), []);
+
   return (
-    <Routes>
-      <Route path="/" element={<LandingGate />} />
-      <Route path="/login" element={<Login />} />
-      <Route
-        path="/*"
-        element={
-          <RequireAuth>
-            <Shell />
-          </RequireAuth>
-        }
-      />
-    </Routes>
+    <>
+      {booting && <Preloader onDone={finishBoot} />}
+      <Routes>
+        <Route path="/" element={<LandingGate />} />
+        <Route path="/login" element={<Login />} />
+        <Route
+          path="/*"
+          element={
+            <RequireAuth>
+              <Shell />
+            </RequireAuth>
+          }
+        />
+      </Routes>
+    </>
   );
 }
 
@@ -99,9 +115,9 @@ function Shell() {
   }, [navOpen]);
 
   return (
-    <div className="overflow-hidden bg-canvas p-1.5 [height:100dvh] sm:p-3 xl:p-4">
+    <div className="overflow-hidden bg-shell p-1.5 [height:100dvh] sm:p-3 xl:p-4">
       {/* The reference's radius: 1.5rem on mobile, 3.125rem from lg up. */}
-      <div className="mx-auto flex h-full w-full max-w-[1440px] flex-col overflow-hidden rounded-panel border border-line bg-white shadow-app lg:rounded-[3.125rem]">
+      <div className="mx-auto flex h-full w-full max-w-[1440px] flex-col overflow-hidden rounded-panel border border-white bg-white shadow-app lg:rounded-[3.125rem]">
         {/* ---- top bar (fixed) ---- */}
         <header className="flex shrink-0 items-center gap-2.5 border-b border-line px-3.5 py-3 sm:px-6">
           <button
@@ -208,6 +224,14 @@ function Shell() {
                   }
                 />
                 <Route
+                  path="/officers"
+                  element={
+                    <RequireCap capability="users:write">
+                      <Officers />
+                    </RequireCap>
+                  }
+                />
+                <Route
                   path="/enroll"
                   element={
                     <RequireCap capability="assets:upload">
@@ -304,22 +328,12 @@ function useHealth() {
 function AccountMenu({ user }) {
   const { signOut } = useAuth();
   const [open, setOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [confirmSignOut, setConfirmSignOut] = useState(false);
   const meta = ROLE_UI[user?.role] ?? {};
 
   if (!user) return null;
 
-  function copyHandle() {
-    if (!user.userRef) return;
-    navigator.clipboard.writeText(user.userRef);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
   function handleClose() {
     setOpen(false);
-    setConfirmSignOut(false);
   }
 
   return (
@@ -335,14 +349,12 @@ function AccountMenu({ user }) {
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-tr from-noir to-[#1b232e] text-xs font-extrabold text-accent ring-2 ring-accent/30 transition group-hover:ring-accent">
             {initialsOf(user.name)}
           </span>
-          <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-attributed" />
         </div>
         <span className="hidden text-left sm:block">
           <span className="block text-xs font-bold leading-tight text-ink group-hover:text-black">
             {user.name}
           </span>
           <span className="flex items-center gap-1 text-[10px] font-semibold text-ink-muted">
-            <span className="h-1.5 w-1.5 rounded-full bg-accent-deep" />
             {meta.short || user.role}
           </span>
         </span>
@@ -361,7 +373,6 @@ function AccountMenu({ user }) {
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-line/70 pb-4">
               <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-attributed animate-pulse" />
                 <h3 className="text-sm font-extrabold tracking-wide uppercase text-ink-muted">
                   Account & Clearance Profile
                 </h3>
@@ -377,20 +388,14 @@ function AccountMenu({ user }) {
             </div>
 
             {/* User Profile Overview */}
-            <div className="flex items-center gap-4 rounded-2xl bg-gradient-to-br from-[#fcfcf9] to-muted p-4 border border-line/80 shadow-xs">
+            <div className="flex items-center gap-4 rounded-2xl bg-gradient-to-br from-surface to-muted p-4 border border-line/80 shadow-xs">
               <div className="relative shrink-0">
                 <span className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-tr from-noir to-[#1b232e] text-base font-extrabold text-accent shadow-md ring-2 ring-accent/40">
                   {initialsOf(user.name)}
                 </span>
-                <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-white bg-attributed" />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h4 className="text-base font-extrabold text-ink truncate">{user.name}</h4>
-                  <span className="rounded-full bg-attributed-tint px-2 py-0.5 text-[10px] font-bold text-attributed-deep">
-                    ACTIVE
-                  </span>
-                </div>
+                <h4 className="text-base font-extrabold text-ink truncate">{user.name}</h4>
                 <div className="text-xs text-ink-muted truncate mt-0.5">{user.email}</div>
                 <div className="mt-1.5 flex items-center gap-2 flex-wrap text-[11px]">
                   <span className="font-bold text-ink">Dept: {user.dept}</span>
@@ -410,93 +415,21 @@ function AccountMenu({ user }) {
               </p>
             )}
 
-            {/* On-Chain Sepolia Identity Card */}
-            <div className="rounded-2xl border border-line/70 bg-gradient-to-br from-[#faf8f5] to-muted p-4 space-y-2 shadow-xs">
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
-                  <span className="h-1.5 w-1.5 rounded-full bg-attributed" />
-                  On-Chain Cryptographic Identity
-                </span>
-                <span className="text-[10px] font-bold text-attributed-deep bg-attributed-tint/70 px-2 py-0.5 rounded-full">
-                  Sepolia Zero-PII
-                </span>
-              </div>
-              <p className="text-[11px] text-ink-muted">
-                Keccak-256 handle verified across Ethereum smart contract logs:
-              </p>
-              <div className="flex items-center justify-between gap-2 rounded-xl border border-line/80 bg-white px-3 py-2 shadow-inner">
-                <span className="mono text-xs font-bold text-ink truncate">
-                  {user.userRef ? shortHash(user.userRef, 10, 8) : 'Not enrolled'}
-                </span>
-                <button
-                  type="button"
-                  onClick={copyHandle}
-                  className="shrink-0 flex items-center gap-1 rounded-lg bg-muted px-2.5 py-1 text-[11px] font-bold text-ink-muted transition hover:bg-accent hover:text-noir"
-                  title="Copy full 32-byte on-chain userRef"
-                >
-                  {copied ? (
-                    <span className="flex items-center gap-1 font-bold text-attributed-deep">
-                      <CheckIcon size={12} /> Copied
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1">
-                      <CopyIcon size={12} /> Copy
-                    </span>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* Logout / Sign Out Action Box */}
-            <div className="pt-2 border-t border-line/80 space-y-2.5">
-              {!confirmSignOut ? (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setConfirmSignOut(true)}
-                    className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-danger-bright bg-danger-tint py-3 text-xs font-extrabold text-danger-deep hover:bg-danger-tint hover:border-danger-bright transition shadow-xs cursor-pointer"
-                  >
-                    <span>Sign out of session</span>
-                    <SignOutIcon size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleClose}
-                    className="rounded-2xl border border-line bg-white px-4 py-3 text-xs font-bold text-ink-muted hover:bg-noir/5 hover:text-ink transition cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <div className="rounded-2xl border border-danger-bright bg-danger-tint/90 p-4 space-y-3 animate-in fade-in">
-                  <div className="text-xs font-bold text-danger-deep">
-                    Are you sure you want to end your security session?
-                  </div>
-                  <p className="text-[11px] text-danger-deep">
-                    Signing out terminates your authenticated enclave session. You will need to
-                    re-enter your clearance credentials to access protected documents.
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleClose();
-                        signOut();
-                      }}
-                      className="flex-1 rounded-xl bg-danger-deep hover:bg-danger-deep text-white font-extrabold py-2.5 text-xs shadow-md transition hover:scale-[1.01] cursor-pointer"
-                    >
-                      Confirm Sign Out
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmSignOut(false)}
-                      className="rounded-xl border border-line bg-white px-4 py-2.5 text-xs font-bold text-ink hover:bg-noir/5 transition cursor-pointer"
-                    >
-                      Stay Signed In
-                    </button>
-                  </div>
-                </div>
-              )}
+            {/* Signing out is not destructive — you sign back in. A red
+                two-step confirmation made an ordinary action look alarming,
+                so this is one plain button. */}
+            <div className="border-t border-line/80 pt-3">
+              <button
+                type="button"
+                onClick={() => {
+                  handleClose();
+                  signOut();
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-line bg-white py-3 text-sm font-semibold text-ink transition hover:bg-muted"
+              >
+                <SignOutIcon size={15} />
+                Sign out
+              </button>
             </div>
           </div>
         </div>
@@ -657,11 +590,6 @@ function WalletButton({ health }) {
           title="MetaMask wallet details & chain settings"
           className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-3 py-1.5 text-xs font-bold text-ink hover:border-ink-faint transition"
         >
-          <span
-            className={`h-2 w-2 rounded-full ${
-              isLocalChain || isSepolia ? 'bg-attributed animate-pulse' : 'bg-probable'
-            }`}
-          />
           <span className="mono">{short(account)}</span>
           <span className="hidden md:inline-block text-[10px] text-ink-muted bg-noir/5 px-2 py-0.5 rounded-full font-medium">
             {chainLabel}
@@ -679,7 +607,6 @@ function WalletButton({ health }) {
             <div className="absolute right-0 z-50 mt-2 w-[19rem] max-w-[calc(100vw-2rem)] rounded-2xl border border-line bg-white p-4 shadow-panel">
               <div className="flex items-center justify-between pb-3 border-b border-line">
                 <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-attributed" />
                   <span className="text-xs font-bold text-ink">MetaMask Connected</span>
                 </div>
                 <button
@@ -864,6 +791,17 @@ function ClockIcon(p) {
     <NavIcon {...p}>
       <circle cx="12" cy="12" r="8.5" {...S} />
       <path d="M12 7.5V12l3 2" {...S} />
+    </NavIcon>
+  );
+}
+function UsersIcon(p) {
+  return (
+    <NavIcon {...p}>
+      <circle cx="9" cy="8" r="3.5" {...S} />
+      <path
+        d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6.5 6.5 0 0 1 3.5 6"
+        {...S}
+      />
     </NavIcon>
   );
 }

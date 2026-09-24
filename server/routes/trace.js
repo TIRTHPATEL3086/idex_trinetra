@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import sharp from 'sharp';
 
 import { prisma } from '../lib/prisma.js';
 import { env } from '../lib/env.js';
@@ -27,6 +28,78 @@ import { generateDossier } from '../core/dossier.js';
  * here, not a missed one.
  */
 const router = Router();
+
+/**
+ * Bits that must agree before a reading without a valid CRC may name a release.
+ * Chance agreement is 24/48; the watermark attack suite's genuine survivals
+ * land at 43-48. At 30, comparing a blank or unrelated image against the ~50
+ * recent releases routinely found one at 31 by luck and named its recipient.
+ * 40/48 happens by chance about once in a million comparisons.
+ */
+const MIN_BITS_WITHOUT_CRC = 40;
+
+/**
+ * Whether bits name a real release: a valid CRC alone is not enough, because
+ * degenerate readings (all zeros, all ones) from a mark that did not survive
+ * can satisfy an 8-bit CRC by construction.
+ */
+async function namesARelease(bits) {
+  try {
+    const parsed = parsePayload(bits);
+    if (!parsed.crcOk) return false;
+    const hit = await prisma.decryptionEvent.findUnique({
+      where: { shortId: parsed.shortId },
+      select: { id: true },
+    });
+    return Boolean(hit);
+  } catch {
+    return false;
+  }
+}
+
+/** Candidates the pHash search itself matched — a genuine visual resemblance. */
+const visualMatches = (candidates) => candidates.filter((c) => c.pHashDist != null);
+
+/**
+ * Re-read the mark after scaling the leak back to the size of each copy the
+ * hash search matched. A rescaled reading is rarely bit-perfect, so it is kept
+ * when it agrees with that copy's own payload well beyond chance (the same
+ * bar the candidate ranking below uses), not only when its CRC holds.
+ *
+ * @returns the best such reading, or null
+ */
+async function extractAtCandidateSizes(buffer, candidates) {
+  const events = await prisma.decryptionEvent.findMany({
+    where: { id: { in: visualMatches(candidates).map((c) => c.id) } },
+    select: { markedPath: true, payloadBits: true },
+  });
+  const leak = await sharp(buffer).metadata();
+  const readings = new Map(); // size -> reading, so each size is decoded once
+  let best = null;
+  for (const ev of events) {
+    let size;
+    try {
+      size = await sharp(ev.markedPath).metadata();
+    } catch {
+      continue; // the released file is gone from disk; nothing to align to
+    }
+    if (size.width === leak.width && size.height === leak.height) continue;
+    const key = `${size.width}x${size.height}`;
+    if (!readings.has(key)) {
+      const aligned = await sharp(buffer)
+        .resize(size.width, size.height, { fit: 'fill' })
+        .png()
+        .toBuffer();
+      readings.set(key, { ...(await extract(aligned)), rescaledTo: `${key} px` });
+    }
+    const reading = readings.get(key);
+    const matches = bitsMatching(reading.payloadBits, ev.payloadBits);
+    if (matches >= MIN_BITS_WITHOUT_CRC && (!best || matches > best.matches)) {
+      best = { reading, matches };
+    }
+  }
+  return best?.reading ?? null;
+}
 
 router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => {
   const startedAt = Date.now();
@@ -58,6 +131,13 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
       };
     } else {
       marked = await extract(buffer);
+      // A leak that was scaled and left at the new size no longer lines up with
+      // the grid the mark was embedded on. The hashes still find the document,
+      // so scale the leak back to each candidate's released size and read again.
+      if (visualMatches(candidates).length && !(await namesARelease(marked.payloadBits))) {
+        const rescaled = await extractAtCandidateSizes(buffer, candidates);
+        if (rescaled) marked = rescaled;
+      }
     }
 
     // --- 5. shortId -> the exact DecryptionEvent (O(1) on a unique index) --
@@ -107,10 +187,10 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
       })
       .sort((a, b) => b.matches - a.matches);
 
-    // If no direct CRC match, assign top candidate if bit match significantly exceeds random chance (>= 30/48)
+    // No valid CRC: accept the best candidate only when its agreement could not be luck.
     if (!event && rankedCandidates.length > 0) {
       const top = rankedCandidates[0];
-      if (top.matches >= 30) {
+      if (top.matches >= MIN_BITS_WITHOUT_CRC) {
         event = top.event;
       }
     }
@@ -150,16 +230,16 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
     // --- 7. Confidence -> band -> reasons ----------------------------------
     // Prefer a direct comparison against the bits we know we embedded; fall back
     // to the extractor’s own confidence when there is no candidate at all.
-    const agreement = event
-      ? bitAgreement(marked.payloadBits, event.payloadBits)
-      : (marked.bitConfidence ?? 0);
+    // With no receipt identified there is nothing for the bits to agree with:
+    // the extractor's confidence in its own reading is not evidence about anyone.
+    const agreement = event ? bitAgreement(marked.payloadBits, event.payloadBits) : 0;
 
     const verdictResult = score({
       bitConfidence: agreement,
       pHashDist: dists.pHashDist,
       dHashDist: dists.dHashDist,
       aHashDist: dists.aHashDist,
-      chainVerified: chainCheck.verified,
+      chainVerified: event ? chainCheck.verified : null,
     });
 
     const reasons = [...verdictResult.reasons];
@@ -171,8 +251,15 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
         `${n}/${PAYLOAD_BITS} watermark bits match receipt ${bufferToHex(event.receiptId).slice(0, 10)}…` +
           (marked.eccCorrected ? ' (corrected by Reed-Solomon)' : '')
       );
+      if (marked.rescaledTo) {
+        reasons.push(
+          `Leak had been resized — rescaled to the released ${marked.rescaledTo} before reading the mark.`
+        );
+      }
       if (marked.rotationAngle) {
-        reasons.push(`Geometric orientation compensation: recovered successfully from ${marked.rotationAngle}° rotation.`);
+        reasons.push(
+          `Geometric orientation compensation: recovered successfully from ${marked.rotationAngle}° rotation.`
+        );
       }
       if (!crcOk) reasons.push('Payload CRC failed — the extracted bits are unreliable.');
 
@@ -180,10 +267,7 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
       if (event.decryptionSignature && event.user?.dsaPublicKey) {
         try {
           const receiptDigest = sha256(
-            Buffer.concat([
-              Buffer.from(event.receiptId),
-              Buffer.from(event.user.userRef),
-            ])
+            Buffer.concat([Buffer.from(event.receiptId), Buffer.from(event.user.userRef)])
           );
           signatureVerified = verifyDecryptionSignature(
             event.decryptionSignature,
@@ -192,13 +276,19 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
           );
           if (signatureVerified) {
             reasons.push(
-              `NIST ML-DSA-65 post-quantum digital signature verified — non-repudiation proof confirmed for Officer ${event.user.name}.`
+              `NIST ML-DSA-65 post-quantum digital signature verified — non-repudiation proof confirmed for ${event.user.name}.`
             );
           }
         } catch (sigErr) {
           console.warn('ML-DSA-65 verification error:', sigErr.message);
         }
       }
+    } else if (visualMatches(candidates).length) {
+      const seen = visualMatches(candidates);
+      const best = Math.min(...seen.map((c) => c.pHashDist));
+      reasons.unshift(
+        `Visually matches ${seen.length} released cop${seen.length === 1 ? 'y' : 'ies'} in the register (pHash distance ${best}/64), but the watermark could not be recovered, so the recipient cannot be named.`
+      );
     } else {
       reasons.unshift('No candidate file in the register resembled this upload.');
     }
@@ -206,7 +296,10 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
     const elapsedMs = Date.now() - startedAt;
 
     // --- 8. Persist the investigation --------------------------------------
-    const targetEvent = event || rankedCandidates[0]?.event || allRecentEvents[0] || null;
+    // Only a release the evidence actually identified is linked. Linking the
+    // nearest candidate, or the latest release, would put a name on a report
+    // that the verdict does not support.
+    const targetEvent = event;
     const investigation = await prisma.investigation.create({
       data: {
         uploadedSha: sha256(buffer),
@@ -308,15 +401,10 @@ router.get('/:investigationId/dossier', requireCap('trace:run'), async (req, res
         where: { receiptId: investigation.topReceiptId },
         include: { user: true, asset: true },
       });
-    } else if (investigation.verdict === 'ATTRIBUTED' || investigation.verdict === 'PROBABLE') {
-      event = await prisma.decryptionEvent.findFirst({
-        orderBy: { createdAt: 'desc' },
-        include: { user: true, asset: true },
-      });
     }
 
     const txHash = event?.txHash ? bufferToHex(event.txHash) : null;
-    const blockNumber = event?.blockNumber != null ? Number(event.blockNumber) : 2;
+    const blockNumber = event?.blockNumber != null ? Number(event.blockNumber) : null;
     const sigCommit = event?.signatureCommit ? bufferToHex(event.signatureCommit) : null;
 
     const pdfBuffer = await generateDossier({
@@ -328,7 +416,13 @@ router.get('/:investigationId/dossier', requireCap('trace:run'), async (req, res
       txHash,
       blockNumber,
       signatureCommit: sigCommit,
-      signatureAlgorithm: event?.signatureAlgorithm || 'ML-DSA-65',
+      signatureAlgorithm: event?.signatureAlgorithm || null,
+      // What the report may say about the chain is looked up, not assumed.
+      chainMode: chain.chainConfig().mode,
+      contractAddress: chain.chainConfig().address || null,
+      chainVerified: event
+        ? (await chain.getReceipt(bufferToHex(event.receiptId))).verified
+        : false,
     });
 
     res.setHeader('Content-Type', 'application/pdf');

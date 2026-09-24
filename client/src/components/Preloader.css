@@ -1,0 +1,463 @@
+/*
+ * Preloader timeline (seconds from mount), 4 s end to end
+ *
+ *   0.05  lock settles in              0.35  key flies in on an arc
+ *   0.95  key slides into the keyhole
+ *   1.30  lock takes the thud          1.40  key turns 90° clockwise
+ *   1.85  shackle lifts and swings open
+ *   1.95  gears and the plate's rings start turning
+ *   1.95  wordmark rises letter by letter
+ *   2.20  tagline                      3.20  INTRO_MS — halves part (0.8 s)
+ *
+ * Every animated element's resting style is its final frame, and each
+ * animation fills backwards, so with animations switched off the scene simply
+ * shows the opened lock.
+ */
+
+.pl {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: auto;
+}
+
+:root.is-preloading,
+:root.is-preloading body {
+  overflow: hidden;
+}
+
+/* Hold the landing page's own entrance until the loader lifts. */
+:root.is-preloading .hero-fade-up {
+  animation-play-state: paused;
+}
+
+/* -- the two halves ------------------------------------------------------- */
+
+.pl-half {
+  position: absolute;
+  inset: 0;
+  transition: transform 0.6s cubic-bezier(0.76, 0, 0.24, 1) 0.18s;
+  will-change: transform;
+}
+/* A pixel of overlap so no hairline of the page shows through the seam. */
+.pl-half--top {
+  clip-path: inset(0 0 calc(50% - 1px) 0);
+}
+.pl-half--bottom {
+  clip-path: inset(calc(50% - 1px) 0 0 0);
+}
+.pl--leaving .pl-half--top {
+  transform: translateY(-100%);
+}
+.pl--leaving .pl-half--bottom {
+  transform: translateY(100%);
+}
+.pl--leaving {
+  pointer-events: none;
+}
+
+.pl-seam {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  margin-top: -0.5px;
+  /* A plain graphite hairline, the same ink as the drawing — no colour, no glow. */
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(31, 26, 35, 0.45) 18%,
+    rgba(31, 26, 35, 0.6) 50%,
+    rgba(31, 26, 35, 0.45) 82%,
+    transparent
+  );
+  transform: scaleX(0);
+  opacity: 0;
+  transition: transform 0.2s cubic-bezier(0.65, 0, 0.35, 1);
+}
+/* Draws across the middle, then fades as the halves part along it. */
+.pl--leaving .pl-seam {
+  transform: scaleX(1);
+  animation: pl-seam-flash 0.55s ease forwards;
+}
+@keyframes pl-seam-flash {
+  0% {
+    opacity: 1;
+  }
+  55% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* -- scene ---------------------------------------------------------------- */
+
+.pl-scene {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(70% 60% at 50% 45%, #fbf8f8, #ebe4e5 75%, #ddd5d7);
+  color: #1f1a23;
+}
+
+/* -- clockwork ------------------------------------------------------------ */
+
+.mech {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  animation: pl-fade-in 0.6s ease both;
+}
+.mech-edge {
+  stroke: #463f4b;
+  stroke-width: 1.7;
+  stroke-linejoin: round;
+}
+.mech-line {
+  fill: none;
+  stroke: #8d8490;
+  stroke-width: 1;
+}
+.mech-pitch {
+  stroke: #a99fad;
+  stroke-width: 0.8;
+  stroke-dasharray: 3 5;
+}
+.mech-hole {
+  fill: #e4dddf;
+  stroke: #5b5360;
+  stroke-width: 1.4;
+}
+.mech-bolt {
+  fill: #b9b0b4;
+  stroke: #5b5360;
+  stroke-width: 1;
+}
+.mech-axle {
+  fill: #463f4b;
+}
+.mech-back {
+  opacity: 0.45;
+}
+
+/* Still until the shackle opens, then the whole train spins up together.
+   Each gear's --turn is sized to its tooth count, so pairs stay in mesh. */
+.mech-gear {
+  transform: rotate(var(--turn));
+  animation: mech-spin 2.4s cubic-bezier(0.55, 0, 0.85, 0.55) 1.95s both;
+}
+@keyframes mech-spin {
+  from {
+    transform: none;
+  }
+  to {
+    transform: rotate(var(--turn));
+  }
+}
+
+.pl-center {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 16px;
+}
+
+.pl-stage {
+  width: min(330px, 72vw, 40vh);
+  height: auto;
+  overflow: visible;
+}
+
+/* -- lock ----------------------------------------------------------------- */
+
+.pl-lock {
+  transform-box: fill-box;
+  transform-origin: 50% 60%;
+  animation: pl-lock-in 0.6s cubic-bezier(0.2, 0.9, 0.25, 1.15) 0.05s both;
+}
+@keyframes pl-lock-in {
+  from {
+    opacity: 0;
+    transform: translateY(26px) scale(0.82);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: blur(0);
+  }
+}
+
+.pl-thud {
+  transform-box: fill-box;
+  transform-origin: 50% 70%;
+  animation: pl-thud 0.2s ease-out 1.3s both;
+}
+@keyframes pl-thud {
+  0%,
+  100% {
+    transform: none;
+  }
+  40% {
+    transform: translateY(4px) scale(1.015, 0.985);
+  }
+}
+
+/* Pivot is the right leg's foot: lift clear of the body, then swing so the
+   left top rises and opens. */
+.pl-shackle {
+  transform: translateY(-20px) rotate(30deg);
+  animation: pl-shackle 0.55s 1.85s both;
+}
+@keyframes pl-shackle {
+  0% {
+    transform: none;
+    animation-timing-function: cubic-bezier(0.3, 0, 0.2, 1.6);
+  }
+  32% {
+    transform: translateY(-20px);
+    animation-timing-function: cubic-bezier(0.34, 1.4, 0.5, 1);
+  }
+  100% {
+    transform: translateY(-20px) rotate(30deg);
+  }
+}
+
+@keyframes pl-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* The riveted plate where the clock face was. */
+.pl-plate {
+  animation: pl-fade-in 0.5s ease 0.05s both;
+}
+/* The rings of rivets and ticks turn with the gears once the lock opens. */
+.pl-plate__spin {
+  transform: rotate(120deg);
+  animation: mech-spin-plate 2.4s cubic-bezier(0.55, 0, 0.85, 0.55) 1.95s both;
+}
+@keyframes mech-spin-plate {
+  from {
+    transform: none;
+  }
+  to {
+    transform: rotate(120deg);
+  }
+}
+.pl-ink {
+  stroke: #1f1a23;
+}
+.pl-plate__edge {
+  stroke: #5b5360;
+  stroke-width: 2;
+}
+.pl-plate__line {
+  fill: none;
+  stroke: #8d8490;
+  stroke-width: 1;
+}
+/* Round-capped zero-length dashes draw a ring of rivet heads. */
+.pl-plate__rivets {
+  fill: none;
+  stroke: #9a9095;
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-dasharray: 0 22.41; /* 60 rivets round r=214 */
+}
+.pl-plate__ticks {
+  fill: none;
+  stroke: #6e6472;
+  stroke-width: 10;
+  stroke-dasharray: 1.5 19.23; /* 60 ticks round r=198 */
+  opacity: 0.55;
+}
+
+/* -- key ------------------------------------------------------------------ */
+
+/* These three sit inside translate(200 236), so their origin is the keyhole. */
+.pl-key-fly {
+  animation: pl-key-fly 0.6s cubic-bezier(0.22, 0.75, 0.2, 1) 0.35s both;
+}
+@keyframes pl-key-fly {
+  from {
+    opacity: 0;
+    transform: translate(230px, -220px) rotate(-110deg) scale(0.55);
+  }
+  60% {
+    opacity: 1;
+  }
+  to {
+    transform: none;
+  }
+}
+
+.pl-key-slide {
+  animation: pl-key-slide 0.35s 0.95s both;
+}
+@keyframes pl-key-slide {
+  0% {
+    transform: translateY(-118px);
+    animation-timing-function: cubic-bezier(0.5, 0, 0.75, 0);
+  }
+  85% {
+    transform: translateY(2px);
+    animation-timing-function: ease-out;
+  }
+  100% {
+    transform: none;
+  }
+}
+
+.pl-key-turn {
+  transform: rotate(90deg);
+  animation: pl-key-turn 0.45s cubic-bezier(0.55, -0.3, 0.35, 1.35) 1.4s both;
+}
+@keyframes pl-key-turn {
+  from {
+    transform: none;
+  }
+  to {
+    transform: rotate(90deg);
+  }
+}
+
+/* -- wordmark ------------------------------------------------------------- */
+
+/* A soft pool of paper behind the type, so it reads over the gears. */
+.pl-caption {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: clamp(4px, 1.2vh, 14px);
+  position: relative;
+  padding: 6px 36px 12px;
+}
+.pl-caption::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  animation: pl-fade-in 0.4s ease 1.95s both;
+  background: radial-gradient(
+    closest-side,
+    rgba(251, 248, 248, 0.95),
+    rgba(251, 248, 248, 0.7) 60%,
+    transparent
+  );
+}
+
+.pl-word {
+  display: flex;
+  font-family: Comfortaa, Sniglet, ui-rounded, sans-serif;
+  font-weight: 700;
+  font-size: clamp(34px, 7vw, 58px);
+  letter-spacing: 0.01em;
+  line-height: 1.1;
+  perspective: 400px;
+}
+.pl-word span {
+  display: inline-block;
+  color: #1f1a23;
+  text-shadow:
+    0 0 14px #fbf8f8,
+    0 0 4px #fbf8f8;
+  transform-origin: 50% 100%;
+  animation: pl-letter 0.5s cubic-bezier(0.2, 0.9, 0.25, 1.1) both;
+  animation-delay: calc(1.95s + var(--i) * 0.03s);
+}
+@keyframes pl-letter {
+  from {
+    opacity: 0;
+    transform: translateY(0.55em) rotateX(-70deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.pl-tag {
+  margin-top: 10px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: clamp(10px, 2.6vw, 12px);
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: #6e6472;
+  white-space: nowrap;
+  animation: pl-tag 0.45s ease 2.2s both;
+}
+@keyframes pl-tag {
+  from {
+    opacity: 0;
+    letter-spacing: 0.6em;
+  }
+}
+
+@media (max-width: 480px) {
+  .pl-tag {
+    letter-spacing: 0.18em;
+  }
+}
+
+/* -- progress ------------------------------------------------------------- */
+
+.pl-progress {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(24px, 6vh, 56px);
+  translate: -50% 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  animation: pl-fade-in 0.4s ease 0.1s both;
+}
+.pl-progress__track {
+  width: min(180px, 44vw);
+  height: 2px;
+  border-radius: 2px;
+  background: rgba(31, 26, 35, 0.14);
+  overflow: hidden;
+}
+.pl-progress__fill {
+  height: 100%;
+  background: linear-gradient(90deg, #8d8490, #463f4b);
+  transform-origin: 0 50%;
+}
+.pl-progress__num {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: #6e6472;
+  font-variant-numeric: tabular-nums;
+}
+
+/* -- reduced motion ------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .pl *,
+  .pl *::before {
+    animation: none !important;
+  }
+  .pl-half,
+  .pl-seam {
+    transition: opacity 0.4s ease;
+  }
+  .pl--leaving .pl-half--top,
+  .pl--leaving .pl-half--bottom {
+    transform: none;
+    opacity: 0;
+  }
+  :root.is-preloading .hero-fade-up {
+    animation-play-state: running;
+  }
+}

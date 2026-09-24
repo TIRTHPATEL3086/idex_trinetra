@@ -18,14 +18,11 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { PrismaClient } from '@prisma/client';
 
-import { env, masterKey } from '../server/lib/env.js';
+import { env } from '../server/lib/env.js';
+import { escrowKeys } from '../server/lib/keyring.js';
 import { assetRef, userRef, hexToBuffer } from '../server/lib/refs.js';
 import { hashPassword } from '../server/lib/auth.js';
-import {
-  generatePqcKeyPair,
-  encryptKeyBundle,
-  encapsulateKey,
-} from '../server/core/pqc.js';
+import { generatePqcKeyPair, encryptKeyBundle, encapsulateKey } from '../server/core/pqc.js';
 
 const prisma = new PrismaClient();
 
@@ -68,7 +65,7 @@ const USERS = [
   },
   {
     name: 'Analyst A-004',
-    dept: 'Forensics',
+    dept: 'Intel Cell',
     email: 'a004@example.gov',
     role: 'INVESTIGATOR',
     password: 'analyst123',
@@ -123,11 +120,17 @@ async function main() {
         kemPublicKey: Buffer.from(pqc.kemPublicKey),
         dsaPublicKey: Buffer.from(pqc.dsaPublicKey),
         encryptedPqcKeys,
+        escrowedPqcKeys: escrowKeys({
+          kemSecretKey: pqc.kemSecretKey,
+          dsaSecretKey: pqc.dsaSecretKey,
+        }),
       },
     });
 
     userPqcMap.set(id, { u, pqc });
-    console.log(`  user  ${id}  ${u.name.padEnd(16)} ${u.role.padEnd(13)} ${u.dept} [PQC enrolled]`);
+    console.log(
+      `  user  ${id}  ${u.name.padEnd(16)} ${u.role.padEnd(13)} ${u.dept} [PQC enrolled]`
+    );
   }
   await prisma.$executeRawUnsafe(
     `SELECT setval(pg_get_serial_sequence('"User"','id'), ${USERS.length})`

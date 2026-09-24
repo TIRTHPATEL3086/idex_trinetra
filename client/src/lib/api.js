@@ -54,11 +54,11 @@ export const getHealth = () => request('/api/health');
 
 // ------------------------------------------------------------------ auth ---
 
-export const login = (email, password) =>
+export const login = (email, password, extra = {}) =>
   request('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, ...extra }),
   });
 
 export const logout = () => request('/api/auth/logout', { method: 'POST' });
@@ -107,6 +107,9 @@ export const decryptAsset = ({
   passphrase,
   clientSignature,
   challengeId,
+  securityAnswer,
+  newSecurityQuestion,
+  newSecurityAnswer,
 }) =>
   request('/api/decrypt', {
     method: 'POST',
@@ -118,7 +121,19 @@ export const decryptAsset = ({
       passphrase,
       clientSignature,
       challengeId,
+      securityAnswer,
+      newSecurityQuestion,
+      newSecurityAnswer,
     }),
+  });
+
+export const getSecurityQuestion = () => request('/api/users/security-question');
+
+export const setSecurityQuestion = ({ securityQuestion, securityAnswer }) =>
+  request('/api/users/security-question', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ securityQuestion, securityAnswer }),
   });
 
 export const batchDecryptAsset = ({
@@ -181,6 +196,22 @@ export const getAudit = (assetId) => request(`/api/audit/${assetId}`);
 
 export const toggleUserActive = (userId) =>
   request(`/api/users/${userId}/toggle-active`, { method: 'POST' });
+
+/** Administrator: assign a new officer their login ID and password. */
+export const createOfficer = ({ name, dept, email, password }) =>
+  request('/api/users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, dept, email, password }),
+  });
+
+/** Administrator: assign a new password to an officer or analyst. */
+export const setUserPassword = (userId, password) =>
+  request(`/api/users/${userId}/password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  });
 
 export const getMetrics = (classification) =>
   request(
