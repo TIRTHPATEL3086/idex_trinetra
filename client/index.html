@@ -21,7 +21,18 @@
          headlines of the Chromia reference. Inter runs the interface, Sniglet
          the wordmark, and JetBrains Mono the hashes and small labels. -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,900&family=Inter:wght@400;500;600;700;800&family=Sniglet:wght@800&family=Comfortaa:wght@700&family=JetBrains+Mono:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,900&family=Inter:wght@400;500;600;700;800&family=Comfortaa:wght@700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- The wordmark is requested separately with `display=block` rather than
+         `swap`. Swap is right for body text — show something immediately,
+         correct it when the font lands — but on a logo that reads as the brand
+         briefly rendering in the wrong typeface. Block holds the glyphs
+         invisible for a moment instead, so the mark only ever appears once,
+         correctly. It is four short words, so nothing is kept from the reader. -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Sniglet:wght@800&display=block"
       rel="stylesheet"
     />
   </head>
