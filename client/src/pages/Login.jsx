@@ -72,7 +72,7 @@ export default function Login() {
 
   // Everything fits the screen, so the page itself never scrolls.
   return (
-    <div className="relative grid h-[100dvh] w-full place-items-center overflow-hidden bg-shell p-3 sm:p-5 lg:p-6">
+    <div className="relative grid h-[100dvh] w-full grid-cols-[minmax(0,1fr)] place-items-center overflow-hidden bg-shell p-3 sm:p-5 lg:p-6">
       {/* A real route home, not history.back() — someone who opened /login
           directly, or followed a stale link, has no history to go back to. */}
       <Link
@@ -370,6 +370,7 @@ function DemoAccounts({ onPick, activeAccount, open, setOpen, role }) {
   const [maxH, setMaxH] = useState(320);
 
   const group = ROLE_GROUPS.find((g) => g.role === role) ?? ROLE_GROUPS[0];
+  const inUse = activeAccount?.role === group.role;
 
   const pick = (acc) => {
     onPick(acc);
@@ -419,21 +420,31 @@ function DemoAccounts({ onPick, activeAccount, open, setOpen, role }) {
           open ? 'border-accent' : 'border-line'
         }`}
       >
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="shrink-0 text-xs font-bold uppercase tracking-wide text-ink-faint">
-            {group.label} demo {group.accounts.length > 1 ? 'accounts' : 'account'}
+        {/* One line at every width: the label gives way (truncates) before the
+            pill ever wraps under it. */}
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="min-w-0 truncate text-xs font-bold uppercase tracking-normal text-ink-faint min-[360px]:tracking-wide">
+            {/* On a phone the pill already names the account, so the role
+                drops out of the label rather than being cut off. */}
+            <span className={inUse ? 'hidden sm:inline' : undefined}>{group.label} </span>
+            demo{' '}
+            <span className={inUse ? 'hidden min-[360px]:inline' : undefined}>
+              {group.accounts.length > 1 ? 'accounts' : 'account'}
+            </span>
           </span>
-          {activeAccount && activeAccount.role === group.role && (
+          {inUse && (
             <span
-              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${activeAccount.badge} shadow-xs`}
+              className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-bold ${activeAccount.badge} shadow-xs`}
             >
               <span className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
-              In use: {activeAccount.short}
+              <span className="hidden sm:inline">In use:</span> {activeAccount.short}
             </span>
           )}
         </div>
         <span className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-ink-muted">
-          {activeAccount?.role === group.role ? 'Change' : 'Choose'}
+          <span className={inUse ? 'hidden min-[400px]:inline' : undefined}>
+            {inUse ? 'Change' : 'Choose'}
+          </span>
           {/* Points the way the list opens: down, then up to close. */}
           <ChevronIcon open={open} />
         </span>
