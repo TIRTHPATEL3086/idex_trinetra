@@ -34,6 +34,7 @@ const GlobalQuery = z.object({
   limit: z.coerce.number().int().min(1).max(200).optional().default(50),
   userId: z.coerce.number().int().positive().optional(),
   assetId: z.coerce.number().int().positive().optional(),
+  classification: z.enum(['RESTRICTED', 'CONFIDENTIAL', 'SECRET']).optional(),
   from: z.string().datetime({ offset: true }).optional(),
   to: z.string().datetime({ offset: true }).optional(),
 });
@@ -44,12 +45,13 @@ router.get(
   validate(GlobalQuery, 'query'),
   async (req, res, next) => {
     try {
-      const { page, limit, userId, assetId, from, to } = req.valid;
+      const { page, limit, userId, assetId, classification, from, to } = req.valid;
       const skip = (page - 1) * limit;
 
       const where = {
         ...(userId ? { userId } : {}),
         ...(assetId ? { assetId } : {}),
+        ...(classification ? { asset: { classification } } : {}),
         ...(from || to
           ? {
               createdAt: {

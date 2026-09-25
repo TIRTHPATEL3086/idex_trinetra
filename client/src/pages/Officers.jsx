@@ -86,7 +86,7 @@ export default function Officers() {
               {officers.map((u) => (
                 <li key={u.userId} className="px-5 py-4">
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-0 flex-1 basis-48">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-semibold text-ink">{u.name}</span>
                         <span className="pill bg-muted text-ink-muted">{u.roleLabel}</span>
@@ -98,8 +98,8 @@ export default function Officers() {
                       </div>
                       <div className="mono mt-1 truncate text-xs text-ink-muted">
                         {u.email || 'no login ID'}
-                        {u.dept && <span className="font-sans"> · {u.dept}</span>}
                       </div>
+                      {u.dept && <div className="mt-0.5 text-xs text-ink-faint">{u.dept}</div>}
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       <button

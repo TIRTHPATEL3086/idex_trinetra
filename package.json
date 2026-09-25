@@ -30,7 +30,8 @@
     "format:check": "prettier --check .",
     "client:dev": "npm --prefix client run dev",
     "client:build": "npm --prefix client run build",
-    "setup": "npm install && npm --prefix client install && npm run db:generate"
+    "setup": "npm install && npm --prefix client install && npm run db:generate",
+    "offline": "node scripts/offline.mjs"
   },
   "dependencies": {
     "@noble/post-quantum": "^0.7.1",

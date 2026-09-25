@@ -320,7 +320,7 @@ export default function Decrypt() {
       <div className={`grid gap-6 ${status === 'idle' ? '' : 'xl:grid-cols-12'}`}>
         {/* ── Left Column: Form ────────────────────────────────────────── */}
         <div
-          className={`space-y-5 ${status === 'idle' ? 'mx-auto w-full max-w-3xl' : 'xl:col-span-6'}`}
+          className={`min-w-0 space-y-5 ${status === 'idle' ? 'mx-auto w-full max-w-3xl' : 'xl:col-span-6'}`}
         >
           <form
             onSubmit={isAdmin ? submitAdminBatch : submitOfficerDecrypt}
@@ -388,9 +388,11 @@ export default function Decrypt() {
                             className="h-4 w-4 rounded text-accent focus:ring-accent"
                           />
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-bold text-ink">{u.name}</span>
-                              <span className="rounded bg-noir/5 px-1.5 py-0.5 text-[11px] font-bold text-ink-muted">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                              <span className="whitespace-nowrap text-sm font-bold text-ink">
+                                {u.name}
+                              </span>
+                              <span className="whitespace-nowrap rounded bg-noir/5 px-1.5 py-0.5 text-[11px] font-bold text-ink-muted">
                                 {u.dept}
                               </span>
                             </div>
@@ -798,7 +800,7 @@ export default function Decrypt() {
         </div>
 
         {/* ── Right Column: Interactive Results & Receipts ─────────────── */}
-        <div className={`space-y-5 ${status === 'idle' ? 'hidden' : 'xl:col-span-6'}`}>
+        <div className={`min-w-0 space-y-5 ${status === 'idle' ? 'hidden' : 'xl:col-span-6'}`}>
           {isBusy && (
             <div className="card grid place-items-center p-12 text-center space-y-4">
               <div className="h-10 w-10 animate-spin rounded-full border-4 border-accent border-t-transparent" />

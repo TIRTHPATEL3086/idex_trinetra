@@ -140,6 +140,7 @@ function Shell() {
           </span>
 
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+            <NetworkStatus network={health?.network} />
             <WalletButton health={health} />
             <AccountMenu user={user} />
           </div>
@@ -299,6 +300,73 @@ function Sidebar({ open, can }) {
         </div>
       )}
     </aside>
+  );
+}
+
+/**
+ * Deployment status: "air-gapped" only when the server reports no dependency
+ * beyond this machine or its private network — the claim is checked, not
+ * decorative. The chip opens a list of what each dependency is and where.
+ */
+function NetworkStatus({ network }) {
+  const [open, setOpen] = useState(false);
+  if (!network) return null;
+  const off = network.airGapped;
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        title={
+          off
+            ? 'No dependency outside this machine or its private network'
+            : 'This deployment depends on internet services'
+        }
+        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide transition ${
+          off
+            ? 'border-attributed-bright bg-attributed-tint text-attributed-deep'
+            : 'border-probable-bright bg-probable-tint text-probable-deep'
+        }`}
+      >
+        <span className={`h-2 w-2 rounded-full ${off ? 'bg-attributed' : 'bg-probable'}`} />
+        <span className="hidden md:inline">{off ? 'Air-gapped · offline' : 'Online'}</span>
+        <span className="md:hidden">{off ? 'Offline' : 'Online'}</span>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" aria-hidden="true" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 z-50 mt-2 w-[18rem] max-w-[calc(100vw-2rem)] rounded-2xl border border-line bg-white p-4 text-left shadow-panel">
+            <div className="text-xs font-bold uppercase tracking-wider text-ink-muted">
+              {off
+                ? '100% air-gapped — zero WAN dependencies'
+                : `${network.wan.length} internet dependenc${network.wan.length === 1 ? 'y' : 'ies'}`}
+            </div>
+            <ul className="mt-3 space-y-2">
+              {network.deps.map((d) => (
+                <li key={d.name} className="flex items-start gap-2 text-xs">
+                  <span
+                    className={`mt-1 h-2 w-2 shrink-0 rounded-full ${d.local ? 'bg-attributed' : 'bg-probable'}`}
+                  />
+                  <span className="min-w-0">
+                    <span className="block font-semibold text-ink">{d.name}</span>
+                    <span className="mono block truncate text-ink-muted">
+                      {d.local ? 'local' : 'internet'} · {d.host}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {!off && (
+              <p className="mt-3 text-[11px] leading-relaxed text-ink-muted">
+                Run the offline field kit (<span className="mono">npm run offline</span>) for a
+                fully air-gapped deployment.
+              </p>
+            )}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

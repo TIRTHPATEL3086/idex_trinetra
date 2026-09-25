@@ -3,6 +3,7 @@ client/node_modules/
 
 .env
 .env.local
+.env.offline
 *.local
 
 # hardhat
@@ -24,6 +25,7 @@ client/dist/
 
 # runtime data (encrypted blobs + watermarked releases) — never commit
 data/
+data-fieldkit/
 
 # misc
 *.log

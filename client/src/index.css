@@ -41,7 +41,7 @@ h3 {
    `opsz` is Fraunces's optical-size axis: large headlines want the display
    cut, which sharpens the serifs and closes the spacing. */
 .font-display {
-  font-family: Fraunces, ui-serif, Georgia, serif;
+  font-family: 'Fraunces Variable', Fraunces, ui-serif, Georgia, serif;
   font-weight: 900;
   font-variation-settings:
     'opsz' 120,
@@ -51,7 +51,7 @@ h3 {
 
 /* Smaller display lines want the text cut, not the display cut. */
 .font-display-sm {
-  font-family: Fraunces, ui-serif, Georgia, serif;
+  font-family: 'Fraunces Variable', Fraunces, ui-serif, Georgia, serif;
   font-weight: 700;
   font-variation-settings: 'opsz' 24;
   letter-spacing: -0.015em;

@@ -92,7 +92,14 @@ function NavBar() {
   return (
     <header className="sticky top-0 z-30 px-3 pt-3 sm:px-6 sm:pt-5">
       <nav className="mx-auto flex max-w-6xl items-center justify-between rounded-full border border-white bg-white px-4 py-3 shadow-[0_1px_2px_rgba(31,26,35,0.06),0_14px_34px_-14px_rgba(31,26,35,0.28)] sm:px-6 sm:py-3.5">
-        <Logo size="sm" />
+        {/* The smallest phones keep the mark and drop the wordmark, as the app
+            header does, so the Sign in button is never crowded. */}
+        <span className="min-[360px]:hidden">
+          <Logo size="sm" iconOnly />
+        </span>
+        <span className="hidden min-[360px]:block">
+          <Logo size="sm" />
+        </span>
 
         <div className="hidden items-center gap-9 md:flex">
           {NAV_LINKS.map((link) => (
@@ -106,7 +113,10 @@ function NavBar() {
           ))}
         </div>
 
-        <Link to="/login" className="cta-pill text-sm sm:text-base">
+        <Link
+          to="/login"
+          className="cta-pill shrink-0 whitespace-nowrap px-4 text-sm sm:px-5 sm:text-base"
+        >
           Sign in
           <ArrowUpRight />
         </Link>

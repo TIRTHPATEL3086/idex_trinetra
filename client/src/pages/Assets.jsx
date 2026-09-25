@@ -446,7 +446,8 @@ function Overview({ assets }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-2.5 sm:gap-3.5 shrink-0 w-full xl:w-auto">
+        {/* Three compact rows on a phone, three tiles from sm up. */}
+        <div className="grid w-full shrink-0 grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3.5 xl:w-auto">
           <StatTile label="Documents" value={documents} />
           <StatTile label="Secret" value={secret} />
           <StatTile label="Decryptions" value={decryptions} highlight />
@@ -459,7 +460,7 @@ function Overview({ assets }) {
 function StatTile({ label, value, highlight }) {
   return (
     <div
-      className={`flex flex-col justify-between rounded-2xl p-3.5 sm:p-4 transition min-w-[90px] sm:min-w-[110px] ${
+      className={`flex min-w-0 items-center justify-between gap-3 rounded-2xl px-4 py-2.5 transition sm:min-w-[110px] sm:flex-col sm:items-stretch sm:p-4 ${
         highlight ? 'bg-accent text-noir shadow-md' : 'bg-noir-soft text-white'
       }`}
     >
@@ -473,7 +474,7 @@ function StatTile({ label, value, highlight }) {
         </span>
         <ArrowUpRight highlight={highlight} />
       </div>
-      <div className="font-display mt-2 sm:mt-3 text-2xl sm:text-3xl font-extrabold">{value}</div>
+      <div className="font-display text-2xl font-extrabold sm:mt-3 sm:text-3xl">{value}</div>
     </div>
   );
 }
@@ -495,12 +496,15 @@ function DocumentList({ assets, user, classificationFilter, setClassificationFil
             ? `Assigned Documents (${assets.length})`
             : `All Documents (${assets.length})`}
         </div>
-        <div className="flex items-center gap-2">
-          <label htmlFor="classification-select" className="text-xs font-semibold text-ink-muted">
+        <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
+          <label
+            htmlFor="classification-select"
+            className="shrink-0 text-xs font-semibold text-ink-muted"
+          >
             Classification:
           </label>
           <Select
-            className="w-52"
+            className="flex-1 sm:w-52 sm:flex-none"
             ariaLabel="Filter by classification"
             buttonClassName="!py-1.5 !text-xs !font-semibold"
             value={classificationFilter}
@@ -515,8 +519,9 @@ function DocumentList({ assets, user, classificationFilter, setClassificationFil
         </div>
       </div>
 
-      {/* Cards — mobile only. */}
-      <ul className="space-y-3 sm:hidden">
+      {/* Cards until the table fits without sideways scrolling: the admin's
+          four-column table fits from md, the officer's five-column one from xl. */}
+      <ul className={`space-y-3 ${showPassphrase ? 'xl:hidden' : 'md:hidden'}`}>
         {assets.map((a) => (
           <li key={a.assetId} className="card p-4 space-y-2">
             <div className="flex items-start justify-between gap-2">
@@ -536,13 +541,23 @@ function DocumentList({ assets, user, classificationFilter, setClassificationFil
               <dt>Decryptions</dt>
               <dd className="text-right font-extrabold text-ink">{a.decryptCount}</dd>
             </dl>
+            {/* The same reveal the table offers, so a phone loses nothing. */}
+            {showPassphrase && (
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line/60 pt-2">
+                <span className="text-xs font-semibold text-ink-muted">Passphrase</span>
+                <PassphraseCell asset={a} />
+              </div>
+            )}
           </li>
         ))}
       </ul>
 
-      {/* Table — sm and up with smooth horizontal scroll and minimum column widths */}
-      <div className="card hidden overflow-x-auto scroll-slim sm:block shadow-sm">
-        <table className="w-full min-w-[720px] text-sm">
+      {/* Table — once it fits; still scrolls inside its card if a width is ever short. */}
+      <div
+        className={`card hidden overflow-x-auto scroll-slim shadow-sm ${showPassphrase ? 'xl:block' : 'md:block'}`}
+      >
+        {/* Sized to its columns: the officer's view carries the passphrase column. */}
+        <table className={`w-full text-sm ${showPassphrase ? 'min-w-[720px]' : 'min-w-[560px]'}`}>
           <thead>
             <tr className="border-b border-line bg-surface text-left text-xs uppercase tracking-wider text-ink-muted">
               <th className="px-5 py-3.5 font-bold">Document</th>

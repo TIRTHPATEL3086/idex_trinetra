@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Header, Notice } from './Assets.jsx';
-import { shortHash } from '../lib/api.js';
+import { getUsers, shortHash } from '../lib/api.js';
+import Select from '../components/Select.jsx';
 import { useAuth } from '../lib/auth.jsx';
 import {
   CheckIcon,
@@ -11,10 +12,10 @@ import {
 
 const BASE = import.meta.env.VITE_API_BASE || '';
 
-async function fetchGlobalAudit({ page = 1, limit = 50, userId, assetId, from, to } = {}) {
+async function fetchGlobalAudit({ page = 1, limit = 50, userId, classification, from, to } = {}) {
   const params = new URLSearchParams({ page, limit });
   if (userId) params.set('userId', userId);
-  if (assetId) params.set('assetId', assetId);
+  if (classification) params.set('classification', classification);
   if (from) params.set('from', from);
   if (to) params.set('to', to);
   const res = await fetch(`${BASE}/api/audit/global?${params}`, { credentials: 'include' });
@@ -35,7 +36,15 @@ export default function History() {
   const [page, setPage] = useState(1);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [filters, setFilters] = useState({ userId: '', assetId: '', from: '', to: '' });
+  const EMPTY = { userId: '', classification: '', from: '', to: '' };
+  const [filters, setFilters] = useState(EMPTY);
+  const [officers, setOfficers] = useState([]);
+
+  useEffect(() => {
+    getUsers()
+      .then(({ users }) => setOfficers(users))
+      .catch(() => setOfficers([]));
+  }, []);
 
   const load = useCallback(
     (p = page) => {
@@ -45,7 +54,7 @@ export default function History() {
         page: p,
         limit: 50,
         ...(filters.userId ? { userId: Number(filters.userId) } : {}),
-        ...(filters.assetId ? { assetId: Number(filters.assetId) } : {}),
+        ...(filters.classification ? { classification: filters.classification } : {}),
         ...(filters.from ? { from: new Date(filters.from).toISOString() } : {}),
         ...(filters.to ? { to: new Date(filters.to).toISOString() } : {}),
       };
@@ -79,18 +88,40 @@ export default function History() {
 
       {/* ── Filters ─────────────────────────────────────────────────────── */}
       <div className="card grid grid-cols-2 items-end gap-3 p-4 sm:grid-cols-3 lg:grid-cols-6">
-        <FilterField
-          label="User ID"
-          value={filters.userId}
-          onChange={(v) => setFilters((f) => ({ ...f, userId: v }))}
-          type="number"
-        />
-        <FilterField
-          label="Asset ID"
-          value={filters.assetId}
-          onChange={(v) => setFilters((f) => ({ ...f, assetId: v }))}
-          type="number"
-        />
+        <div className="col-span-2 block min-w-0 sm:col-span-1 lg:col-span-1">
+          <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-ink-faint">
+            Officer
+          </span>
+          <Select
+            ariaLabel="Filter by officer"
+            value={filters.userId}
+            onChange={(v) => setFilters((f) => ({ ...f, userId: v }))}
+            options={[
+              { value: '', label: 'All officers' },
+              ...officers.map((u) => ({
+                value: String(u.userId),
+                label: u.name,
+                hint: u.dept || '',
+              })),
+            ]}
+          />
+        </div>
+        <div className="col-span-2 block min-w-0 sm:col-span-1 lg:col-span-1">
+          <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-ink-faint">
+            Classification
+          </span>
+          <Select
+            ariaLabel="Filter by document classification"
+            value={filters.classification}
+            onChange={(v) => setFilters((f) => ({ ...f, classification: v }))}
+            options={[
+              { value: '', label: 'All classifications' },
+              { value: 'RESTRICTED', label: 'RESTRICTED' },
+              { value: 'CONFIDENTIAL', label: 'CONFIDENTIAL' },
+              { value: 'SECRET', label: 'SECRET' },
+            ]}
+          />
+        </div>
         <FilterField
           label="From"
           value={filters.from}
@@ -109,7 +140,7 @@ export default function History() {
         <button
           className="w-full rounded-full border border-line px-4 py-2.5 text-sm font-semibold text-ink-muted transition hover:bg-muted hover:text-ink"
           onClick={() => {
-            setFilters({ userId: '', assetId: '', from: '', to: '' });
+            setFilters(EMPTY);
           }}
         >
           Clear
@@ -166,17 +197,19 @@ export default function History() {
                     <td className="px-4 py-3.5 mono text-xs text-ink-muted whitespace-nowrap">
                       {new Date(e.at).toLocaleString()}
                     </td>
-                    <td className="px-4 py-3.5 font-bold text-ink text-sm">{e.userName}</td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-sm font-bold text-ink">
+                      {e.userName}
+                    </td>
                     <td className="px-4 py-3.5 text-ink-muted text-xs font-medium">
                       {e.department}
                     </td>
-                    <td
-                      className="px-4 py-3.5 text-ink text-sm font-medium max-w-[180px] truncate"
-                      title={e.assetTitle}
-                    >
-                      {e.assetTitle}
+                    <td className="max-w-[180px] px-4 py-3.5 text-sm font-medium text-ink">
+                      {/* Title truncates on its own line, so the badge is never the part cut off. */}
+                      <span className="block truncate" title={e.assetTitle}>
+                        {e.assetTitle}
+                      </span>
                       {e.assetClassification && (
-                        <span className="ml-1.5 rounded bg-surface px-1.5 py-0.5 text-[10px] font-bold text-ink-muted">
+                        <span className="mt-1 inline-block rounded bg-surface px-1.5 py-0.5 text-[10px] font-bold text-ink-muted">
                           {e.assetClassification}
                         </span>
                       )}

@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 400 400" width="400" height="400">
+  <!-- Provenance forensic register — the project's own seal. Original artwork. -->
+  <g fill="none" stroke="#000">
+    <!-- rings -->
+    <circle cx="200" cy="200" r="192" stroke-width="6" />
+    <circle cx="200" cy="200" r="183" stroke-width="1.6" />
+    <circle cx="200" cy="200" r="118" stroke-width="1.6" />
+    <circle cx="200" cy="200" r="111" stroke-width="4" />
+    <!-- beaded band between the rings -->
+    <circle cx="200" cy="200" r="104" stroke-width="3" stroke-dasharray="1 9.9" stroke-linecap="round" />
+  </g>
+
+  <!-- ring lettering, placed letter by letter around the circle -->
+  <g font-family="Times New Roman, Times, serif" font-weight="700" fill="#000">
+    <text x="70.89" y="123.64" font-size="30" text-anchor="middle" dominant-baseline="central" transform="rotate(-59.40 70.89 123.64)">P</text>
+    <text x="91.74" y="96.18" font-size="30" text-anchor="middle" dominant-baseline="central" transform="rotate(-46.20 91.74 96.18)">R</text>
+    <text x="118.30" y="74.20" font-size="30" text-anchor="middle" dominant-baseline="central" transform="rotate(-33.00 118.30 74.20)">O</text>
+    <text x="149.19" y="58.87" font-size="30" text-anchor="middle" dominant-baseline="central" transform="rotate(-19.80 149.19 58.87)">V</text>
+    <text x="182.76" y="50.99" font-size="30" text-anchor="middle" dominant-baseline="central" transform="rotate(-6.60 182.76 50.99)">E</text>
+    <text x="217.24" y="50.99" font-size="30" text-anchor="middle" dominant-baseline="central" transform="rotate(6.60 217.24 50.99)">N</text>
+    <text x="250.81" y="58.87" font-size="30" text-anchor="middle" dominant-baseline="central" transform="rotate(19.80 250.81 58.87)">A</text>
+    <text x="281.70" y="74.20" font-size="30" text-anchor="middle" dominant-baseline="central" transform="rotate(33.00 281.70 74.20)">N</text>
+    <text x="308.26" y="96.18" font-size="30" text-anchor="middle" dominant-baseline="central" transform="rotate(46.20 308.26 96.18)">C</text>
+    <text x="329.11" y="123.64" font-size="30" text-anchor="middle" dominant-baseline="central" transform="rotate(59.40 329.11 123.64)">E</text>
+    <text x="63.40" y="261.97" font-size="20" text-anchor="middle" dominant-baseline="central" transform="rotate(65.60 63.40 261.97)">F</text>
+    <text x="73.63" y="280.82" font-size="20" text-anchor="middle" dominant-baseline="central" transform="rotate(57.40 73.63 280.82)">O</text>
+    <text x="86.45" y="298.01" font-size="20" text-anchor="middle" dominant-baseline="central" transform="rotate(49.20 86.45 298.01)">R</text>
+    <text x="101.59" y="313.21" font-size="20" text-anchor="middle" dominant-baseline="central" transform="rotate(41.00 101.59 313.21)">E</text>
+    <text x="118.74" y="326.08" font-size="20" text-anchor="middle" dominant-baseline="central" transform="rotate(32.80 118.74 326.08)">N</text>
+    <text x="137.56" y="336.39" font-size="20" text-anchor="middle" dominant-baseline="central" transform="rotate(24.60 137.56 336.39)">S</text>
+    <text x="157.65" y="343.90" font-size="20" text-anchor="middle" dominant-baseline="central" transform="rotate(16.40 157.65 343.90)">I</text>
+    <text x="178.61" y="348.47" font-size="20" text-anchor="middle" dominant-baseline="central" transform="rotate(8.20 178.61 348.47)">C</text>
+    <text x="221.39" y="348.47" font-size="20" text-anchor="middle" dominant-baseline="central" transform="rotate(-8.20 221.39 348.47)">R</text>
+    <text x="242.35" y="343.90" font-size="20" text-anchor="middle" dominant-baseline="central" transform="rotate(-16.40 242.35 343.90)">E</text>
+    <text x="262.44" y="336.39" font-size="20" text-anchor="middle" dominant-baseline="central" transform="rotate(-24.60 262.44 336.39)">G</text>
+    <text x="281.26" y="326.08" font-size="20" text-anchor="middle" dominant-baseline="central" transform="rotate(-32.80 281.26 326.08)">I</text>
+    <text x="298.41" y="313.21" font-size="20" text-anchor="middle" dominant-baseline="central" transform="rotate(-41.00 298.41 313.21)">S</text>
+    <text x="313.55" y="298.01" font-size="20" text-anchor="middle" dominant-baseline="central" transform="rotate(-49.20 313.55 298.01)">T</text>
+    <text x="326.37" y="280.82" font-size="20" text-anchor="middle" dominant-baseline="central" transform="rotate(-57.40 326.37 280.82)">E</text>
+    <text x="336.60" y="261.97" font-size="20" text-anchor="middle" dominant-baseline="central" transform="rotate(-65.60 336.60 261.97)">R</text>
+  </g>
+  <!-- separators at the sides -->
+  <g fill="#000">
+    <polygon points="40,200 47,193 54,200 47,207" />
+    <polygon points="346,200 353,193 360,200 353,207" />
+  </g>
+
+  <!-- centre: a balance over a padlock -->
+  <g stroke="#000" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- balance beam and post -->
+    <line x1="200" y1="118" x2="200" y2="170" stroke-width="5" />
+    <circle cx="200" cy="114" r="6" fill="#000" stroke="none" />
+    <line x1="146" y1="130" x2="254" y2="130" stroke-width="5" />
+    <!-- pans -->
+    <line x1="146" y1="130" x2="130" y2="162" stroke-width="2" />
+    <line x1="146" y1="130" x2="162" y2="162" stroke-width="2" />
+    <path d="M 124 162 Q 146 180 168 162 Z" fill="#000" stroke-width="2" />
+    <line x1="254" y1="130" x2="238" y2="162" stroke-width="2" />
+    <line x1="254" y1="130" x2="270" y2="162" stroke-width="2" />
+    <path d="M 232 162 Q 254 180 276 162 Z" fill="#000" stroke-width="2" />
+    <!-- shackle -->
+    <path d="M 176 212 V 196 A 24 24 0 0 1 224 196 V 212" stroke-width="9" />
+  </g>
+  <!-- lock body with keyhole -->
+  <rect x="160" y="210" width="80" height="66" rx="8" fill="#000" />
+  <circle cx="200" cy="236" r="9" fill="#fff" />
+  <path d="M 195 240 L 192 262 H 208 L 205 240 Z" fill="#fff" />
+  <!-- small stars flanking the lock -->
+  <g fill="#000">
+    <polygon points="132,244 135,252 144,252 137,257 140,265 132,260 124,265 127,257 120,252 129,252" />
+    <polygon points="268,244 271,252 280,252 273,257 276,265 268,260 260,265 263,257 256,252 265,252" />
+  </g>
+  <!-- date line -->
+  <text x="200" y="288" font-family="Times New Roman, Times, serif" font-size="14" font-weight="700"
+        letter-spacing="3" text-anchor="middle" fill="#000">EST. 2026</text>
+</svg>
