@@ -1,6 +1,6 @@
 {
   "source": "attack-suite",
-  "generatedAt": "2026-09-22T10:45:19.364Z",
+  "generatedAt": "2026-09-25T18:40:34.728Z",
   "attacks": [
     {
       "name": "JPEG q90",
@@ -63,7 +63,7 @@
     {
       "delta": 4,
       "psnrDb": 57.60798333279559,
-      "bitsRecovered": 48
+      "bitsRecovered": 43
     },
     {
       "delta": 8,

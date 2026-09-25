@@ -58,10 +58,25 @@ export function buildPayload(receiptIdHex, versionTag = 1) {
 }
 
 /**
+ * Detects whether payload bits are degenerate (e.g. all zeros, all ones,
+ * or overwhelming zero/one bias from an unwatermarked or destroyed image).
+ * Genuine watermarks have balanced bit distribution (~50% 0s and 1s).
+ */
+export function isDegeneratePayload(bits) {
+  if (!bits || bits.length !== PAYLOAD_BITS) return true;
+  const idBits = bits.slice(0, SHORT_ID_BITS);
+  if (idBits === '0'.repeat(SHORT_ID_BITS) || idBits === '1'.repeat(SHORT_ID_BITS)) return true;
+  const zeros = bits.split('0').length - 1;
+  // A genuine 48-bit pseudo-random string has std dev 3.46; >= 39 zeros is > 4.3 sigma bias.
+  if (zeros >= 39 || zeros <= 9) return true;
+  return false;
+}
+
+/**
  * Inverse of buildPayload(), used by /api/trace on whatever A extracted.
  * A bad CRC does NOT throw — it is a signal that feeds the confidence score.
  * @param {string} bits 48 chars of '0'/'1'
- * @returns {{ shortId: bigint, crcOk: boolean, version: number }}
+ * @returns {{ shortId: bigint, crcOk: boolean, version: number, degenerate: boolean }}
  */
 export function parsePayload(bits) {
   if (typeof bits !== 'string' || bits.length !== PAYLOAD_BITS || /[^01]/.test(bits)) {
@@ -70,11 +85,13 @@ export function parsePayload(bits) {
   const idBits = bits.slice(0, SHORT_ID_BITS);
   const crcBits = bits.slice(SHORT_ID_BITS, SHORT_ID_BITS + CRC_BITS);
   const verBits = bits.slice(SHORT_ID_BITS + CRC_BITS);
+  const degenerate = isDegeneratePayload(bits);
 
   return {
     shortId: BigInt('0b' + idBits),
-    crcOk: crc8(idBits) === crcBits,
+    crcOk: !degenerate && crc8(idBits) === crcBits,
     version: parseInt(verBits, 2),
+    degenerate,
   };
 }
 

@@ -29,12 +29,12 @@ export default function LensEditor({ file, onTrace, onCancel, busy }) {
       .then((r) => {
         if (!live) return;
         setSize({ width: r.width, height: r.height });
-        // Default fallback targets the upper screen region (avoids laptop keyboards/desks)
+        // Default fallback targets the document/screen area
         const fallback = [
-          { x: Math.round(r.width * 0.08), y: Math.round(r.height * 0.12) },
-          { x: Math.round(r.width * 0.92), y: Math.round(r.height * 0.12) },
-          { x: Math.round(r.width * 0.92), y: Math.round(r.height * 0.58) },
-          { x: Math.round(r.width * 0.08), y: Math.round(r.height * 0.58) },
+          { x: Math.round(r.width * 0.05), y: Math.round(r.height * 0.08) },
+          { x: Math.round(r.width * 0.95), y: Math.round(r.height * 0.08) },
+          { x: Math.round(r.width * 0.95), y: Math.round(r.height * 0.85) },
+          { x: Math.round(r.width * 0.05), y: Math.round(r.height * 0.85) },
         ];
         setDetected(r.corners);
         setCorners(r.corners || fallback);

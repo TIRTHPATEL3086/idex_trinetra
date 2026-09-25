@@ -11,7 +11,7 @@ import { requireCap } from '../middleware/auth.js';
 import * as chain from '../core/chain.js';
 import * as bktree from '../core/bktree.js';
 import { hashes, extract, score, sha256, hamming, isPdf, extractPdf } from '../core/index.js';
-import { parsePayload, bitAgreement, bitsMatching, PAYLOAD_BITS } from '../core/payload.js';
+import { parsePayload, bitAgreement, bitsMatching, PAYLOAD_BITS, isDegeneratePayload } from '../core/payload.js';
 import { signDecryptionReceipt, verifyDecryptionSignature } from '../core/pqc.js';
 import { userKeys } from '../lib/keyring.js';
 import { generateDossier } from '../core/dossier.js';
@@ -120,30 +120,29 @@ async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {
     }
     const dims = `${size.width}x${size.height}`;
 
-    // Pass 1: standard alignment to candidate dimensions
-    if (!readings.has(dims)) {
-      try {
-        const aligned = await sharp(buffer)
-          .resize(size.width, size.height, { fit: 'fill' })
-          .png()
-          .toBuffer();
-        const reading = await extract(aligned);
-        readings.set(dims, { ...reading, rescaledTo: `${dims} px` });
-      } catch {}
-    }
-
-    const reading = readings.get(dims);
-    if (reading) {
-      let isCrcValid = false;
-      try {
-        isCrcValid = parsePayload(reading.payloadBits)?.crcOk;
-      } catch {}
-      if (isCrcValid) {
-        return reading;
+    // Pass 1: standard alignment to candidate dimensions across adaptive QIM deltas
+    for (const d of [12, 16, 14]) {
+      const readKey = `${dims}@${d}`;
+      if (!readings.has(readKey)) {
+        try {
+          const aligned = await sharp(buffer)
+            .resize(size.width, size.height, { fit: 'fill' })
+            .png()
+            .toBuffer();
+          const reading = await extract(aligned, d);
+          readings.set(readKey, { ...reading, rescaledTo: `${dims} px` });
+        } catch {}
       }
-      const matches = bitsMatching(reading.payloadBits, ev.payloadBits);
-      if (matches >= MIN_BITS_WITHOUT_CRC && (!best || matches > best.matches)) {
-        best = { reading, matches };
+
+      const reading = readings.get(readKey);
+      if (reading && !isDegeneratePayload(reading.payloadBits)) {
+        if (await namesARelease(reading.payloadBits)) {
+          return reading;
+        }
+        const matches = bitsMatching(reading.payloadBits, ev.payloadBits);
+        if (matches >= MIN_BITS_WITHOUT_CRC && (!best || matches > best.matches)) {
+          best = { reading, matches };
+        }
       }
     }
 
@@ -163,12 +162,8 @@ async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {
     }
 
     const toneReading = readings.get(toneKey);
-    if (toneReading) {
-      let isToneCrcValid = false;
-      try {
-        isToneCrcValid = parsePayload(toneReading.payloadBits)?.crcOk;
-      } catch {}
-      if (isToneCrcValid) {
+    if (toneReading && !isDegeneratePayload(toneReading.payloadBits)) {
+      if (await namesARelease(toneReading.payloadBits)) {
         return toneReading;
       }
       const matches = bitsMatching(toneReading.payloadBits, ev.payloadBits);
@@ -196,8 +191,8 @@ async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {
         } catch {}
       }
       const topReading = readings.get(topScreenKey);
-      if (topReading) {
-        if (parsePayload(topReading.payloadBits)?.crcOk) {
+      if (topReading && !isDegeneratePayload(topReading.payloadBits)) {
+        if (await namesARelease(topReading.payloadBits)) {
           return topReading;
         }
         const matches = bitsMatching(topReading.payloadBits, ev.payloadBits);
@@ -417,15 +412,18 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
       .sort((a, b) => b.matches - a.matches);
 
     // No valid CRC: accept candidate if agreement exceeds noise threshold.
-    // When a strong visual resemblance (pHashDist <= 24) is confirmed by BK-tree,
-    // a 28/48 agreement has p < 0.05 on that specific file, confirming the recipient.
+    // No valid CRC: accept candidate ONLY if agreement exceeds noise threshold,
+    // is not degenerate noise, and has a decisive lead over runner-up suspects.
     if (!event && rankedCandidates.length > 0) {
       const top = rankedCandidates[0];
-      const hasStrongVisualMatch = visualMatches(candidates).some(
-        (c) => c.id === top.event.id && c.pHashDist <= 24
-      );
-      const effectiveThreshold = hasStrongVisualMatch ? 28 : MIN_BITS_WITHOUT_CRC;
-      if (top.matches >= effectiveThreshold) {
+      const runnerUp = rankedCandidates[1];
+      const margin = runnerUp ? top.matches - runnerUp.matches : top.matches;
+      const isDegenerate = isDegeneratePayload(marked.payloadBits);
+
+      // Distinguishing BETWEEN recipients of the SAME broadcast document requires
+      // watermark statistical significance (at least MIN_BITS_WITHOUT_CRC = 34 bits).
+      // A tie or degenerate reading must NEVER arbitrarily accuse an innocent officer.
+      if (!isDegenerate && top.matches >= MIN_BITS_WITHOUT_CRC && margin >= 2) {
         event = top.event;
       }
     }
