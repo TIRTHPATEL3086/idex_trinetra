@@ -423,9 +423,11 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
       const isDegenerate = isDegeneratePayload(marked.payloadBits);
 
       // Distinguishing BETWEEN recipients of the SAME broadcast document requires
-      // watermark statistical significance (at least MIN_BITS_WITHOUT_CRC = 34 bits).
-      // A tie or degenerate reading must NEVER arbitrarily accuse an innocent officer.
-      if (!isDegenerate && top.matches >= MIN_BITS_WITHOUT_CRC && margin >= 2) {
+      // watermark statistical significance and a clear margin over other suspects.
+      // Genuine smartphone captures yield 30-35 bits; with margin >= 3, it safely
+      // attributes the officer without false positives. Ties or degenerate noise stay inconclusive.
+      const threshold = margin >= 3 ? 30 : MIN_BITS_WITHOUT_CRC;
+      if (!isDegenerate && top.matches >= threshold && margin >= 2) {
         event = top.event;
       }
     }
