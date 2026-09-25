@@ -94,11 +94,11 @@ const visualMatches = (candidates) => candidates.filter((c) => c.pHashDist != nu
  * @returns the best such reading, or null
  */
 async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {}) {
-  let matchedIds = visualMatches(candidates).map((c) => c.id);
+  let matchedIds = visualMatches(candidates).slice(0, 6).map((c) => c.id);
   if (!matchedIds.length) {
     const recent = await prisma.decryptionEvent.findMany({
       orderBy: { createdAt: 'desc' },
-      take: 40,
+      take: 6,
       select: { id: true },
     });
     matchedIds = recent.map((r) => r.id);
@@ -120,8 +120,8 @@ async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {
     }
     const dims = `${size.width}x${size.height}`;
 
-    // Pass 1: standard alignment to candidate dimensions across adaptive QIM deltas
-    for (const d of [12, 16, 14]) {
+    // Pass 1: standard alignment to candidate dimensions (fast non-rotating)
+    for (const d of [12, 16]) {
       const readKey = `${dims}@${d}`;
       if (!readings.has(readKey)) {
         try {
@@ -129,7 +129,7 @@ async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {
             .resize(size.width, size.height, { fit: 'fill' })
             .png()
             .toBuffer();
-          const reading = await extract(aligned, d);
+          const reading = await extract(aligned, d, { multiOrientation: false });
           readings.set(readKey, { ...reading, rescaledTo: `${dims} px` });
         } catch {}
       }
@@ -146,29 +146,31 @@ async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {
       }
     }
 
-    // Pass 2: tone-matched alignment to counteract camera glare & screen exposure
-    const toneKey = `${dims}#${ev.markedPath}`;
-    if (!readings.has(toneKey)) {
-      try {
-        const rawAligned = await sharp(buffer)
-          .resize(size.width, size.height, { fit: 'fill' })
-          .png()
-          .toBuffer();
-        const refBytes = await fs.readFile(ev.markedPath);
-        const toneAligned = await matchTones(rawAligned, refBytes);
-        const toneReading = await extract(toneAligned);
-        readings.set(toneKey, { ...toneReading, rescaledTo: `${dims} px (tones matched)` });
-      } catch {}
-    }
-
-    const toneReading = readings.get(toneKey);
-    if (toneReading && !isDegeneratePayload(toneReading.payloadBits)) {
-      if (await namesARelease(toneReading.payloadBits)) {
-        return toneReading;
+    // Pass 2: tone-matched alignment (only when optical lens or tones explicitly active)
+    if (tones) {
+      const toneKey = `${dims}#tones`;
+      if (!readings.has(toneKey)) {
+        try {
+          const rawAligned = await sharp(buffer)
+            .resize(size.width, size.height, { fit: 'fill' })
+            .png()
+            .toBuffer();
+          const refBytes = await fs.readFile(ev.markedPath);
+          const toneAligned = await matchTones(rawAligned, refBytes);
+          const toneReading = await extract(toneAligned, 12, { multiOrientation: false });
+          readings.set(toneKey, { ...toneReading, rescaledTo: `${dims} px (tones matched)` });
+        } catch {}
       }
-      const matches = bitsMatching(toneReading.payloadBits, ev.payloadBits);
-      if (matches >= MIN_BITS_WITHOUT_CRC && (!best || matches > best.matches)) {
-        best = { reading: toneReading, matches };
+
+      const toneReading = readings.get(toneKey);
+      if (toneReading && !isDegeneratePayload(toneReading.payloadBits)) {
+        if (await namesARelease(toneReading.payloadBits)) {
+          return toneReading;
+        }
+        const matches = bitsMatching(toneReading.payloadBits, ev.payloadBits);
+        if (matches >= MIN_BITS_WITHOUT_CRC && (!best || matches > best.matches)) {
+          best = { reading: toneReading, matches };
+        }
       }
     }
 
@@ -186,7 +188,7 @@ async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {
             .resize(size.width, size.height, { fit: 'fill' })
             .png()
             .toBuffer();
-          const topReading = await extract(topCrop);
+          const topReading = await extract(topCrop, 12, { multiOrientation: false });
           readings.set(topScreenKey, { ...topReading, rescaledTo: `${dims} px (keyboard clipped)` });
         } catch {}
       }
