@@ -80,6 +80,38 @@ export function TamperPanel({ tamper }) {
   );
 }
 
+/**
+ * How a photo or screenshot was read: the released page was found inside the
+ * upload and put back on its own pixel grid before the mark was read.
+ */
+export function CapturePanel({ capture }) {
+  if (!capture) return null;
+  const photo = capture.method === 'quad';
+  return (
+    <div className="card overflow-hidden">
+      <div className="border-b border-line bg-surface px-5 py-3.5 text-xs font-bold uppercase tracking-wider text-ink-muted">
+        {photo ? 'Phone photo' : 'Screenshot or crop'} · how it was read
+      </div>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 p-5 text-sm">
+        <dt className="text-ink-muted">Found</dt>
+        <dd className="text-ink">
+          {photo
+            ? 'The page’s corners were detected and the perspective straightened'
+            : 'The released page was located inside the image'}
+        </dd>
+        <dt className="text-ink-muted">Scale</dt>
+        <dd className="text-ink">{Math.round(capture.scale * 100)}% of the released size</dd>
+        <dt className="text-ink-muted">In view</dt>
+        <dd className="text-ink">
+          {Math.round(capture.visibleShare * 100)}% of the page — the mark was read from that part
+        </dd>
+        <dt className="text-ink-muted">Registered</dt>
+        <dd className="text-ink">Aligned to the released copy to within a pixel, tones matched</dd>
+      </dl>
+    </div>
+  );
+}
+
 export function LensPanel({ lens }) {
   if (!lens) return null;
   if (!lens.applied) {

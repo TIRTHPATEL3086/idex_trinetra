@@ -1,11 +1,11 @@
 import { Router } from 'express';
-import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import sharp from 'sharp';
 import { z } from 'zod';
 
 import { prisma } from '../lib/prisma.js';
+import { readCipher, readMarked, writeDurable } from '../lib/files.js';
 import { env } from '../lib/env.js';
 import { notFound, badInput } from '../lib/errors.js';
 import {
@@ -236,7 +236,10 @@ export async function executeDecryption({
   if (!encapsulation && user.kemPublicKey) {
     await encapsulateFor(assetId, user, contentKey);
   }
-  const ciphertext = await fs.readFile(asset.cipherPath);
+  const ciphertext = await readCipher(asset);
+  if (!ciphertext) {
+    throw notFound(`Asset ${assetId}: its encrypted file is missing from storage.`);
+  }
   const plaintext = aesDecrypt(
     ciphertext,
     contentKey,
@@ -340,10 +343,9 @@ export async function executeDecryption({
   }
 
   // Persist released copy
-  await fs.mkdir(env.markedDir, { recursive: true });
   const shortHexId = receiptIdHex.replace(/^0x/, '').slice(0, 16);
   const markedPath = path.join(env.markedDir, `${shortHexId}${extFor(asset.mimeType)}`);
-  await fs.writeFile(markedPath, marked.buffer);
+  await writeDurable('marked', markedPath, marked.buffer);
 
   // --- 10. INSERT DecryptionEvent ------------------------------------------
   const event = await prisma.decryptionEvent.create({
@@ -715,7 +717,8 @@ router.post('/inspect/:receiptId', requireAnyCap('decrypt:any'), async (req, res
     if (!event) throw notFound(`No release for ${key}`);
     if (!event.markedPath) throw notFound('That release has no stored copy to inspect.');
 
-    const buffer = await fs.readFile(event.markedPath);
+    const buffer = await readMarked(event);
+    if (!buffer) throw notFound('The released copy is missing from storage.');
     const recovered = isPdf(buffer)
       ? await extractPdf(buffer)
       : await extract(buffer, event.deltaUsed);
@@ -822,8 +825,8 @@ filesRouter.get('/marked/:receiptId', requireAuth, async (req, res, next) => {
       throw forbidden('That copy was released to another officer.');
     }
 
-    const buffer = await fs.readFile(event.markedPath).catch(() => null);
-    if (!buffer) throw notFound('The marked file is no longer on disk.');
+    const buffer = await readMarked(event);
+    if (!buffer) throw notFound('The released copy is missing from storage.');
 
     const mime = event.asset?.mimeType || 'application/octet-stream';
     const wantsStamp = Boolean(req.query.stamped) && mime.startsWith('image/');

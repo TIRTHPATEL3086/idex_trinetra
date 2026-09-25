@@ -156,7 +156,7 @@ export default function Timeline() {
 
                 <div className="mono mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-muted">
                   <span>receipt {shortHash(e.receiptId, 8, 4)}</span>
-                  {e.psnrDb != null && <span>PSNR {e.psnrDb.toFixed(1)} dB</span>}
+                  {e.psnrDb > 0 && <span>PSNR {e.psnrDb.toFixed(1)} dB</span>}
                   {e.userRef && <span>on-chain {shortHash(e.userRef, 6, 4)}</span>}
                   {e.etherscanUrl && (
                     <a

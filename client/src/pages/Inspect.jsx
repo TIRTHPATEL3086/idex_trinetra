@@ -122,7 +122,7 @@ export default function Inspect() {
                         {new Date(r.createdAt).toLocaleDateString()}
                       </span>
                       <span className="mono block text-[11px] text-ink-faint">
-                        {r.psnrDb?.toFixed(1)} dB
+                        {r.psnrDb > 0 ? `${r.psnrDb.toFixed(1)} dB` : '—'}
                       </span>
                     </span>
                   </button>
