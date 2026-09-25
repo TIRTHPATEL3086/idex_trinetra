@@ -67,8 +67,8 @@ export function isDegeneratePayload(bits) {
   const idBits = bits.slice(0, SHORT_ID_BITS);
   if (idBits === '0'.repeat(SHORT_ID_BITS) || idBits === '1'.repeat(SHORT_ID_BITS)) return true;
   const zeros = bits.split('0').length - 1;
-  // A genuine 48-bit pseudo-random string has std dev 3.46; >= 39 zeros is > 4.3 sigma bias.
-  if (zeros >= 39 || zeros <= 9) return true;
+  // A genuine 48-bit pseudo-random string has std dev 3.46; >= 42 zeros is > 5.1 sigma bias (p < 1e-7).
+  if (zeros >= 42 || zeros <= 6) return true;
   return false;
 }
 

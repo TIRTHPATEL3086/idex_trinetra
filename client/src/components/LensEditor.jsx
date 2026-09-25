@@ -30,11 +30,16 @@ export default function LensEditor({ file, onTrace, onCancel, busy }) {
         if (!live) return;
         setSize({ width: r.width, height: r.height });
         // Default fallback targets the document/screen area
+        const isPortrait = r.height > r.width * 1.1;
+        const topY = Math.round(r.height * (isPortrait ? 0.12 : 0.08));
+        const bottomY = Math.round(
+          isPortrait ? Math.min(r.height * 0.46, topY + (r.width * 0.9) / 1.55) : r.height * 0.88
+        );
         const fallback = [
-          { x: Math.round(r.width * 0.05), y: Math.round(r.height * 0.08) },
-          { x: Math.round(r.width * 0.95), y: Math.round(r.height * 0.08) },
-          { x: Math.round(r.width * 0.95), y: Math.round(r.height * 0.85) },
-          { x: Math.round(r.width * 0.05), y: Math.round(r.height * 0.85) },
+          { x: Math.round(r.width * 0.05), y: topY },
+          { x: Math.round(r.width * 0.95), y: topY },
+          { x: Math.round(r.width * 0.95), y: bottomY },
+          { x: Math.round(r.width * 0.05), y: bottomY },
         ];
         setDetected(r.corners);
         setCorners(r.corners || fallback);

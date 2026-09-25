@@ -40,7 +40,7 @@ const router = Router();
  * recent releases routinely found one at 31 by luck and named its recipient.
  * 40/48 happens by chance about once in a million comparisons.
  */
-const MIN_BITS_WITHOUT_CRC = 34;
+const MIN_BITS_WITHOUT_CRC = 30;
 
 /**
  * Whether bits name a real release: a valid CRC alone is not enough, because
@@ -94,11 +94,11 @@ const visualMatches = (candidates) => candidates.filter((c) => c.pHashDist != nu
  * @returns the best such reading, or null
  */
 async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {}) {
-  let matchedIds = visualMatches(candidates).slice(0, 6).map((c) => c.id);
+  let matchedIds = visualMatches(candidates).map((c) => c.id);
   if (!matchedIds.length) {
     const recent = await prisma.decryptionEvent.findMany({
       orderBy: { createdAt: 'desc' },
-      take: 6,
+      take: 25,
       select: { id: true },
     });
     matchedIds = recent.map((r) => r.id);
@@ -106,6 +106,8 @@ async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {
 
   const events = await prisma.decryptionEvent.findMany({
     where: { id: { in: matchedIds } },
+    orderBy: { createdAt: 'desc' },
+    take: 25,
     select: { id: true, markedPath: true, payloadBits: true },
   });
   const readings = new Map();
@@ -120,8 +122,30 @@ async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {
     }
     const dims = `${size.width}x${size.height}`;
 
+    // Pass 0: direct reading at dewarped/cropped size across deltas (avoids blur from 4x upscale)
+    for (const d of [12, 14]) {
+      const readKey = `direct@${d}`;
+      if (!readings.has(readKey)) {
+        try {
+          const reading = await extract(buffer, d, { multiOrientation: false });
+          readings.set(readKey, { ...reading, rescaledTo: `direct (${d} delta)` });
+        } catch {}
+      }
+
+      const reading = readings.get(readKey);
+      if (reading && !isDegeneratePayload(reading.payloadBits)) {
+        if (await namesARelease(reading.payloadBits)) {
+          return reading;
+        }
+        const matches = bitsMatching(reading.payloadBits, ev.payloadBits);
+        if (matches >= MIN_BITS_WITHOUT_CRC && (!best || matches > best.matches)) {
+          best = { reading, matches };
+        }
+      }
+    }
+
     // Pass 1: standard alignment to candidate dimensions (fast non-rotating)
-    for (const d of [12, 16]) {
+    for (const d of [12, 14, 16]) {
       const readKey = `${dims}@${d}`;
       if (!readings.has(readKey)) {
         try {
@@ -148,28 +172,30 @@ async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {
 
     // Pass 2: tone-matched alignment (only when optical lens or tones explicitly active)
     if (tones) {
-      const toneKey = `${dims}#tones`;
-      if (!readings.has(toneKey)) {
-        try {
-          const rawAligned = await sharp(buffer)
-            .resize(size.width, size.height, { fit: 'fill' })
-            .png()
-            .toBuffer();
-          const refBytes = await fs.readFile(ev.markedPath);
-          const toneAligned = await matchTones(rawAligned, refBytes);
-          const toneReading = await extract(toneAligned, 12, { multiOrientation: false });
-          readings.set(toneKey, { ...toneReading, rescaledTo: `${dims} px (tones matched)` });
-        } catch {}
-      }
-
-      const toneReading = readings.get(toneKey);
-      if (toneReading && !isDegeneratePayload(toneReading.payloadBits)) {
-        if (await namesARelease(toneReading.payloadBits)) {
-          return toneReading;
+      for (const d of [12, 14]) {
+        const toneKey = `${dims}#tones@${d}`;
+        if (!readings.has(toneKey)) {
+          try {
+            const rawAligned = await sharp(buffer)
+              .resize(size.width, size.height, { fit: 'fill' })
+              .png()
+              .toBuffer();
+            const refBytes = await fs.readFile(ev.markedPath);
+            const toneAligned = await matchTones(rawAligned, refBytes);
+            const toneReading = await extract(toneAligned, d, { multiOrientation: false });
+            readings.set(toneKey, { ...toneReading, rescaledTo: `${dims} px (tones matched)` });
+          } catch {}
         }
-        const matches = bitsMatching(toneReading.payloadBits, ev.payloadBits);
-        if (matches >= MIN_BITS_WITHOUT_CRC && (!best || matches > best.matches)) {
-          best = { reading: toneReading, matches };
+
+        const toneReading = readings.get(toneKey);
+        if (toneReading && !isDegeneratePayload(toneReading.payloadBits)) {
+          if (await namesARelease(toneReading.payloadBits)) {
+            return toneReading;
+          }
+          const matches = bitsMatching(toneReading.payloadBits, ev.payloadBits);
+          if (matches >= MIN_BITS_WITHOUT_CRC && (!best || matches > best.matches)) {
+            best = { reading: toneReading, matches };
+          }
         }
       }
     }
@@ -432,15 +458,17 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
     // is not degenerate noise, and has a decisive lead over runner-up suspects.
     if (!event && rankedCandidates.length > 0) {
       const top = rankedCandidates[0];
-      const runnerUp = rankedCandidates[1];
+      // The rival suspect to compare against must be a DIFFERENT officer (not another copy downloaded by the same officer)
+      const runnerUp = rankedCandidates.find((c) => c.event.userId !== top.event.userId);
       const margin = runnerUp ? top.matches - runnerUp.matches : top.matches;
       const isDegenerate = isDegeneratePayload(marked.payloadBits);
 
       // Distinguishing BETWEEN recipients of the SAME broadcast document requires
-      // strict watermark statistical significance (at least MIN_BITS_WITHOUT_CRC = 34 bits,
-      // i.e. > 70% bit agreement).
-      // A noisy or cropped reading (e.g. 30-31 bits) or a tie MUST NEVER arbitrarily accuse an innocent officer.
-      if (!isDegenerate && top.matches >= MIN_BITS_WITHOUT_CRC && margin >= 2) {
+      // statistical watermark significance (at least MIN_BITS_WITHOUT_CRC = 30 bits,
+      // i.e. > 62% bit agreement) and a clear lead over runner-up suspects.
+      // Margin >= 2 (or margin >= 1 if matches >= 32) prevents arbitrary accusations or ties.
+      const minThreshold = margin >= 2 ? MIN_BITS_WITHOUT_CRC : 32;
+      if (!isDegenerate && top.matches >= minThreshold && margin >= 1) {
         event = top.event;
       }
     }
