@@ -128,17 +128,6 @@ export const DEMO_ACCOUNTS = [
     desc: 'Full custody & management',
   },
   {
-    role: 'INVESTIGATOR',
-    short: 'Investigator',
-    badge: 'bg-chromia-purple-500/20 text-chromia-purple-300 border border-chromia-purple-500/30',
-    title: 'Forensic Analyst',
-    name: 'Analyst A-004',
-    dept: 'Forensics Wing',
-    email: 'a004@example.gov',
-    password: 'analyst123',
-    desc: 'Leak detection & forensic tracing',
-  },
-  {
     role: 'OFFICER',
     short: 'Officer 1',
     badge: 'bg-accent text-noir',
