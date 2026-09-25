@@ -141,65 +141,43 @@ function ihaar2D(coeffs, w, h) {
 // ========================== 2-Level DWT ====================================
 
 /**
- * 2-level forward: DWT the whole image, then DWT the LL quadrant again.
- * Returns { coeffs, w, h, halfW, halfH, qW, qH } where
- *   level-1 quadrants are at [0..halfW-1, 0..halfH-1] = LL, etc.
- *   level-2 LL is the top-left qW×qH block of the level-1 LL.
+ * How deep the transform goes. The mark sits in the HL and LH bands of the
+ * deepest level, one coefficient per BLOCK x BLOCK square of pixels.
+ *
+ * Level 3 (8x8 squares) rather than 2 (4x4): a leak is rarely the file
+ * itself. A page shown fit-to-screen and screenshotted is shrunk to about
+ * half size, and a messenger then re-saves it as a JPEG; detail on a
+ * four-pixel scale does not survive both, detail on an eight-pixel one does.
  */
-function twoLevelForward(pixels, w, h) {
-  // Level 1
-  const level1 = haar2D(pixels, w, h);
-  const halfW = w >> 1;
-  const halfH = h >> 1;
+const LEVELS = 3;
+const BLOCK = 1 << LEVELS;
 
-  // Level 2: operate on the LL quadrant (top-left halfW×halfH)
-  const ll = new Float64Array(halfW * halfH);
-  for (let y = 0; y < halfH; y++) {
-    for (let x = 0; x < halfW; x++) {
-      ll[y * halfW + x] = level1[y * w + x];
-    }
+/** Forward DWT, LEVELS deep: each level transforms the previous one's LL. */
+function forwardDWT(pixels, w, h) {
+  const coeffs = new Float64Array(pixels);
+  for (let l = 0; l < LEVELS; l++) {
+    const cw = w >> l;
+    const ch = h >> l;
+    const sub = new Float64Array(cw * ch);
+    for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) sub[y * cw + x] = coeffs[y * w + x];
+    const t = haar2D(sub, cw, ch);
+    for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) coeffs[y * w + x] = t[y * cw + x];
   }
-  const level2LL = haar2D(ll, halfW, halfH);
-
-  // Write level-2 result back into the level-1 LL quadrant
-  const coeffs = new Float64Array(level1);
-  for (let y = 0; y < halfH; y++) {
-    for (let x = 0; x < halfW; x++) {
-      coeffs[y * w + x] = level2LL[y * halfW + x];
-    }
-  }
-
-  return { coeffs, w, h, halfW, halfH, qW: halfW >> 1, qH: halfH >> 1 };
+  return { coeffs };
 }
 
-/**
- * 2-level inverse: undo the inner DWT on the LL quadrant, then undo the outer.
- */
-function twoLevelInverse(coeffs, w, h) {
-  const halfW = w >> 1;
-  const halfH = h >> 1;
-
-  // Extract the level-2 data from the LL quadrant
-  const ll2 = new Float64Array(halfW * halfH);
-  for (let y = 0; y < halfH; y++) {
-    for (let x = 0; x < halfW; x++) {
-      ll2[y * halfW + x] = coeffs[y * w + x];
-    }
-  }
-
-  // Inverse level 2 → reconstructed LL
-  const llRecon = ihaar2D(ll2, halfW, halfH);
-
-  // Write back
+/** Inverse of forwardDWT, deepest level first. */
+function inverseDWT(coeffs, w, h) {
   const working = new Float64Array(coeffs);
-  for (let y = 0; y < halfH; y++) {
-    for (let x = 0; x < halfW; x++) {
-      working[y * w + x] = llRecon[y * halfW + x];
-    }
+  for (let l = LEVELS - 1; l >= 0; l--) {
+    const cw = w >> l;
+    const ch = h >> l;
+    const sub = new Float64Array(cw * ch);
+    for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) sub[y * cw + x] = working[y * w + x];
+    const t = ihaar2D(sub, cw, ch);
+    for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) working[y * w + x] = t[y * cw + x];
   }
-
-  // Inverse level 1
-  return ihaar2D(working, w, h);
+  return working;
 }
 
 // ========================== Keyed Permutation ==============================
@@ -236,9 +214,15 @@ function keyedPermutation(n, seed) {
 
 // ========================== QIM ============================================
 
+/**
+ * Move the coefficient to the NEAREST point of the bit's lattice — up or down,
+ * at most half a step. Always moving up within the current cell (the old
+ * rule) pushed a flat white page past 255, where the change was clipped off
+ * and the mark did not survive a JPEG. extractBit reads both the same way.
+ */
 function embedBit(c, bit, delta) {
-  const q = Math.floor(c / delta);
-  return delta * (q + (bit === 0 ? 0.25 : 0.75));
+  const offset = bit === 0 ? 0.25 : 0.75;
+  return delta * (Math.round(c / delta - offset) + offset);
 }
 
 function extractBit(c, delta) {
@@ -249,38 +233,26 @@ function extractBit(c, delta) {
 // ========================== Collect embeddable coefficient indices ==========
 
 /**
- * Returns indices into the coefficient array for HL and LH sub-bands.
- * For robustness against JPEG, we SKIP Level 1 (it's completely destroyed by quantization).
- * We embed ONLY into Level 2 HL and LH bands.
+ * Indices into the coefficient array of the deepest level's HL and LH bands.
+ * The finer levels are left alone: JPEG quantisation and any rescaling
+ * destroy them first.
  */
 function getEmbeddableIndices(w, h) {
-  const halfW = w >> 1;
-  const halfH = h >> 1;
-  const qW = halfW >> 1;
-  const qH = halfH >> 1;
+  const lw = w >> LEVELS; // width of the deepest LL, and of each of its bands
+  const lh = h >> LEVELS;
   const indices = [];
-
-  // Level 2 (inside the LL quadrant): HL2 and LH2
-  // HL2: rows [0, qH), cols [qW, halfW)
-  for (let y = 0; y < qH; y++) {
-    for (let x = qW; x < halfW; x++) {
-      indices.push(y * w + x);
-    }
-  }
-  // LH2: rows [qH, halfH), cols [0, qW)
-  for (let y = qH; y < halfH; y++) {
-    for (let x = 0; x < qW; x++) {
-      indices.push(y * w + x);
-    }
-  }
-
+  // HL: rows [0, lh), cols [lw, 2*lw)
+  for (let y = 0; y < lh; y++) for (let x = lw; x < 2 * lw; x++) indices.push(y * w + x);
+  // LH: rows [lh, 2*lh), cols [0, lw)
+  for (let y = lh; y < 2 * lh; y++) for (let x = 0; x < lw; x++) indices.push(y * w + x);
   return indices;
 }
 
 // ========================== Pad to power-of-2 multiples of 4 ===============
 
-function padTo4(n) {
-  return n % 4 === 0 ? n : n + (4 - (n % 4));
+/** Round up to whole BLOCKs, so every level halves evenly. */
+function padToBlock(n) {
+  return Math.ceil(n / BLOCK) * BLOCK;
 }
 
 // ========================== RGB ↔ Y channel ================================
@@ -309,12 +281,15 @@ export async function embed(imageBuffer, payloadBits, delta = 12) {
   const meta = await sharp(imageBuffer).metadata();
   const origW = meta.width;
   const origH = meta.height;
-  const paddedW = padTo4(origW);
-  const paddedH = padTo4(origH);
+  const paddedW = padToBlock(origW);
+  const paddedH = padToBlock(origH);
 
   const rawRGB = await sharp(imageBuffer)
-    .resize(paddedW, paddedH, { fit: 'fill' })
     .removeAlpha()
+    .toColourspace('srgb')
+    // Repeat the edge pixels out to the padded size. Resizing instead would
+    // resample the whole page by a pixel or two, blurring every text edge.
+    .extend({ right: paddedW - meta.width, bottom: paddedH - meta.height, extendWith: 'copy' })
     .raw()
     .toBuffer();
 
@@ -322,7 +297,7 @@ export async function embed(imageBuffer, payloadBits, delta = 12) {
   const yChannel = rgbToY(rawRGB, paddedW, paddedH);
 
   // 3. 2-level forward DWT
-  const dwt = twoLevelForward(yChannel, paddedW, paddedH);
+  const dwt = forwardDWT(yChannel, paddedW, paddedH);
   const coeffs = dwt.coeffs;
 
   // 4. Get embeddable HL+LH indices and apply keyed permutation
@@ -340,7 +315,7 @@ export async function embed(imageBuffer, payloadBits, delta = 12) {
   }
 
   // 6. Inverse 2-level DWT → modified Y channel
-  const reconstructedY = twoLevelInverse(coeffs, paddedW, paddedH);
+  const reconstructedY = inverseDWT(coeffs, paddedW, paddedH);
 
   // 7. Apply the Y delta back to the original RGB pixels
   const markedRGB = Buffer.from(rawRGB);
@@ -356,7 +331,8 @@ export async function embed(imageBuffer, payloadBits, delta = 12) {
   const markedBuffer = await sharp(markedRGB, {
     raw: { width: paddedW, height: paddedH, channels: 3 },
   })
-    .resize(origW, origH, { fit: 'fill' })
+    // Cut the padding back off: the page itself is never resampled.
+    .extract({ left: 0, top: 0, width: origW, height: origH })
     .png()
     .toBuffer();
 
@@ -383,12 +359,15 @@ async function extractSingle(imageBuffer, delta = 12) {
   const meta = await sharp(imageBuffer).metadata();
   const origW = meta.width;
   const origH = meta.height;
-  const paddedW = padTo4(origW);
-  const paddedH = padTo4(origH);
+  const paddedW = padToBlock(origW);
+  const paddedH = padToBlock(origH);
 
   const rawRGB = await sharp(imageBuffer)
-    .resize(paddedW, paddedH, { fit: 'fill' })
     .removeAlpha()
+    .toColourspace('srgb')
+    // Repeat the edge pixels out to the padded size. Resizing instead would
+    // resample the whole page by a pixel or two, blurring every text edge.
+    .extend({ right: paddedW - meta.width, bottom: paddedH - meta.height, extendWith: 'copy' })
     .raw()
     .toBuffer();
 
@@ -396,7 +375,7 @@ async function extractSingle(imageBuffer, delta = 12) {
   const yChannel = rgbToY(rawRGB, paddedW, paddedH);
 
   // 3. 2-level forward DWT
-  const dwt = twoLevelForward(yChannel, paddedW, paddedH);
+  const dwt = forwardDWT(yChannel, paddedW, paddedH);
   const coeffs = dwt.coeffs;
 
   // 4. Same keyed permutation as embed
@@ -437,6 +416,104 @@ async function extractSingle(imageBuffer, delta = 12) {
   }
 
   return { payloadBits, bitConfidence, eccCorrected, rotationAngle: 0 };
+}
+
+/**
+ * Read the 48 bits from only the part of the page a capture actually shows.
+ *
+ * A screenshot or photo of a tall document usually holds just the part that
+ * was on screen. Once that part has been put back where it belongs on a
+ * canvas the size of the released copy, every coefficient outside it would
+ * read as noise — so only positions whose 4x4 pixel block lies inside
+ * `visible` get a vote. Each bit is spread over REPEAT_FACTOR positions
+ * scattered across the page, so a partial view still carries most of them.
+ *
+ * @param {Buffer} imageBuffer  aligned to the released copy's size
+ * @param {number} delta        the QIM step that release was marked with
+ * @param {{x0:number,y0:number,x1:number,y1:number}|null} visible
+ *        the captured region, in the image's own pixels; null = all of it
+ * @returns {Promise<{ payloadBits: string, bitConfidence: number, eccCorrected: boolean, votes: number }>}
+ */
+export async function extractVisible(imageBuffer, delta = 12, visible = null) {
+  const seed = env.watermarkSeed;
+  const numBits = 48;
+
+  const meta = await sharp(imageBuffer).metadata();
+  const paddedW = padToBlock(meta.width);
+  const paddedH = padToBlock(meta.height);
+  const rawRGB = await sharp(imageBuffer)
+    .removeAlpha()
+    .toColourspace('srgb')
+    // Repeat the edge pixels out to the padded size. Resizing instead would
+    // resample the whole page by a pixel or two, blurring every text edge.
+    .extend({ right: paddedW - meta.width, bottom: paddedH - meta.height, extendWith: 'copy' })
+    .raw()
+    .toBuffer();
+
+  const { coeffs } = forwardDWT(rgbToY(rawRGB, paddedW, paddedH), paddedW, paddedH);
+  const rawIndices = getEmbeddableIndices(paddedW, paddedH);
+  const perm = keyedPermutation(rawIndices.length, seed);
+  const permutedIndices = perm.map((i) => rawIndices[i]);
+
+  // The visible rectangle in padded pixels.
+  const sx = paddedW / meta.width;
+  const sy = paddedH / meta.height;
+  const box = visible
+    ? {
+        x0: visible.x0 * sx,
+        y0: visible.y0 * sy,
+        x1: visible.x1 * sx,
+        y1: visible.y1 * sy,
+      }
+    : null;
+  const lw = paddedW >> LEVELS;
+  const lh = paddedH >> LEVELS;
+  const inView = (idx) => {
+    if (!box) return true;
+    const y = Math.floor(idx / paddedW);
+    const x = idx % paddedW;
+    // HL sits right of the deepest LL block, LH below it; either way one
+    // coefficient summarises one BLOCK x BLOCK square of pixels.
+    const bx = y < lh ? x - lw : x;
+    const by = y < lh ? y : y - lh;
+    return (
+      bx * BLOCK >= box.x0 &&
+      by * BLOCK >= box.y0 &&
+      bx * BLOCK + BLOCK <= box.x1 &&
+      by * BLOCK + BLOCK <= box.y1
+    );
+  };
+
+  const bits = [];
+  let totalAgreement = 0;
+  let votesUsed = 0;
+  for (let b = 0; b < numBits; b++) {
+    let ones = 0;
+    let n = 0;
+    for (let r = 0; r < REPEAT_FACTOR; r++) {
+      const idx = permutedIndices[(b * REPEAT_FACTOR + r) % permutedIndices.length];
+      if (!inView(idx)) continue;
+      ones += extractBit(coeffs[idx], delta);
+      n++;
+    }
+    votesUsed += n;
+    bits.push(n && ones > n / 2 ? 1 : 0);
+    totalAgreement += n ? Math.max(ones, n - ones) / n : 0.5;
+  }
+
+  let payloadBits = bits.join('');
+  let eccCorrected = false;
+  try {
+    const { rsDecode } = await import('./ecc.js');
+    const decoded = rsDecode(payloadBits);
+    if (decoded.corrected && decoded.bits) {
+      eccCorrected = true;
+      payloadBits = decoded.bits;
+    }
+  } catch {
+    // ECC not available
+  }
+  return { payloadBits, bitConfidence: totalAgreement / numBits, eccCorrected, votes: votesUsed };
 }
 
 /**

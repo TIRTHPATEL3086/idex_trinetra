@@ -22,6 +22,7 @@ import { env } from '../server/lib/env.js';
 import { escrowKeys } from '../server/lib/keyring.js';
 import { assetRef, userRef, hexToBuffer } from '../server/lib/refs.js';
 import { hashPassword } from '../server/lib/auth.js';
+import { writeDurable } from '../server/lib/files.js';
 import { generatePqcKeyPair, encryptKeyBundle, encapsulateKey } from '../server/core/pqc.js';
 
 const prisma = new PrismaClient();
@@ -94,6 +95,7 @@ async function main() {
   await prisma.assetKeyEncapsulation.deleteMany();
   await prisma.asset.deleteMany();
   await prisma.user.deleteMany();
+  await prisma.storedFile.deleteMany();
 
   // ---- users -------------------------------------------------------------
   const userPqcMap = new Map();
@@ -145,7 +147,7 @@ async function main() {
     const contentKey = crypto.randomBytes(32);
     const { ciphertext, iv, authTag } = encrypt(plaintext, contentKey);
     const cipherPath = path.join(env.cipherDir, `asset-${id}.bin`);
-    await fs.writeFile(cipherPath, ciphertext);
+    await writeDurable('cipher', cipherPath, ciphertext);
 
     const asset = await prisma.asset.create({
       data: {

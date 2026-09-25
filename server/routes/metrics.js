@@ -41,26 +41,22 @@ router.get('/', requireCap('metrics:read'), async (req, res, next) => {
     });
 
     const totalEvents = await prisma.decryptionEvent.count({ where: scoped });
-    let avgPsnr = 0;
-    let minPsnr = null;
-    let maxPsnr = null;
 
-    if (recentEvents.length > 0) {
-      let sum = 0;
-      for (const ev of recentEvents) {
-        sum += ev.psnrDb;
-        if (minPsnr === null || ev.psnrDb < minPsnr) minPsnr = ev.psnrDb;
-        if (maxPsnr === null || ev.psnrDb > maxPsnr) maxPsnr = ev.psnrDb;
-      }
-      avgPsnr = Math.round((sum / recentEvents.length) * 10) / 10;
-      minPsnr = Math.round(minPsnr * 10) / 10;
-      maxPsnr = Math.round(maxPsnr * 10) / 10;
-    }
+    // PSNR only from releases where it was measured. A PDF release has no
+    // single raster to compare and is stored as 0; averaging those in as if
+    // they were real 0 dB copies is what made these figures jump about.
+    const measured = recentEvents.filter((e) => Number.isFinite(e.psnrDb) && e.psnrDb > 0);
+    const round1 = (v) => Math.round(v * 10) / 10;
+    const psnrs = measured.map((e) => e.psnrDb);
+    const avgPsnr = psnrs.length ? round1(psnrs.reduce((a, b) => a + b, 0) / psnrs.length) : 0;
+    const minPsnr = psnrs.length ? round1(Math.min(...psnrs)) : null;
+    const maxPsnr = psnrs.length ? round1(Math.max(...psnrs)) : null;
 
     const live = {
       classification,
       totalDecryptions: totalEvents,
       sampleCount: recentEvents.length,
+      measuredCount: measured.length,
       avgPsnr,
       minPsnr,
       maxPsnr,
@@ -72,9 +68,9 @@ router.get('/', requireCap('metrics:read'), async (req, res, next) => {
       maxDelta: recentEvents.length
         ? Math.max(...recentEvents.map((e) => e.deltaUsed))
         : env.watermarkDelta,
-      history: recentEvents
+      history: measured
         .map((e, idx) => ({
-          index: recentEvents.length - idx,
+          index: measured.length - idx,
           psnrDb: Math.round(e.psnrDb * 10) / 10,
           delta: e.deltaUsed,
           classification: e.asset?.classification,

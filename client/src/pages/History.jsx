@@ -233,7 +233,7 @@ export default function History() {
                       )}
                     </td>
                     <td className="px-4 py-3.5 mono text-xs font-semibold text-ink">
-                      {e.psnrDb != null ? `${Number(e.psnrDb).toFixed(1)} dB` : '—'}
+                      {e.psnrDb > 0 ? `${Number(e.psnrDb).toFixed(1)} dB` : '—'}
                     </td>
                     <td className="px-4 py-3.5">
                       {e.signatureAlgorithm ? (

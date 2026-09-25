@@ -21,7 +21,7 @@ model Asset {
   iv             Bytes? // 12 bytes
   authTag        Bytes? // 16 bytes
   originalSha    Bytes // SHA-256 of the plaintext
-  assetRef       Bytes   @unique // keccak256(assetId || salt) — the on-chain handle
+  assetRef       Bytes    @unique // keccak256(assetId || salt) — the on-chain handle
   sizeBytes      Int      @default(0)
   createdAt      DateTime @default(now())
 
@@ -41,7 +41,6 @@ enum Role {
   OFFICER // Clearance holder — may release a copy to themselves only.
   INVESTIGATOR // Forensic analyst — traces leaks, and cannot decrypt anything.
 }
-
 
 /// A person who may decrypt. The NAME NEVER GOES ON CHAIN — only `userRef`.
 model User {
@@ -72,18 +71,18 @@ model User {
 
 /// Per-recipient broadcast encryption key encapsulation (NIST ML-KEM-768).
 model AssetKeyEncapsulation {
-  id            Int      @id @default(autoincrement())
-  asset         Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
-  assetId       Int
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId        Int
+  id      Int   @id @default(autoincrement())
+  asset   Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  assetId Int
+  user    User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId  Int
 
-  kemCiphertext Bytes    // ML-KEM-768 encapsulated key (1088 bytes)
-  encryptedKey  Bytes    // AES-256-GCM encrypted content key (32 bytes)
-  iv            Bytes    // 12 bytes
-  authTag       Bytes    // 16 bytes
+  kemCiphertext      Bytes // ML-KEM-768 encapsulated key (1088 bytes)
+  encryptedKey       Bytes // AES-256-GCM encrypted content key (32 bytes)
+  iv                 Bytes // 12 bytes
+  authTag            Bytes // 16 bytes
   allottedPassphrase String? // Passphrase allotted by Admin for this officer & document
-  createdAt     DateTime @default(now())
+  createdAt          DateTime @default(now())
 
   @@unique([assetId, userId])
   @@index([assetId])
@@ -124,11 +123,11 @@ model DecryptionEvent {
   blockNumber BigInt?
   chainMode   String  @default("local") // local | sepolia | off
 
-  deltaUsed Int
-  psnrDb    Float
+  deltaUsed    Int
+  psnrDb       Float
   // Whether the fragile (tamper-evidence) layer was embedded in this release.
   // Releases made before it existed carry only the robust layer.
-  fragileLayer Boolean @default(false)
+  fragileLayer Boolean  @default(false)
   createdAt    DateTime @default(now())
 
   @@index([pHash])
@@ -155,4 +154,14 @@ model Investigation {
   createdAt    DateTime @default(now())
 
   @@index([createdAt])
+}
+
+/// A copy of each file the server writes to disk: an asset's ciphertext and
+/// every released (marked) copy. Hosts with ephemeral disks lose `data/` on
+/// each restart; this keeps decryption, previews and tracing working after
+/// one. The disk stays the fast path and is refilled from here on a miss.
+model StoredFile {
+  key       String   @id // "cipher/asset-12.bin", "marked/0a1b2c3d.png"
+  bytes     Bytes
+  createdAt DateTime @default(now())
 }

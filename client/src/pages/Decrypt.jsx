@@ -579,7 +579,7 @@ function Receipt({ result, officer, asset, device }) {
           <Reg k="Department" v={officer?.dept} />
           <Reg k="Document" v={asset?.title} />
           <Reg k="Device" v={device} />
-          <Reg k="PSNR" v={result.psnrDb != null ? `${result.psnrDb.toFixed(1)} dB` : '—'} />
+          <Reg k="PSNR" v={result.psnrDb > 0 ? `${result.psnrDb.toFixed(1)} dB` : '—'} />
           <Reg k="QIM strength" v={`Δ = ${result.deltaUsed}`} />
         </dl>
 

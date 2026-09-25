@@ -10,7 +10,7 @@
  *   systems, and is the ground truth used by extractPdf().
  *
  * Layer 2 — Rasterized DWT (Invisible Image XObject):
- *   Generates a 128×128 grayscale tile, applies the same Haar-DWT + QIM
+ *   Generates a 256×256 grayscale tile, applies the same Haar-DWT + QIM
  *   pipeline as embed() in watermark.js, and injects it as a transparent
  *   image XObject on every page. This survives print-scan cycles (the raster
  *   mark survives rasterization — metadata doesn't).
@@ -28,6 +28,8 @@
 import { PDFDocument, rgb } from 'pdf-lib';
 import sharp from 'sharp';
 
+import { env } from '../lib/env.js';
+
 /**
  * Checks if a buffer is a PDF file by inspecting the magic header bytes.
  * @param {Buffer} buffer
@@ -39,7 +41,7 @@ export function isPdf(buffer) {
 }
 
 /**
- * Generate a rasterized DWT-watermarked tile (128×128 JPEG) carrying the
+ * Generate a rasterized DWT-watermarked tile (256×256 JPEG) carrying the
  * payload bits. The tile is a nearly-uniform mid-gray image so the delta
  * from watermarking is perceptually negligible.
  *
@@ -47,7 +49,9 @@ export function isPdf(buffer) {
  * @returns {Promise<Buffer>}   JPEG bytes of the watermarked tile
  */
 async function generateWatermarkTile(payloadBits) {
-  const SIZE = 128;
+  // 256 px: the mark sits in 8x8 blocks (watermark.js LEVELS = 3), and
+  // a smaller tile has too few of them to hold every copy of every bit.
+  const SIZE = 256;
   // Create a mid-gray base tile (RGB, 3 channels)
   const grayValue = 127;
   const raw = Buffer.alloc(SIZE * SIZE * 3, grayValue);
@@ -62,7 +66,7 @@ async function generateWatermarkTile(payloadBits) {
   try {
     // Use the same Haar-DWT + QIM embed pipeline as images
     const { embed } = await import('./watermark.js');
-    const result = await embed(pngTile, payloadBits, 10); // delta=10 for subtle mark
+    const result = await embed(pngTile, payloadBits, env.watermarkDelta);
     // Convert to JPEG for compact embedding in PDF (lossless enough at Q90)
     return await sharp(result.buffer).jpeg({ quality: 90 }).toBuffer();
   } catch (err) {
@@ -76,7 +80,7 @@ async function generateWatermarkTile(payloadBits) {
 /**
  * Embeds a dual-layer provenance watermark into a PDF document:
  *   - Metadata layer: receipt ID + payload bits in PDF Subject/Keywords
- *   - Rasterized DWT layer: 128×128 JPEG tile injected as transparent XObject
+ *   - Rasterized DWT layer: 256×256 JPEG tile injected as transparent XObject
  *
  * @param {Buffer} pdfBuffer    Plaintext PDF bytes
  * @param {string} payloadBits  Exactly 48 chars of '0'/'1'
@@ -137,8 +141,10 @@ export async function embedPdf(pdfBuffer, payloadBits, receiptIdHex) {
   const modifiedBytes = await doc.save();
   return {
     buffer: Buffer.from(modifiedBytes),
-    psnrDb: 58.0, // PDF raster tile at 4% opacity is visually lossless
-    deltaUsed: 10,
+    // Not measured: a PDF has no single raster to compare, so its release
+    // records no PSNR and stays out of the pixel statistics.
+    psnrDb: null,
+    deltaUsed: env.watermarkDelta,
   };
 }
 

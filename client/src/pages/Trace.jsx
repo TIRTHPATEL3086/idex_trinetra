@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { traceFile, getInvestigations, shortHash } from '../lib/api.js';
 import LensEditor from '../components/LensEditor.jsx';
-import { LensPanel, TamperPanel } from '../components/ForensicPanels.jsx';
+import { CapturePanel, LensPanel, TamperPanel } from '../components/ForensicPanels.jsx';
 import { Header, Notice } from './Assets.jsx';
 import Select from '../components/Select.jsx';
 
@@ -187,10 +187,11 @@ export default function Trace() {
           className="mt-0.5 h-4 w-4 shrink-0 rounded text-accent focus:ring-accent"
         />
         <span className="min-w-0">
-          <span className="block text-sm font-bold text-ink">Optical forensic lens</span>
+          <span className="block text-sm font-bold text-ink">Place the corners by hand</span>
           <span className="block text-xs leading-relaxed text-ink-muted">
-            For a phone photo of a screen: find the document&rsquo;s corners, straighten the
-            perspective, remove moir&eacute; and correct the exposure before reading the watermark.
+            Phone photos and screenshots are recognised automatically &mdash; the page is found,
+            straightened and read without this. Turn it on only if a photo is not traced, to mark
+            the document&rsquo;s four corners yourself.
           </span>
         </span>
       </label>
@@ -755,6 +756,7 @@ function Verdict({ result }) {
       </div>
 
       <LensPanel lens={result.lens} />
+      <CapturePanel capture={result.capture} />
       <TamperPanel tamper={result.tamper} />
     </div>
   );
