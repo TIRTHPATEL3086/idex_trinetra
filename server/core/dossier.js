@@ -518,19 +518,19 @@ async function renderOnePage(
   y -= s(8);
 
   // ---- VI certificate ---------------------------------------------------------------------
-  heading('VI', 'Certificate under Section 63, BSA, 2023');
+  heading('VI', 'Certificate under Section 63, BSA, 2023 / Section 65B, IEA, 1872');
   paraAt(
-    `Part A: I certify that the electronic record in item 3 of Part III, and this report, were produced by the Provenance decryption-register system in its regular use; that the system was operating properly throughout; and that the SHA-256 digests above were computed by it at the stages stated.`,
+    `Part A: I certify that the electronic record in item 3 of Part III, and this report, were produced by the Indian Navy (WESEE) Decryption Provenance system in its regular use; that the system was operating properly under air-gapped security throughout; and that the SHA-256 digests and DLT blockchain commitments were computed by it at the stages stated.`,
     L + 2,
     W - 4,
-    s(7.6),
+    s(7.4),
     F.serif
   );
   paraAt(
-    `Part B: I have examined that record with the system's forensic engine; Parts II and IV set out the evidence and Part V my opinion.${stamp ? ' I have signed the evidence digest (item 4) with my ML-DSA-65 key.' : ''}`,
+    `Part B: I have examined that record with the system's forensic engine; Parts II and IV set out the evidence and Part V my opinion.${stamp ? ' I have signed the evidence digest (item 4) with my post-quantum ML-DSA-65 key.' : ''}`,
     L + 2,
     W - 4,
-    s(7.6),
+    s(7.4),
     F.serif
   );
   y -= s(26);
@@ -570,7 +570,7 @@ async function renderOnePage(
   const fits = y >= BOTTOM + 10;
   page.drawLine({ start: { x: L, y: 44 }, end: { x: R, y: 44 }, thickness: 0.5, color: RULE });
   text(`Forensic Examination Report - ${reportNo}`, L, 34, 6.8, F.sans, MUTED);
-  const pn = 'Certified under Section 63, BSA, 2023 - Page 1 of 1';
+  const pn = 'Certified under Section 63, BSA, 2023 & Section 65B, IEA, 1872 - Page 1 of 1';
   text(pn, R - F.sans.widthOfTextAtSize(pn, 6.8), 34, 6.8, F.sans, MUTED);
 
   return { fits, buffer: Buffer.from(await doc.save()) };

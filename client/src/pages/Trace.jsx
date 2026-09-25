@@ -102,7 +102,12 @@ export default function Trace() {
     setError(null);
     setResult(null);
     try {
-      const r = await traceFile(file, lens ? { lens: true, corners: lens.corners } : {});
+      const opts = lens
+        ? { lens: true, corners: lens.corners }
+        : opticalLensMode
+          ? { lens: true }
+          : {};
+      const r = await traceFile(file, opts);
       setLensFile(null);
       setResult(r);
       setStatus('done');

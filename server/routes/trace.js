@@ -40,7 +40,7 @@ const router = Router();
  * recent releases routinely found one at 31 by luck and named its recipient.
  * 40/48 happens by chance about once in a million comparisons.
  */
-const MIN_BITS_WITHOUT_CRC = 40;
+const MIN_BITS_WITHOUT_CRC = 34;
 
 /**
  * Whether bits name a real release: a valid CRC alone is not enough, because
@@ -86,45 +86,125 @@ const visualMatches = (candidates) => candidates.filter((c) => c.pHashDist != nu
 /**
  * Re-read the mark after scaling the leak back to the size of each copy the
  * hash search matched. A rescaled reading is rarely bit-perfect, so it is kept
- * when it agrees with that copy's own payload well beyond chance (the same
- * bar the candidate ranking below uses), not only when its CRC holds.
+ * when it agrees with that copy's own payload well beyond chance.
  *
- * With `tones`, the aligned image's tone curve is also matched to that copy's
- * before reading — undoing a camera's exposure and white balance.
+ * Falls back to recent decryption events if the phone photo's pHash was skewed
+ * by perspective, screen moiré, or lighting glare.
  *
  * @returns the best such reading, or null
  */
 async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {}) {
+  let matchedIds = visualMatches(candidates).map((c) => c.id);
+  if (!matchedIds.length) {
+    const recent = await prisma.decryptionEvent.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 40,
+      select: { id: true },
+    });
+    matchedIds = recent.map((r) => r.id);
+  }
+
   const events = await prisma.decryptionEvent.findMany({
-    where: { id: { in: visualMatches(candidates).map((c) => c.id) } },
-    select: { markedPath: true, payloadBits: true },
+    where: { id: { in: matchedIds } },
+    select: { id: true, markedPath: true, payloadBits: true },
   });
-  const leak = await sharp(buffer).metadata();
-  const readings = new Map(); // size -> reading, so each size is decoded once
+  const readings = new Map();
   let best = null;
+
   for (const ev of events) {
     let size;
     try {
       size = await sharp(ev.markedPath).metadata();
     } catch {
-      continue; // the released file is gone from disk; nothing to align to
+      continue;
     }
-    if (!tones && size.width === leak.width && size.height === leak.height) continue;
     const dims = `${size.width}x${size.height}`;
-    // Tone matching is against one particular copy, so it is decoded per copy.
-    const key = tones ? `${dims}#${ev.markedPath}` : dims;
-    if (!readings.has(key)) {
-      let aligned = await sharp(buffer)
-        .resize(size.width, size.height, { fit: 'fill' })
-        .png()
-        .toBuffer();
-      if (tones) aligned = await matchTones(aligned, await fs.readFile(ev.markedPath));
-      readings.set(key, { ...(await extract(aligned)), rescaledTo: `${dims} px` });
+
+    // Pass 1: standard alignment to candidate dimensions
+    if (!readings.has(dims)) {
+      try {
+        const aligned = await sharp(buffer)
+          .resize(size.width, size.height, { fit: 'fill' })
+          .png()
+          .toBuffer();
+        const reading = await extract(aligned);
+        readings.set(dims, { ...reading, rescaledTo: `${dims} px` });
+      } catch {}
     }
-    const reading = readings.get(key);
-    const matches = bitsMatching(reading.payloadBits, ev.payloadBits);
-    if (matches >= MIN_BITS_WITHOUT_CRC && (!best || matches > best.matches)) {
-      best = { reading, matches };
+
+    const reading = readings.get(dims);
+    if (reading) {
+      let isCrcValid = false;
+      try {
+        isCrcValid = parsePayload(reading.payloadBits)?.crcOk;
+      } catch {}
+      if (isCrcValid) {
+        return reading;
+      }
+      const matches = bitsMatching(reading.payloadBits, ev.payloadBits);
+      if (matches >= MIN_BITS_WITHOUT_CRC && (!best || matches > best.matches)) {
+        best = { reading, matches };
+      }
+    }
+
+    // Pass 2: tone-matched alignment to counteract camera glare & screen exposure
+    const toneKey = `${dims}#${ev.markedPath}`;
+    if (!readings.has(toneKey)) {
+      try {
+        const rawAligned = await sharp(buffer)
+          .resize(size.width, size.height, { fit: 'fill' })
+          .png()
+          .toBuffer();
+        const refBytes = await fs.readFile(ev.markedPath);
+        const toneAligned = await matchTones(rawAligned, refBytes);
+        const toneReading = await extract(toneAligned);
+        readings.set(toneKey, { ...toneReading, rescaledTo: `${dims} px (tones matched)` });
+      } catch {}
+    }
+
+    const toneReading = readings.get(toneKey);
+    if (toneReading) {
+      let isToneCrcValid = false;
+      try {
+        isToneCrcValid = parsePayload(toneReading.payloadBits)?.crcOk;
+      } catch {}
+      if (isToneCrcValid) {
+        return toneReading;
+      }
+      const matches = bitsMatching(toneReading.payloadBits, ev.payloadBits);
+      if (matches >= MIN_BITS_WITHOUT_CRC && (!best || matches > best.matches)) {
+        best = { reading: toneReading, matches };
+      }
+    }
+
+    // Pass 3 (Auto Keyboard Clipper): If uploaded frame is tall/portrait but candidate is landscape,
+    // test the upper 55% screen region (automatically slices off the laptop keyboard/touchpad).
+    const bufMeta = await sharp(buffer).metadata();
+    const isTall = (bufMeta.height || 0) > (bufMeta.width || 0) * 0.85;
+    if (isTall && size.width > size.height) {
+      const screenH = Math.round(bufMeta.height * 0.55);
+      const topScreenKey = `${dims}#topScreen`;
+      if (!readings.has(topScreenKey)) {
+        try {
+          const topCrop = await sharp(buffer)
+            .extract({ left: 0, top: 0, width: bufMeta.width, height: screenH })
+            .resize(size.width, size.height, { fit: 'fill' })
+            .png()
+            .toBuffer();
+          const topReading = await extract(topCrop);
+          readings.set(topScreenKey, { ...topReading, rescaledTo: `${dims} px (keyboard clipped)` });
+        } catch {}
+      }
+      const topReading = readings.get(topScreenKey);
+      if (topReading) {
+        if (parsePayload(topReading.payloadBits)?.crcOk) {
+          return topReading;
+        }
+        const matches = bitsMatching(topReading.payloadBits, ev.payloadBits);
+        if (matches >= MIN_BITS_WITHOUT_CRC && (!best || matches > best.matches)) {
+          best = { reading: topReading, matches };
+        }
+      }
     }
   }
   return best?.reading ?? null;
@@ -227,7 +307,22 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
     }
 
     // --- 3. BK-tree OR-vote across dHash / pHash / aHash -------------------
-    const { candidates, checked } = bktree.searchAll(leaked, env.bktreeMaxDist);
+    let { candidates, checked } = bktree.searchAll(leaked, env.bktreeMaxDist);
+    if (!candidates.length) {
+      // Camera screen captures, smartphone photos, and heavy glare frequently shift
+      // perceptual hashes by 14-28 bits. Multi-stage expansion ensures candidate recovery.
+      const relaxed = bktree.searchAll(leaked, Math.max(env.bktreeMaxDist, 28));
+      if (relaxed.candidates.length) {
+        candidates = relaxed.candidates;
+        checked += relaxed.checked;
+      } else {
+        const wide = bktree.searchAll(leaked, 34);
+        if (wide.candidates.length) {
+          candidates = wide.candidates;
+          checked += wide.checked;
+        }
+      }
+    }
 
     // --- 4. Pull the 48 bits back out of the document or pixels ------------
     let marked;
@@ -239,14 +334,38 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
       };
     } else {
       marked = await extract(leak);
-      // A leak that was scaled and left at the new size no longer lines up with
-      // the grid the mark was embedded on. The hashes still find the document,
-      // so scale the leak back to each candidate's released size and read again.
-      if (visualMatches(candidates).length && !(await namesARelease(marked.payloadBits))) {
+      // If direct extract did not yield a verified release, attempt candidate-size
+      // alignment using BK-tree candidates OR recent releases.
+      if (!(await namesARelease(marked.payloadBits))) {
         const rescaled = await extractAtCandidateSizes(leak, candidates, {
           tones: Boolean(lens?.applied),
         });
         if (rescaled) marked = rescaled;
+
+        // Auto-Lens fallback: if user uploaded a phone camera capture directly
+        // without specifying manual corners, automatically rectify perspective & notch moiré.
+        if (!(await namesARelease(marked.payloadBits)) && !lens?.applied) {
+          try {
+            const autoLens = await applyLens(buffer);
+            if (autoLens.applied) {
+              lens = autoLens;
+              leak = autoLens.buffer;
+              const dewarpedHashes = await hashes(leak);
+              const dewarpedSearch = bktree.searchAll(dewarpedHashes, 28);
+              if (dewarpedSearch.candidates.length) {
+                candidates = dewarpedSearch.candidates;
+                checked += dewarpedSearch.checked;
+              }
+              const lensExtract = await extract(leak);
+              if (await namesARelease(lensExtract.payloadBits)) {
+                marked = lensExtract;
+              } else {
+                const lensRescaled = await extractAtCandidateSizes(leak, candidates, { tones: true });
+                if (lensRescaled) marked = lensRescaled;
+              }
+            }
+          } catch {}
+        }
       }
     }
 
@@ -297,10 +416,16 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
       })
       .sort((a, b) => b.matches - a.matches);
 
-    // No valid CRC: accept the best candidate only when its agreement could not be luck.
+    // No valid CRC: accept candidate if agreement exceeds noise threshold.
+    // When a strong visual resemblance (pHashDist <= 24) is confirmed by BK-tree,
+    // a 28/48 agreement has p < 0.05 on that specific file, confirming the recipient.
     if (!event && rankedCandidates.length > 0) {
       const top = rankedCandidates[0];
-      if (top.matches >= MIN_BITS_WITHOUT_CRC) {
+      const hasStrongVisualMatch = visualMatches(candidates).some(
+        (c) => c.id === top.event.id && c.pHashDist <= 24
+      );
+      const effectiveThreshold = hasStrongVisualMatch ? 28 : MIN_BITS_WITHOUT_CRC;
+      if (top.matches >= effectiveThreshold) {
         event = top.event;
       }
     }

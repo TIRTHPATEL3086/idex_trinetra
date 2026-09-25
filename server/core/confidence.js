@@ -54,10 +54,10 @@ export function score(sig) {
   const reasons = [];
 
   // Detect screenshot or phone display capture:
-  // When visual distance is high (>28) due to phone/laptop borders, status bars,
-  // or window frames, but watermark bit agreement is elevated (>= 0.65, meaning >= 31/48 bits),
+  // When visual distance is high (>16) due to phone/laptop borders, glare, or camera angles,
+  // but watermark bit agreement is elevated (>= 0.60, meaning >= 29/48 bits),
   // the frequency-domain Haar DWT watermark is the primary forensic identifier.
-  const isScreenshotTransformed = pHashDist > 28 && dHashDist > 28 && bitConfidence >= 0.65;
+  const isScreenshotTransformed = (pHashDist > 16 || dHashDist > 16) && bitConfidence >= 0.60;
 
   if (isScreenshotTransformed) {
     // Watermark carries primary weight under screenshot transformation

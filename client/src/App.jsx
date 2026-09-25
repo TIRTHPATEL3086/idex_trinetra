@@ -139,7 +139,13 @@ function Shell() {
             <Logo size="sm" />
           </span>
 
+          <div className="hidden md:flex items-center gap-2 ml-3 px-3 py-1 rounded-full border border-emerald-500/20 bg-emerald-950/5 text-[11px] font-bold tracking-wider text-emerald-800">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span>INDIAN NAVY (WESEE) // PROVENANCE DLT</span>
+          </div>
+
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+            <InstallAppButton />
             <NetworkStatus network={health?.network} />
             <WalletButton health={health} />
             <AccountMenu user={user} />
@@ -367,6 +373,71 @@ function NetworkStatus({ network }) {
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * PWA Install button for Mobile & Desktop offline experience.
+ */
+function InstallAppButton() {
+  const [prompt, setPrompt] = useState(null);
+  const [installed, setInstalled] = useState(false);
+
+  useEffect(() => {
+    const handleBeforeInstall = (e) => {
+      e.preventDefault();
+      setPrompt(e);
+    };
+    const handleAppInstalled = () => {
+      setInstalled(true);
+      setPrompt(null);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setInstalled(true);
+    }
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+
+  if (installed) {
+    return (
+      <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-950/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+        Offline PWA
+      </span>
+    );
+  }
+
+  if (!prompt) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        if (!prompt) return;
+        prompt.prompt();
+        const { outcome } = await prompt.userChoice;
+        if (outcome === 'accepted') {
+          setInstalled(true);
+        }
+        setPrompt(null);
+      }}
+      className="inline-flex items-center gap-1.5 rounded-full border border-emerald-600 bg-emerald-600 px-3 py-1 text-[11px] font-bold text-white shadow-sm transition hover:bg-emerald-700"
+    >
+      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+      </svg>
+      <span>Install App</span>
+    </button>
   );
 }
 
@@ -642,9 +713,9 @@ function WalletButton({ health }) {
   const isSepolia = chainId === '0xaa36a7' || chainId === '0xAA36A7';
 
   const chainLabel = isLocalChain
-    ? 'Hardhat (31337)'
+    ? 'Air-Gapped DLT (31337)'
     : isSepolia
-      ? 'Sepolia (11155111)'
+      ? 'Sepolia Testnet (11155111)'
       : chainId
         ? `Chain ${parseInt(chainId, 16) || chainId}`
         : 'Chain';
@@ -763,7 +834,7 @@ function WalletButton({ health }) {
                           : 'border-line bg-white hover:bg-noir/5 text-ink'
                       }`}
                     >
-                      Localhost (31337)
+                      Air-Gapped DLT (Local)
                     </button>
                     <button
                       type="button"

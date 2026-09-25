@@ -37,9 +37,13 @@ model Asset {
 /// OFFICER cannot trace, so nobody investigates their own leak. Only an ADMIN
 /// holds both, and an AUDITOR holds neither.
 enum Role {
-  ADMIN // Registry administrator — uploads, releases, investigations, audits.
-  OFFICER // Clearance holder — may release a copy to themselves only.
-  INVESTIGATOR // Forensic analyst — traces leaks, and cannot decrypt anything.
+  ADMIN // Legacy alias for CRYPTO_CUSTODIAN
+  OFFICER // Legacy alias for TACTICAL_OFFICER
+  INVESTIGATOR // Legacy alias for FORENSIC_ANALYST
+  CRYPTO_CUSTODIAN // WESEE Signals Originator & Key Custodian
+  TACTICAL_OFFICER // Operational Recipient (CO / Watchkeeper)
+  FORENSIC_ANALYST // Naval Cyber Forensic Analyst / Provost
+  NAVAL_AUDITOR // Judge Advocate General / Oversight Authority
 }
 
 
