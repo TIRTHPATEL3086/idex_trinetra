@@ -93,9 +93,17 @@ export default function Robustness() {
               PSNR Range
             </div>
             <div className="mt-2 text-2xl sm:text-3xl font-extrabold tracking-tight text-ink">
-              {live.minPsnr !== null ? `${live.minPsnr} – ${live.maxPsnr} dB` : '—'}
+              {live.minPsnr === null
+                ? '—'
+                : live.minPsnr === live.maxPsnr
+                  ? `${live.minPsnr} dB`
+                  : `${live.minPsnr} – ${live.maxPsnr} dB`}
             </div>
-            <p className="mt-1 text-xs text-ink-muted">Min / Max observed</p>
+            <p className="mt-1 text-xs text-ink-muted">
+              {live.measuredCount
+                ? `Lowest / highest of ${live.measuredCount} measured release${live.measuredCount === 1 ? '' : 's'}`
+                : 'Measured on image releases'}
+            </p>
           </div>
 
           <div className="card p-5 shadow-xs">
@@ -115,8 +123,9 @@ export default function Robustness() {
       {/* Live Decryption PSNR History (if records exist) */}
       {live && live.history.length === 0 && (
         <Notice>
-          No documents classified {classification === 'ALL' ? 'at all' : classification} have been
-          released yet, so there is no production telemetry to plot for this selection.
+          {live.totalDecryptions > 0
+            ? 'Only PDF documents have been released for this selection. PSNR is measured on image releases, where the mark is in the pixels — a PDF carries it in its structure.'
+            : `No documents classified ${classification === 'ALL' ? 'at all' : classification} have been released yet, so there is no production telemetry to plot for this selection.`}
         </Notice>
       )}
 
@@ -153,8 +162,14 @@ export default function Robustness() {
                 tickLine={{ stroke: '#e7dde0' }}
                 label={{ value: 'Event #', position: 'insideBottom', offset: -2, fontSize: 10 }}
               />
+              {/* A fixed scale around the 40 dB line: with an auto scale a
+                  0.3 dB wobble between releases filled the whole chart and
+                  read as instability. */}
               <YAxis
-                domain={['auto', 'auto']}
+                domain={[
+                  (min) => Math.min(30, Math.floor(min - 5)),
+                  (max) => Math.max(70, Math.ceil(max + 5)),
+                ]}
                 tick={{ fontSize: 11, fill: '#6e6472' }}
                 axisLine={{ stroke: '#e7dde0' }}
                 tickLine={{ stroke: '#e7dde0' }}

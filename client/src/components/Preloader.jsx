@@ -145,7 +145,7 @@ function Scene({ pct }) {
               <g transform={`translate(${PIVOT.join(' ')})`}>
                 <g className="pl-shackle">
                   <image
-                    href="/loader/lock-shackle.webp"
+                    href="/loader/lock-shackle.svg"
                     x={IMG.x - PIVOT[0]}
                     y={IMG.y - PIVOT[1]}
                     width={IMG.w}
@@ -154,7 +154,7 @@ function Scene({ pct }) {
                 </g>
               </g>
               <image
-                href="/loader/lock-body.webp"
+                href="/loader/lock-body.svg"
                 x={IMG.x}
                 y={IMG.y}
                 width={IMG.w}
@@ -201,7 +201,7 @@ function Scene({ pct }) {
   );
 }
 
-// The lock drawing is 117 x 167 px (layers stored at 4x). It is placed on the
+// The lock drawing is a 117 x 167 vector frame (two SVG layers). It is placed on the
 // stage at K units per source pixel; the points below are read off the source.
 const K = 1.96;
 const IMG = { x: 30, y: 84.5, w: 117 * K, h: 167 * K };

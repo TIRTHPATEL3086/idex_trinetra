@@ -142,7 +142,7 @@ export default function PqcEnroll() {
         <div className="border-b border-line px-6 py-4">
           <h2 className="text-base font-semibold text-ink">Officer Cryptographic Roster</h2>
           <p className="text-xs text-ink-muted">
-            Inspect public key parameters and issue post-quantum credentials.
+            Who holds post-quantum credentials, and issuing or renewing them.
           </p>
         </div>
 
@@ -150,14 +150,12 @@ export default function PqcEnroll() {
           <div className="p-8 text-center text-sm text-ink-muted">Loading officer credentials…</div>
         ) : (
           <div className="overflow-x-auto scroll-slim">
-            <table className="w-full min-w-[760px] text-left text-sm">
+            <table className="w-full min-w-[520px] text-left text-sm">
               <thead className="border-b border-line/60 bg-noir/20 text-xs font-bold uppercase tracking-wider text-ink-muted">
                 <tr>
                   <th className="px-6 py-3.5">Officer / Role</th>
                   <th className="px-6 py-3.5">Department</th>
                   <th className="px-6 py-3.5">PQC Status</th>
-                  <th className="px-6 py-3.5">ML-KEM-768 (KEM)</th>
-                  <th className="px-6 py-3.5">ML-DSA-65 (Sig)</th>
                   <th className="px-6 py-3.5 text-right">Action</th>
                 </tr>
               </thead>
@@ -170,10 +168,8 @@ export default function PqcEnroll() {
                     <tr key={u.userId} className="transition-colors hover:bg-muted">
                       <td className="px-6 py-4">
                         <div className="font-bold text-ink text-sm">{u.name}</div>
-                        <div className="flex items-center gap-2 text-xs text-ink-muted mt-0.5">
-                          <span className="font-semibold">{u.roleLabel || u.role}</span>
-                          <span>•</span>
-                          <span className="font-mono text-xs text-ink-muted/90">{u.userRef}</span>
+                        <div className="mt-0.5 text-xs font-semibold text-ink-muted">
+                          {u.roleLabel || u.role}
                         </div>
                       </td>
                       <td className="px-6 py-4 text-xs sm:text-sm text-ink-muted font-medium">
@@ -190,24 +186,6 @@ export default function PqcEnroll() {
                             <span className="h-1.5 w-1.5 rounded-full bg-probable" />
                             Pending
                           </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 font-mono text-xs text-ink-muted">
-                        {status?.kemPublicKey ? (
-                          <span title={status.kemPublicKey} className="font-semibold">
-                            {shortHash(status.kemPublicKey, 6, 6)}
-                          </span>
-                        ) : (
-                          <span className="text-ink-muted/50">—</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 font-mono text-xs text-ink-muted">
-                        {status?.dsaPublicKey ? (
-                          <span title={status.dsaPublicKey} className="font-semibold">
-                            {shortHash(status.dsaPublicKey, 6, 6)}
-                          </span>
-                        ) : (
-                          <span className="text-ink-muted/50">—</span>
                         )}
                       </td>
                       <td className="px-6 py-4 text-right">

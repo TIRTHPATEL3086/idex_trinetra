@@ -6,12 +6,7 @@ import { useAuth, ROLE_UI, initialsOf } from './lib/auth.jsx';
 import { RequireAuth, RequireCap } from './components/RequireAuth.jsx';
 import Logo from './components/Logo.jsx';
 import Preloader from './components/Preloader.jsx';
-import {
-  CheckIcon,
-  CloseIcon,
-  ShieldIcon as ShieldGlyph,
-  SignOutIcon,
-} from './components/icons.jsx';
+import { CloseIcon, ShieldIcon as ShieldGlyph, SignOutIcon } from './components/icons.jsx';
 import Landing from './pages/Landing.jsx';
 import Login from './pages/Login.jsx';
 import Assets from './pages/Assets.jsx';
@@ -139,15 +134,9 @@ function Shell() {
             <Logo size="sm" />
           </span>
 
-          <div className="hidden md:flex items-center gap-2 ml-3 px-3 py-1 rounded-full border border-emerald-500/20 bg-emerald-950/5 text-[11px] font-bold tracking-wider text-emerald-800">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span>INDIAN NAVY (WESEE) // PROVENANCE DLT</span>
-          </div>
-
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-            <InstallAppButton />
             <NetworkStatus network={health?.network} />
-            <WalletButton health={health} />
+            <WalletButton />
             <AccountMenu user={user} />
           </div>
         </header>
@@ -312,132 +301,28 @@ function Sidebar({ open, can }) {
 /**
  * Deployment status: "air-gapped" only when the server reports no dependency
  * beyond this machine or its private network — the claim is checked, not
- * decorative. The chip opens a list of what each dependency is and where.
+ * decorative.
  */
 function NetworkStatus({ network }) {
-  const [open, setOpen] = useState(false);
   if (!network) return null;
   const off = network.airGapped;
   return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        title={
-          off
-            ? 'No dependency outside this machine or its private network'
-            : 'This deployment depends on internet services'
-        }
-        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide transition ${
-          off
-            ? 'border-attributed-bright bg-attributed-tint text-attributed-deep'
-            : 'border-probable-bright bg-probable-tint text-probable-deep'
-        }`}
-      >
-        <span className={`h-2 w-2 rounded-full ${off ? 'bg-attributed' : 'bg-probable'}`} />
-        <span className="hidden md:inline">{off ? 'Air-gapped · offline' : 'Online'}</span>
-        <span className="md:hidden">{off ? 'Offline' : 'Online'}</span>
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" aria-hidden="true" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-50 mt-2 w-[18rem] max-w-[calc(100vw-2rem)] rounded-2xl border border-line bg-white p-4 text-left shadow-panel">
-            <div className="text-xs font-bold uppercase tracking-wider text-ink-muted">
-              {off
-                ? '100% air-gapped — zero WAN dependencies'
-                : `${network.wan.length} internet dependenc${network.wan.length === 1 ? 'y' : 'ies'}`}
-            </div>
-            <ul className="mt-3 space-y-2">
-              {network.deps.map((d) => (
-                <li key={d.name} className="flex items-start gap-2 text-xs">
-                  <span
-                    className={`mt-1 h-2 w-2 shrink-0 rounded-full ${d.local ? 'bg-attributed' : 'bg-probable'}`}
-                  />
-                  <span className="min-w-0">
-                    <span className="block font-semibold text-ink">{d.name}</span>
-                    <span className="mono block truncate text-ink-muted">
-                      {d.local ? 'local' : 'internet'} · {d.host}
-                    </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-            {!off && (
-              <p className="mt-3 text-[11px] leading-relaxed text-ink-muted">
-                Run the offline field kit (<span className="mono">npm run offline</span>) for a
-                fully air-gapped deployment.
-              </p>
-            )}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-/**
- * PWA Install button for Mobile & Desktop offline experience.
- */
-function InstallAppButton() {
-  const [prompt, setPrompt] = useState(null);
-  const [installed, setInstalled] = useState(false);
-
-  useEffect(() => {
-    const handleBeforeInstall = (e) => {
-      e.preventDefault();
-      setPrompt(e);
-    };
-    const handleAppInstalled = () => {
-      setInstalled(true);
-      setPrompt(null);
-    };
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
-    window.addEventListener('appinstalled', handleAppInstalled);
-
-    if (window.matchMedia('(display-mode: standalone)').matches) {
-      setInstalled(true);
-    }
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
-      window.removeEventListener('appinstalled', handleAppInstalled);
-    };
-  }, []);
-
-  if (installed) {
-    return (
-      <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-950/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
-        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-        Offline PWA
-      </span>
-    );
-  }
-
-  if (!prompt) return null;
-
-  return (
-    <button
-      type="button"
-      onClick={async () => {
-        if (!prompt) return;
-        prompt.prompt();
-        const { outcome } = await prompt.userChoice;
-        if (outcome === 'accepted') {
-          setInstalled(true);
-        }
-        setPrompt(null);
-      }}
-      className="inline-flex items-center gap-1.5 rounded-full border border-emerald-600 bg-emerald-600 px-3 py-1 text-[11px] font-bold text-white shadow-sm transition hover:bg-emerald-700"
+    <span
+      title={
+        off
+          ? 'No dependency outside this machine or its private network'
+          : 'This deployment depends on internet services'
+      }
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide ${
+        off
+          ? 'border-attributed-bright bg-attributed-tint text-attributed-deep'
+          : 'border-probable-bright bg-probable-tint text-probable-deep'
+      }`}
     >
-      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-        <polyline points="7 10 12 15 17 10" />
-        <line x1="12" y1="15" x2="12" y2="3" />
-      </svg>
-      <span>Install App</span>
-    </button>
+      <span className={`h-2 w-2 rounded-full ${off ? 'bg-attributed' : 'bg-probable'}`} />
+      <span className="hidden md:inline">{off ? 'Air-gapped · offline' : 'Online'}</span>
+      <span className="md:hidden">{off ? 'Offline' : 'Online'}</span>
+    </span>
   );
 }
 
@@ -581,38 +466,25 @@ function AccountMenu({ user }) {
 
 const short = (a) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '');
 
-/** Real MetaMask connect via window.ethereum. Degrades cleanly with no wallet. */
-function WalletButton({ health }) {
+/**
+ * MetaMask connect via window.ethereum. Once connected it shows only the
+ * account, as a status — no details panel. With no wallet installed it
+ * points to MetaMask's download page.
+ */
+function WalletButton() {
   const [account, setAccount] = useState(null);
-  const [chainId, setChainId] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [panelOpen, setPanelOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [switchError, setSwitchError] = useState(null);
 
   useEffect(() => {
     const eth = window.ethereum;
     if (!eth) return;
-
     eth
       .request({ method: 'eth_accounts' })
       .then((a) => a?.[0] && setAccount(a[0]))
       .catch(() => {});
-
-    eth
-      .request({ method: 'eth_chainId' })
-      .then((cid) => cid && setChainId(cid))
-      .catch(() => {});
-
     const onAccountsChange = (a) => setAccount(a?.[0] ?? null);
-    const onChainChange = (cid) => setChainId(cid);
-
     eth.on?.('accountsChanged', onAccountsChange);
-    eth.on?.('chainChanged', onChainChange);
-    return () => {
-      eth.removeListener?.('accountsChanged', onAccountsChange);
-      eth.removeListener?.('chainChanged', onChainChange);
-    };
+    return () => eth.removeListener?.('accountsChanged', onAccountsChange);
   }, []);
 
   async function connect() {
@@ -625,235 +497,22 @@ function WalletButton({ health }) {
     try {
       const a = await eth.request({ method: 'eth_requestAccounts' });
       setAccount(a?.[0] ?? null);
-
-      const cid = await eth.request({ method: 'eth_chainId' });
-      setChainId(cid);
-
-      // Prompt network switch for local Hardhat node if running in local mode
-      if (health?.chainMode === 'local' || !health?.chainMode) {
-        try {
-          await eth.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: '0x7a69' }], // 31337 in hex
-          });
-        } catch (err) {
-          if (err?.code === 4902) {
-            await eth.request({
-              method: 'wallet_addEthereumChain',
-              params: [
-                {
-                  chainId: '0x7a69',
-                  chainName: 'Hardhat Localhost',
-                  rpcUrls: ['http://127.0.0.1:8545'],
-                  nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
-                },
-              ],
-            });
-          }
-        }
-      }
     } catch {
-      /* user rejected — leave disconnected */
+      /* the user declined — stay disconnected */
     } finally {
       setBusy(false);
     }
   }
 
-  /**
-   * Ask the wallet to change network.
-   *
-   * Three things this has to get right. It must not ask to switch to the
-   * chain the wallet is already on — that is a no-op the extension can choke
-   * on. It must only offer to *add* a chain the wallet genuinely does not
-   * know: Sepolia ships with MetaMask, and adding a built-in network is
-   * refused. And it must not swallow the result, or a refusal looks
-   * identical to success.
-   */
-  async function switchToChain(targetHex, name, rpc) {
-    const eth = window.ethereum;
-    if (!eth) return;
-    setSwitchError(null);
-
-    if (chainId && chainId.toLowerCase() === targetHex.toLowerCase()) return;
-
-    try {
-      await eth.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: targetHex }],
-      });
-    } catch (err) {
-      // 4902 means the wallet has never heard of this chain, which for us
-      // only ever happens with a local dev node.
-      if (err?.code === 4902 && rpc) {
-        try {
-          await eth.request({
-            method: 'wallet_addEthereumChain',
-            params: [
-              {
-                chainId: targetHex,
-                chainName: name,
-                rpcUrls: [rpc],
-                nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
-              },
-            ],
-          });
-        } catch (addErr) {
-          if (addErr?.code !== 4001) {
-            setSwitchError(addErr?.message || `Could not add ${name}.`);
-          }
-        }
-        return;
-      }
-      if (err?.code === 4001) return; // the user declined; not an error
-      setSwitchError(err?.message || `Could not switch to ${name}.`);
-    }
-  }
-
-  const isLocalChain = chainId === '0x7a69' || chainId === '0x7A69';
-  const isSepolia = chainId === '0xaa36a7' || chainId === '0xAA36A7';
-
-  const chainLabel = isLocalChain
-    ? 'Air-Gapped DLT (31337)'
-    : isSepolia
-      ? 'Sepolia Testnet (11155111)'
-      : chainId
-        ? `Chain ${parseInt(chainId, 16) || chainId}`
-        : 'Chain';
-
   if (account) {
     return (
-      <div className="relative">
-        <button
-          type="button"
-          onClick={() => setPanelOpen((o) => !o)}
-          title="MetaMask wallet details & chain settings"
-          className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-3 py-1.5 text-xs font-bold text-ink hover:border-ink-faint transition"
-        >
-          <span className="mono">{short(account)}</span>
-          <span className="hidden md:inline-block text-[10px] text-ink-muted bg-noir/5 px-2 py-0.5 rounded-full font-medium">
-            {chainLabel}
-          </span>
-        </button>
-
-        {panelOpen && (
-          <>
-            <button
-              type="button"
-              aria-label="Close wallet menu"
-              className="fixed inset-0 z-40 cursor-default"
-              onClick={() => setPanelOpen(false)}
-            />
-            <div className="absolute right-0 z-50 mt-2 w-[19rem] max-w-[calc(100vw-2rem)] rounded-2xl border border-line bg-white p-4 shadow-panel">
-              <div className="flex items-center justify-between pb-3 border-b border-line">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-ink">MetaMask Connected</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAccount(null);
-                    setPanelOpen(false);
-                  }}
-                  className="text-[11px] font-semibold text-ink-muted hover:text-ink"
-                >
-                  Disconnect
-                </button>
-              </div>
-
-              <div className="space-y-3 pt-3">
-                <div>
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-ink-faint">
-                    Wallet Account
-                  </div>
-                  <div className="mt-1 flex items-center justify-between gap-1 rounded-xl bg-noir/5 p-2 font-mono text-[11px] text-ink">
-                    <span className="truncate">{account}</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(account);
-                        setCopied(true);
-                        setTimeout(() => setCopied(false), 2000);
-                      }}
-                      className="shrink-0 rounded px-1.5 py-0.5 text-[10px] bg-white border border-line font-sans font-semibold hover:bg-noir/10"
-                    >
-                      {copied ? <CheckIcon size={12} /> : 'Copy'}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-ink-muted">Active Network</span>
-                  <span className="font-semibold text-ink">{chainLabel}</span>
-                </div>
-
-                {health?.chain && (
-                  <>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-ink-muted">Chain Mode</span>
-                      <span className="font-mono text-[11px] font-semibold uppercase text-ink">
-                        {health.chain.mode}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-ink-muted">Registry Contract</span>
-                      <span className="font-mono text-[11px] text-ink" title={health.chain.address}>
-                        {short(health.chain.address)}
-                      </span>
-                    </div>
-
-                    {health.chain.blockNumber && (
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-ink-muted">Sync Block</span>
-                        <span className="font-mono text-[11px] text-ink">
-                          #{health.chain.blockNumber}
-                        </span>
-                      </div>
-                    )}
-                  </>
-                )}
-
-                <div className="pt-2 border-t border-line space-y-1.5">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-ink-faint">
-                    Switch Network
-                  </div>
-                  {switchError && (
-                    <p className="rounded-xl bg-danger-tint px-2.5 py-2 text-[11px] leading-relaxed text-danger-deep">
-                      {switchError}
-                    </p>
-                  )}
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        switchToChain('0x7a69', 'Hardhat Localhost', 'http://127.0.0.1:8545')
-                      }
-                      className={`flex-1 rounded-xl py-1.5 text-xs font-semibold border transition ${
-                        isLocalChain
-                          ? 'border-accent bg-accent/10 text-ink'
-                          : 'border-line bg-white hover:bg-noir/5 text-ink'
-                      }`}
-                    >
-                      Air-Gapped DLT (Local)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => switchToChain('0xaa36a7', 'Sepolia', null)}
-                      className={`flex-1 rounded-xl py-1.5 text-xs font-semibold border transition ${
-                        isSepolia
-                          ? 'border-accent bg-accent/10 text-ink'
-                          : 'border-line bg-white hover:bg-noir/5 text-ink'
-                      }`}
-                    >
-                      Sepolia (11155111)
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
+      <span
+        title="MetaMask connected"
+        className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-3 py-1.5 text-xs font-bold text-ink"
+      >
+        <span className="h-2 w-2 rounded-full bg-attributed" />
+        <span className="mono">{short(account)}</span>
+      </span>
     );
   }
 
@@ -967,13 +626,6 @@ function ShieldIcon(p) {
     </NavIcon>
   );
 }
-function MenuIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M4 6h16M4 12h16M4 18h16" {...S} />
-    </svg>
-  );
-}
 function WalletIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -988,6 +640,13 @@ function WalletIcon() {
         strokeWidth="1.8"
         strokeLinecap="round"
       />
+    </svg>
+  );
+}
+function MenuIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M4 6h16M4 12h16M4 18h16" {...S} />
     </svg>
   );
 }

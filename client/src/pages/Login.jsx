@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { CheckIcon, ChevronLeftIcon } from '../components/icons.jsx';
+import { ChevronLeftIcon, KeyIcon, ShieldIcon } from '../components/icons.jsx';
 
 import Logo from '../components/Logo.jsx';
 import { useAuth, DEMO_ACCOUNTS } from '../lib/auth.jsx';
@@ -34,9 +34,10 @@ export default function Login() {
     setStatus('working');
     setError(null);
     try {
+      // signIn returns the whole login response; the user is inside it.
       const res = await signIn(form.email.trim(), form.password);
-      const targetUser = res?.user || res;
-      navigate(from || targetUser?.landing || '/assets', { replace: true });
+      const signedIn = res?.user || res;
+      navigate(from || signedIn?.landing || '/assets', { replace: true });
     } catch (err) {
       setError(err.message || 'Could not sign in.');
       setStatus('error');
@@ -49,9 +50,25 @@ export default function Login() {
     setStatus('idle');
   };
 
+  // The role bar above the card picks the role; the row under the Sign in
+  // button offers that role's demo accounts, and picking one fills the form.
+  const [menuRole, setMenuRole] = useState(ROLE_GROUPS[0].role);
+  const activeAccount = DEMO_ACCOUNTS.find(
+    (a) => a.email.toLowerCase() === form.email.trim().toLowerCase()
+  );
+
+  // Choosing a role fills nothing in. An account left over from another role
+  // is cleared, so the form never shows credentials for a role not selected.
+  const chooseRole = (role) => {
+    setMenuRole(role);
+    if (activeAccount && activeAccount.role !== role) setForm({ email: '', password: '' });
+  };
+
+  // Everything fits the screen, so the page itself never scrolls.
   return (
-    <div className="relative grid min-h-[100dvh] w-full place-items-center bg-shell p-3 sm:p-5 lg:p-6">
-      {/* Real route home */}
+    <div className="relative grid h-[100dvh] w-full grid-cols-[minmax(0,1fr)] place-items-center overflow-hidden bg-shell p-3 sm:p-5 lg:p-6">
+      {/* A real route home, not history.back() — someone who opened /login
+          directly, or followed a stale link, has no history to go back to. */}
       <Link
         to="/"
         className="absolute left-4 top-4 z-10 inline-flex items-center gap-1.5 rounded-full border border-line bg-white px-3.5 py-2 text-[13px] font-medium text-ink-muted shadow-sm transition hover:border-ink-faint hover:text-ink focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 sm:left-6 sm:top-6"
@@ -60,93 +77,101 @@ export default function Login() {
         Back
       </Link>
 
-      <main className="w-full max-w-[1080px] rounded-2xl bg-white shadow-app sm:rounded-3xl lg:grid lg:grid-cols-[1.02fr_1fr]">
-        <BrandPanel />
+      <div className="flex w-full max-w-[1080px] flex-col items-center gap-4 pt-12 sm:gap-5 sm:pt-0 [@media(max-height:700px)]:gap-3">
+        <RoleBar active={menuRole} onChoose={chooseRole} />
 
-        {/* ------------------------------------------------------ the form -- */}
-        <section className="flex flex-col justify-center px-5 py-8 sm:px-8 sm:py-10 lg:px-11 lg:py-12">
-          {/* Mobile-only brand row */}
-          <div className="mb-7 lg:hidden">
-            <Logo size="sm" />
-          </div>
+        <main className="w-full rounded-2xl bg-white shadow-app sm:rounded-3xl lg:grid lg:grid-cols-[1.02fr_1fr]">
+          <BrandPanel />
 
-          <header className="mb-6">
-            <h1 className="font-display text-2xl font-extrabold tracking-tight text-ink sm:text-[28px]">
-              Sign in
-            </h1>
-            <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">
-              Every release and every investigation is recorded against the account that ran it.
-            </p>
-          </header>
+          {/* ------------------------------------------------------ the form -- */}
+          <section className="flex flex-col justify-center px-5 py-7 sm:px-8 sm:py-10 lg:px-11 lg:py-11 [@media(max-height:760px)]:lg:py-8 [@media(max-height:700px)]:py-5">
+            {/* Mobile-only brand row — the panel beside it is hidden at this width. */}
+            <div className="mb-6 lg:hidden [@media(max-height:700px)]:mb-4">
+              <Logo size="sm" />
+            </div>
 
-          <form onSubmit={submit} className="space-y-4" noValidate>
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-faint">
-                Email
-              </span>
-              <input
-                type="email"
-                name="email"
-                autoComplete="username"
-                inputMode="email"
-                autoCapitalize="none"
-                spellCheck="false"
-                required
-                className="input text-base sm:text-sm"
-                placeholder="name@example.gov"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-              />
-            </label>
-
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-faint">
-                Password
-              </span>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  name="password"
-                  autoComplete="current-password"
-                  required
-                  className="input pr-12 text-base sm:text-sm"
-                  placeholder="••••••••"
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  className="absolute inset-y-0 right-0 grid w-12 place-items-center rounded-r-xl text-ink-faint transition hover:text-ink focus:outline-none focus-visible:text-ink"
-                >
-                  {showPassword ? <EyeOffIcon /> : <EyeIcon />}
-                </button>
-              </div>
-            </label>
-
-            {error && (
-              <p
-                role="alert"
-                className="flex items-start gap-2 rounded-xl bg-probable/10 px-3.5 py-2.5 text-sm text-ink"
-              >
-                <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-probable" />
-                <span>{error}</span>
+            <header className="mb-5 [@media(max-height:700px)]:mb-4">
+              <h1 className="font-display text-2xl font-extrabold tracking-tight text-ink sm:text-[28px]">
+                Sign in
+              </h1>
+              <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">
+                Every release and every investigation is recorded against the account that ran it.
               </p>
-            )}
+            </header>
 
-            <button
-              type="submit"
-              className="btn-accent h-12 w-full text-[15px]"
-              disabled={status === 'working'}
+            <form
+              onSubmit={submit}
+              className="space-y-4 [@media(max-height:700px)]:space-y-3"
+              noValidate
             >
-              {status === 'working' ? 'Signing in…' : 'Sign in'}
-            </button>
-          </form>
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-faint">
+                  Email
+                </span>
+                <input
+                  type="email"
+                  name="email"
+                  autoComplete="username"
+                  inputMode="email"
+                  autoCapitalize="none"
+                  spellCheck="false"
+                  required
+                  className="input text-base sm:text-sm"
+                  placeholder="name@example.gov"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                />
+              </label>
 
-          <DemoAccounts onPick={fillDemo} currentEmail={form.email} />
-        </section>
-      </main>
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-faint">
+                  Password
+                </span>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    name="password"
+                    autoComplete="current-password"
+                    required
+                    className="input pr-12 text-base sm:text-sm"
+                    placeholder="••••••••"
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute inset-y-0 right-0 grid w-12 place-items-center rounded-r-xl text-ink-faint transition hover:text-ink focus:outline-none focus-visible:text-ink"
+                  >
+                    {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                  </button>
+                </div>
+              </label>
+
+              {error && (
+                <p
+                  role="alert"
+                  className="flex items-start gap-2 rounded-xl bg-probable/10 px-3.5 py-2.5 text-sm text-ink"
+                >
+                  <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-probable" />
+                  <span>{error}</span>
+                </p>
+              )}
+
+              <button
+                type="submit"
+                className="btn-accent h-12 w-full text-[15px]"
+                disabled={status === 'working'}
+              >
+                {status === 'working' ? 'Signing in…' : 'Sign in'}
+              </button>
+            </form>
+
+            <DemoPicker role={menuRole} activeAccount={activeAccount} onPick={fillDemo} />
+          </section>
+        </main>
+      </div>
     </div>
   );
 }
@@ -166,7 +191,7 @@ const SUMMARY = [
   },
   {
     title: 'Anchor',
-    body: 'Its receipt is written to an immutable air-gapped DLT ledger, ahead of the copy existing.',
+    body: 'Its receipt is written to an immutable private DLT ledger, ahead of the copy existing.',
     dot: 'bg-chromia-green-500',
   },
   {
@@ -178,7 +203,7 @@ const SUMMARY = [
 
 function BrandPanel() {
   return (
-    <aside className="relative hidden flex-col justify-between overflow-hidden rounded-l-3xl bg-gradient-to-br from-[#0d1117] to-noir p-11 text-white lg:flex">
+    <aside className="relative hidden flex-col justify-between overflow-hidden rounded-l-3xl bg-gradient-to-br from-[#0d1117] to-noir p-11 text-white lg:flex [@media(max-height:760px)]:p-8">
       {/* The artwork is merged into the panel rather than placed on it.
           `screen` is what does the work: the render's near-black background
           becomes nothing against the panel, so only its glow survives and
@@ -233,7 +258,7 @@ function BrandPanel() {
         {/* What the product is, in three lines. Someone at a sign-in screen
             wants to know what they are signing in to — not how the roles are
             split, which only matters once they are inside. */}
-        <h2 className="mt-10 font-display text-[32px] leading-[1.08] text-white">
+        <h2 className="mt-10 font-display text-[32px] [@media(max-height:760px)]:mt-6 leading-[1.08] text-white">
           The register for
           <br />
           <span className="text-accent">released documents.</span>
@@ -245,7 +270,7 @@ function BrandPanel() {
         </p>
       </div>
 
-      <ul className="relative z-10 mt-9 space-y-4 [text-shadow:0_1px_14px_rgba(15,10,20,0.75)]">
+      <ul className="relative z-10 mt-9 space-y-4 [@media(max-height:760px)]:mt-5 [@media(max-height:760px)]:space-y-3 [text-shadow:0_1px_14px_rgba(15,10,20,0.75)]">
         {SUMMARY.map((item) => (
           <li key={item.title} className="flex items-start gap-3">
             <span className={`mt-[6px] h-2 w-2 shrink-0 rounded-full ${item.dot}`} />
@@ -267,132 +292,111 @@ function BrandPanel() {
 /* -------------------------------------------------------- demo accounts --- */
 
 /**
- * Demo accounts selector.
- *
- * A drop-up: the list floats over the form above the trigger rather than
- * opening inside the card, so the sign-in box keeps its size. Picking an
- * account fills the form and closes the menu; a click outside or Escape
- * closes it too.
+ * Demo accounts. The role bar above the card chooses the role; the picker
+ * under the Sign in button lists that role's accounts, and picking one fills
+ * the form.
  */
-function DemoAccounts({ onPick, currentEmail }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef(null);
-  const buttonRef = useRef(null);
+const ROLE_GROUPS = [
+  { role: 'ADMIN', label: 'Admin', hint: 'Registry, officers and custody' },
+  { role: 'OFFICER', label: 'Officer', hint: 'Opens released documents' },
+  { role: 'INVESTIGATOR', label: 'Investigator', hint: 'Traces leaks, cannot decrypt' },
+]
+  .map((g) => ({ ...g, accounts: DEMO_ACCOUNTS.filter((a) => a.role === g.role) }))
+  .filter((g) => g.accounts.length > 0);
 
-  const activeAccount = DEMO_ACCOUNTS.find(
-    (a) => a.email.toLowerCase() === (currentEmail || '').trim().toLowerCase()
-  );
+/**
+ * The role bar above the card: one segment per role, the active one lifted
+ * into a pill. It sits in the page flow, centred, so on a phone it lands under
+ * the Back button instead of colliding with it.
+ */
+const ROLE_ICONS = { ADMIN: ShieldIcon, OFFICER: KeyIcon, INVESTIGATOR: SearchIcon };
 
-  useEffect(() => {
-    if (!open) return;
-    const onPointer = (e) => {
-      if (!rootRef.current?.contains(e.target)) setOpen(false);
-    };
-    const onKey = (e) => {
-      if (e.key === 'Escape') {
-        setOpen(false);
-        buttonRef.current?.focus();
-      }
-    };
-    document.addEventListener('pointerdown', onPointer);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('pointerdown', onPointer);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
-
+function RoleBar({ active, onChoose }) {
   return (
-    <div ref={rootRef} className="relative mt-6">
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        aria-haspopup="true"
-        className={`flex w-full items-center justify-between gap-2 rounded-2xl border bg-surface px-4 py-3 text-left transition hover:bg-line/20 focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 ${
-          open ? 'border-accent' : 'border-line'
-        }`}
-      >
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="shrink-0 text-xs font-bold uppercase tracking-wide text-ink-faint">
-            Demo accounts
-          </span>
-          {activeAccount && (
+    <div
+      role="group"
+      aria-label="Demo role"
+      className="inline-flex max-w-full items-center gap-0.5 rounded-full border border-line bg-white/80 p-1 shadow-app backdrop-blur min-[360px]:gap-1 min-[360px]:p-1.5"
+    >
+      {ROLE_GROUPS.map((g) => {
+        const Icon = ROLE_ICONS[g.role];
+        const on = active === g.role;
+        return (
+          <button
+            key={g.role}
+            type="button"
+            aria-pressed={on}
+            onClick={() => onChoose(g.role)}
+            className={segment(on)}
+          >
+            <Icon size={16} />
+            {g.label}
+            {/* the underline glow under the active segment */}
             <span
-              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${activeAccount.badge} shadow-xs`}
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
-              In use: {activeAccount.short} ({activeAccount.dept})
-            </span>
-          )}
-        </div>
-        <span className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-ink-muted">
-          {activeAccount ? 'Change' : 'Choose'}
-          {/* Points the way the list opens: up, then down to close. */}
-          <ChevronIcon open={!open} />
-        </span>
-      </button>
+              aria-hidden="true"
+              className={`absolute inset-x-4 -bottom-1.5 h-0.5 rounded-full bg-accent transition-opacity ${
+                on ? 'opacity-100' : 'opacity-0'
+              }`}
+            />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
-      {/* Kept mounted so it can animate both ways; hidden from focus and
-          assistive tech while closed. */}
-      <ul
-        aria-hidden={!open}
-        inert={open ? undefined : ''}
-        className={`absolute inset-x-0 bottom-full z-30 mb-2 max-h-[min(60vh,360px)] origin-bottom space-y-1.5 overflow-y-auto rounded-2xl border border-line bg-white p-2 shadow-panel transition-[opacity,transform,visibility] duration-200 ease-out ${
-          open
-            ? 'visible translate-y-0 scale-100 opacity-100'
-            : 'invisible translate-y-2 scale-[0.97] opacity-0'
-        }`}
+/** Segment classes shared by the role bar and the account picker. */
+const segment = (on) =>
+  `relative inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-2 text-[12.5px] font-semibold transition focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 min-[360px]:gap-2 min-[360px]:px-3.5 min-[360px]:text-[13px] sm:px-5 sm:text-sm ${
+    on
+      ? 'bg-accent/25 text-ink shadow-sm ring-1 ring-accent/60'
+      : 'text-ink-muted hover:bg-line/40 hover:text-ink'
+  }`;
+
+/**
+ * The chosen role's demo accounts, under the Sign in button, in the same
+ * segmented style as the role bar. Picking one fills the email and password;
+ * nothing is filled until one is picked.
+ */
+function DemoPicker({ role, activeAccount, onPick }) {
+  const group = ROLE_GROUPS.find((g) => g.role === role) ?? ROLE_GROUPS[0];
+  const Icon = ROLE_ICONS[group.role];
+  const many = group.accounts.length > 1;
+  return (
+    <div className="mt-5 [@media(max-height:700px)]:mt-4">
+      <p className="mb-2 text-center text-[11px] font-bold uppercase tracking-wide text-ink-faint">
+        {group.label} demo {many ? 'accounts' : 'account'} · tap to fill in
+      </p>
+      <div
+        role="group"
+        aria-label="Demo account"
+        className="flex w-full items-center gap-0.5 rounded-full border border-line bg-surface p-1 min-[360px]:gap-1 min-[360px]:p-1.5"
       >
-        {DEMO_ACCOUNTS.map((acc) => {
-          const isSelected = activeAccount?.email === acc.email;
+        {group.accounts.map((acc) => {
+          const on = activeAccount?.email === acc.email;
           return (
-            <li key={acc.email}>
-              <button
-                type="button"
-                onClick={() => {
-                  onPick(acc);
-                  setOpen(false);
-                }}
-                className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-                  isSelected
-                    ? 'bg-line/60 shadow-sm ring-1 ring-accent/70'
-                    : 'bg-white hover:bg-line/40 hover:shadow-sm'
+            <button
+              key={acc.email}
+              type="button"
+              aria-pressed={on}
+              title={`${acc.name} · ${acc.dept} · ${acc.email}`}
+              onClick={() => onPick(acc)}
+              className={`min-w-0 flex-1 ${segment(on)}`}
+            >
+              <span className={many ? 'hidden min-[420px]:inline-flex' : 'inline-flex'}>
+                <Icon size={16} />
+              </span>
+              <span className="truncate">{acc.short}</span>
+              <span
+                aria-hidden="true"
+                className={`absolute inset-x-4 -bottom-1.5 h-0.5 rounded-full bg-accent transition-opacity ${
+                  on ? 'opacity-100' : 'opacity-0'
                 }`}
-              >
-                <span
-                  className={`pill shrink-0 ${acc.badge}`}
-                  style={{ minWidth: 80, justifyContent: 'center' }}
-                >
-                  {acc.short}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="mono truncate text-[12px] font-bold text-ink">{acc.email}</div>
-                  <div className="truncate text-[11px] text-ink-muted">
-                    {acc.name} · <span className="font-semibold text-ink-faint">{acc.dept}</span>
-                  </div>
-                </div>
-                <span
-                  className={`shrink-0 rounded-md px-2.5 py-1 text-[11px] font-bold transition ${
-                    isSelected
-                      ? 'bg-accent font-extrabold text-noir shadow-xs'
-                      : 'border border-line bg-surface text-ink-muted group-hover:border-accent group-hover:bg-accent group-hover:text-noir'
-                  }`}
-                >
-                  {isSelected ? (
-                    <span className="flex items-center gap-1">
-                      In Use <CheckIcon size={11} />
-                    </span>
-                  ) : (
-                    'Use'
-                  )}
-                </span>
-              </button>
-            </li>
+              />
+            </button>
           );
         })}
-      </ul>
+      </div>
     </div>
   );
 }
@@ -427,16 +431,11 @@ function EyeOffIcon() {
   );
 }
 
-function ChevronIcon({ open }) {
+function SearchIcon({ size = 18 }) {
   return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      className={`transition-transform ${open ? 'rotate-180' : ''}`}
-    >
-      <path d="m6 9 6 6 6-6" {...S} />
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="11" cy="11" r="6.5" {...S} />
+      <path d="m20 20-4.4-4.4" {...S} />
     </svg>
   );
 }
