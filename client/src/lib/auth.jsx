@@ -41,10 +41,12 @@ export function AuthProvider({ children }) {
   // every panel quietly failing.
   useEffect(() => onSessionLost(() => setUser(null)), []);
 
-  const signIn = useCallback(async (email, password) => {
-    const r = await apiLogin(email, password);
-    setUser(r.user);
-    return r.user;
+  const signIn = useCallback(async (email, password, extra = {}) => {
+    const r = await apiLogin(email, password, extra);
+    if (r.user) {
+      setUser(r.user);
+    }
+    return r;
   }, []);
 
   const signOut = useCallback(async () => {
@@ -124,6 +126,17 @@ export const DEMO_ACCOUNTS = [
     email: 'admin@example.gov',
     password: 'admin123',
     desc: 'Full custody & management',
+  },
+  {
+    role: 'INVESTIGATOR',
+    short: 'Investigator',
+    badge: 'bg-chromia-purple-500/20 text-chromia-purple-300 border border-chromia-purple-500/30',
+    title: 'Forensic Analyst',
+    name: 'Analyst A-004',
+    dept: 'Forensics Wing',
+    email: 'a004@example.gov',
+    password: 'analyst123',
+    desc: 'Leak detection & forensic tracing',
   },
   {
     role: 'OFFICER',
