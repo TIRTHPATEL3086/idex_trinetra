@@ -34,8 +34,9 @@ export default function Login() {
     setStatus('working');
     setError(null);
     try {
-      const signedIn = await signIn(form.email.trim(), form.password);
-      navigate(from || signedIn.landing || '/assets', { replace: true });
+      const res = await signIn(form.email.trim(), form.password);
+      const targetUser = res?.user || res;
+      navigate(from || targetUser?.landing || '/assets', { replace: true });
     } catch (err) {
       setError(err.message || 'Could not sign in.');
       setStatus('error');
@@ -50,8 +51,7 @@ export default function Login() {
 
   return (
     <div className="relative grid min-h-[100dvh] w-full place-items-center bg-shell p-3 sm:p-5 lg:p-6">
-      {/* A real route home, not history.back() — someone who opened /login
-          directly, or followed a stale link, has no history to go back to. */}
+      {/* Real route home */}
       <Link
         to="/"
         className="absolute left-4 top-4 z-10 inline-flex items-center gap-1.5 rounded-full border border-line bg-white px-3.5 py-2 text-[13px] font-medium text-ink-muted shadow-sm transition hover:border-ink-faint hover:text-ink focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 sm:left-6 sm:top-6"
@@ -65,7 +65,7 @@ export default function Login() {
 
         {/* ------------------------------------------------------ the form -- */}
         <section className="flex flex-col justify-center px-5 py-8 sm:px-8 sm:py-10 lg:px-11 lg:py-12">
-          {/* Mobile-only brand row — the panel beside it is hidden at this width. */}
+          {/* Mobile-only brand row */}
           <div className="mb-7 lg:hidden">
             <Logo size="sm" />
           </div>

@@ -52,6 +52,51 @@ router.get('/', requireAuth, async (req, res, next) => {
   }
 });
 
+const SetSecurityQuestion = z.object({
+  securityQuestion: z.string().trim().min(3, 'Question must be at least 3 characters'),
+  securityAnswer: z.string().min(1, 'Answer cannot be blank'),
+});
+
+router.get('/security-question', requireAuth, async (req, res, next) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { securityQuestion: true },
+    });
+    res.json({
+      hasSecurityQuestion: Boolean(user?.securityQuestion),
+      securityQuestion: user?.securityQuestion ?? null,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post(
+  '/security-question',
+  requireAuth,
+  validate(SetSecurityQuestion),
+  async (req, res, next) => {
+    try {
+      const { securityQuestion, securityAnswer } = req.valid;
+      await prisma.user.update({
+        where: { id: req.user.id },
+        data: {
+          securityQuestion: securityQuestion.trim(),
+          securityAnswer, // preserves exact case, spacing, and characters
+        },
+      });
+      res.json({
+        success: true,
+        hasSecurityQuestion: true,
+        securityQuestion: securityQuestion.trim(),
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 router.post('/:id/toggle-active', requireAuth, async (req, res, next) => {
   try {
     if (!can(req.user.role, 'users:write')) {

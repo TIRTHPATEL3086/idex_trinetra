@@ -43,6 +43,7 @@ enum Role {
 }
 
 
+
 /// A person who may decrypt. The NAME NEVER GOES ON CHAIN — only `userRef`.
 model User {
   id      Int     @id @default(autoincrement())
@@ -52,10 +53,12 @@ model User {
   email   String? @unique
 
   // ---- authentication. None of this ever reaches the chain either. ----
-  role         Role      @default(OFFICER)
-  passwordHash String? // scrypt: <salt-hex>:<key-hex>. Null = cannot sign in.
-  active       Boolean   @default(true)
-  lastLoginAt  DateTime?
+  role             Role      @default(OFFICER)
+  passwordHash     String? // scrypt: <salt-hex>:<key-hex>. Null = cannot sign in.
+  active           Boolean   @default(true)
+  lastLoginAt      DateTime?
+  securityQuestion String? // Custom security challenge question set by officer
+  securityAnswer   String? // Secret exact answer (case-sensitive with spaces)
 
   // ---- Post-Quantum Cryptography (NIST FIPS 203 & FIPS 204) ----
   kemPublicKey     Bytes? // ML-KEM-768 public key (1184 bytes)
