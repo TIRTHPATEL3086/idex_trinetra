@@ -353,12 +353,26 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
                 candidates = dewarpedSearch.candidates;
                 checked += dewarpedSearch.checked;
               }
-              const lensExtract = await extract(leak);
+              let lensExtract = await extract(leak);
+              for (const altDelta of [16, 14]) {
+                if (await namesARelease(lensExtract.payloadBits)) break;
+                try {
+                  const alt = await extract(leak, altDelta, { multiOrientation: false });
+                  if (await namesARelease(alt.payloadBits)) {
+                    lensExtract = alt;
+                    break;
+                  }
+                  if (alt.bitConfidence > lensExtract.bitConfidence) {
+                    lensExtract = alt;
+                  }
+                } catch {}
+              }
               if (await namesARelease(lensExtract.payloadBits)) {
                 marked = lensExtract;
               } else {
                 const lensRescaled = await extractAtCandidateSizes(leak, candidates, { tones: true });
                 if (lensRescaled) marked = lensRescaled;
+                else if (lensExtract) marked = lensExtract;
               }
             }
           } catch {}
@@ -423,11 +437,10 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
       const isDegenerate = isDegeneratePayload(marked.payloadBits);
 
       // Distinguishing BETWEEN recipients of the SAME broadcast document requires
-      // watermark statistical significance and a clear margin over other suspects.
-      // Genuine smartphone captures yield 30-35 bits; with margin >= 3, it safely
-      // attributes the officer without false positives. Ties or degenerate noise stay inconclusive.
-      const threshold = margin >= 3 ? 30 : MIN_BITS_WITHOUT_CRC;
-      if (!isDegenerate && top.matches >= threshold && margin >= 2) {
+      // strict watermark statistical significance (at least MIN_BITS_WITHOUT_CRC = 34 bits,
+      // i.e. > 70% bit agreement).
+      // A noisy or cropped reading (e.g. 30-31 bits) or a tie MUST NEVER arbitrarily accuse an innocent officer.
+      if (!isDegenerate && top.matches >= MIN_BITS_WITHOUT_CRC && margin >= 2) {
         event = top.event;
       }
     }
