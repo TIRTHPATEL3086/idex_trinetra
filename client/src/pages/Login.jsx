@@ -269,19 +269,35 @@ function BrandPanel() {
 /**
  * Demo accounts selector.
  *
- * A drop-up: the list floats over the form above the trigger rather than
- * opening inside the card, so the sign-in box keeps its size. Picking an
- * account fills the form and closes the menu; a click outside or Escape
- * closes it too.
+ * A two-step drop-up: first the role, then the account inside it. A role with
+ * a single account fills the form straight away, so there is no pointless
+ * second step. The list floats over the form above the trigger rather than
+ * opening inside the card, so the sign-in box keeps its size. A click outside
+ * or Escape closes it; Escape on the account step goes back to the roles.
  */
+const ROLE_GROUPS = [
+  { role: 'ADMIN', label: 'Admin', hint: 'Registry, officers and custody' },
+  { role: 'OFFICER', label: 'Officer', hint: 'Opens released documents' },
+  { role: 'INVESTIGATOR', label: 'Investigator', hint: 'Traces leaks, cannot decrypt' },
+]
+  .map((g) => ({ ...g, accounts: DEMO_ACCOUNTS.filter((a) => a.role === g.role) }))
+  .filter((g) => g.accounts.length > 0);
+
 function DemoAccounts({ onPick, currentEmail }) {
   const [open, setOpen] = useState(false);
+  const [role, setRole] = useState(null); // null = the role step
   const rootRef = useRef(null);
   const buttonRef = useRef(null);
 
   const activeAccount = DEMO_ACCOUNTS.find(
     (a) => a.email.toLowerCase() === (currentEmail || '').trim().toLowerCase()
   );
+  const group = ROLE_GROUPS.find((g) => g.role === role);
+
+  const pick = (acc) => {
+    onPick(acc);
+    setOpen(false);
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -289,7 +305,10 @@ function DemoAccounts({ onPick, currentEmail }) {
       if (!rootRef.current?.contains(e.target)) setOpen(false);
     };
     const onKey = (e) => {
-      if (e.key === 'Escape') {
+      if (e.key !== 'Escape') return;
+      if (role) {
+        setRole(null);
+      } else {
         setOpen(false);
         buttonRef.current?.focus();
       }
@@ -300,14 +319,27 @@ function DemoAccounts({ onPick, currentEmail }) {
       document.removeEventListener('pointerdown', onPointer);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open]);
+  }, [open, role]);
+
+  const rowClass = (highlight) =>
+    `group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+      highlight
+        ? 'bg-line/60 shadow-sm ring-1 ring-accent/70'
+        : 'bg-white hover:bg-line/40 hover:shadow-sm'
+    }`;
+  const actionClass =
+    'shrink-0 rounded-md border border-line bg-surface px-2.5 py-1 text-[11px] font-bold text-ink-muted transition group-hover:border-accent group-hover:bg-accent group-hover:text-noir';
 
   return (
     <div ref={rootRef} className="relative mt-6">
       <button
         ref={buttonRef}
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          // Every fresh open starts at the role step.
+          if (!open) setRole(null);
+          setOpen((o) => !o);
+        }}
         aria-expanded={open}
         aria-haspopup="true"
         className={`flex w-full items-center justify-between gap-2 rounded-2xl border bg-surface px-4 py-3 text-left transition hover:bg-line/20 focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 ${
@@ -336,64 +368,126 @@ function DemoAccounts({ onPick, currentEmail }) {
 
       {/* Kept mounted so it can animate both ways; hidden from focus and
           assistive tech while closed. */}
-      <ul
+      <div
         aria-hidden={!open}
         inert={open ? undefined : ''}
-        className={`absolute inset-x-0 bottom-full z-30 mb-2 max-h-[min(60vh,360px)] origin-bottom space-y-1.5 overflow-y-auto rounded-2xl border border-line bg-white p-2 shadow-panel transition-[opacity,transform,visibility] duration-200 ease-out ${
+        className={`absolute inset-x-0 bottom-full z-30 mb-2 max-h-[min(60vh,380px)] origin-bottom overflow-y-auto rounded-2xl border border-line bg-white p-2 shadow-panel transition-[opacity,transform,visibility] duration-200 ease-out ${
           open
             ? 'visible translate-y-0 scale-100 opacity-100'
             : 'invisible translate-y-2 scale-[0.97] opacity-0'
         }`}
       >
-        {DEMO_ACCOUNTS.map((acc) => {
-          const isSelected = activeAccount?.email === acc.email;
-          return (
-            <li key={acc.email}>
+        {!group ? (
+          <>
+            <p className="px-3 pb-1.5 pt-1 text-[11px] font-bold uppercase tracking-wide text-ink-faint">
+              Choose a role
+            </p>
+            <ul className="space-y-1.5">
+              {ROLE_GROUPS.map((g) => {
+                const single = g.accounts.length === 1;
+                const holdsActive = g.accounts.some((a) => a.email === activeAccount?.email);
+                return (
+                  <li key={g.role}>
+                    <button
+                      type="button"
+                      onClick={() => (single ? pick(g.accounts[0]) : setRole(g.role))}
+                      className={rowClass(holdsActive)}
+                    >
+                      <span
+                        className={`pill shrink-0 ${g.accounts[0].badge}`}
+                        style={{ minWidth: 96, justifyContent: 'center' }}
+                      >
+                        {g.label}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[13px] font-bold text-ink">{g.hint}</div>
+                        <div className="truncate text-[11px] text-ink-muted">
+                          {single
+                            ? g.accounts[0].email
+                            : `${g.accounts.length} accounts to choose from`}
+                        </div>
+                      </div>
+                      <span className={actionClass}>
+                        {single ? (
+                          'Use'
+                        ) : (
+                          <span className="flex items-center gap-0.5">
+                            Open <ChevronRight />
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-2 px-1 pb-1.5 pt-0.5">
               <button
                 type="button"
-                onClick={() => {
-                  onPick(acc);
-                  setOpen(false);
-                }}
-                className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-                  isSelected
-                    ? 'bg-line/60 shadow-sm ring-1 ring-accent/70'
-                    : 'bg-white hover:bg-line/40 hover:shadow-sm'
-                }`}
+                onClick={() => setRole(null)}
+                className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[12px] font-semibold text-ink-muted transition hover:bg-line/40 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
-                <span
-                  className={`pill shrink-0 ${acc.badge}`}
-                  style={{ minWidth: 80, justifyContent: 'center' }}
-                >
-                  {acc.short}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="mono truncate text-[12px] font-bold text-ink">{acc.email}</div>
-                  <div className="truncate text-[11px] text-ink-muted">
-                    {acc.name} · <span className="font-semibold text-ink-faint">{acc.dept}</span>
-                  </div>
-                </div>
-                <span
-                  className={`shrink-0 rounded-md px-2.5 py-1 text-[11px] font-bold transition ${
-                    isSelected
-                      ? 'bg-accent font-extrabold text-noir shadow-xs'
-                      : 'border border-line bg-surface text-ink-muted group-hover:border-accent group-hover:bg-accent group-hover:text-noir'
-                  }`}
-                >
-                  {isSelected ? (
-                    <span className="flex items-center gap-1">
-                      In Use <CheckIcon size={11} />
-                    </span>
-                  ) : (
-                    'Use'
-                  )}
-                </span>
+                <ChevronLeftIcon size={13} />
+                Roles
               </button>
-            </li>
-          );
-        })}
-      </ul>
+              <span className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">
+                {group.label} accounts
+              </span>
+            </div>
+            <ul className="space-y-1.5">
+              {group.accounts.map((acc) => {
+                const isSelected = activeAccount?.email === acc.email;
+                return (
+                  <li key={acc.email}>
+                    <button
+                      type="button"
+                      onClick={() => pick(acc)}
+                      className={rowClass(isSelected)}
+                    >
+                      <span
+                        className={`pill shrink-0 ${acc.badge}`}
+                        style={{ minWidth: 80, justifyContent: 'center' }}
+                      >
+                        {acc.short}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="mono truncate text-[12px] font-bold text-ink">
+                          {acc.email}
+                        </div>
+                        <div className="truncate text-[11px] text-ink-muted">
+                          {acc.name} ·{' '}
+                          <span className="font-semibold text-ink-faint">{acc.dept}</span>
+                        </div>
+                      </div>
+                      {isSelected ? (
+                        <span className="shrink-0 rounded-md bg-accent px-2.5 py-1 text-[11px] font-extrabold text-noir shadow-xs">
+                          <span className="flex items-center gap-1">
+                            In Use <CheckIcon size={11} />
+                          </span>
+                        </span>
+                      ) : (
+                        <span className={actionClass}>Use</span>
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        )}
+      </div>
     </div>
+  );
+}
+
+function ChevronRight() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m9 6 6 6-6 6" {...S} />
+    </svg>
   );
 }
 
