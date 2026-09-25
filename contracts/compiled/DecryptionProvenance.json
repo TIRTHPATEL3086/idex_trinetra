@@ -1,0 +1,623 @@
+{
+  "contractName": "DecryptionProvenance",
+  "sourceName": "contracts/DecryptionProvenance.sol",
+  "compiler": "solc 0.8.24",
+  "abi": [
+    {
+      "inputs": [],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "inputs": [],
+      "name": "AccessControlBadConfirmation",
+      "type": "error"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "neededRole",
+          "type": "bytes32"
+        }
+      ],
+      "name": "AccessControlUnauthorizedAccount",
+      "type": "error"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "receiptId",
+          "type": "bytes32"
+        }
+      ],
+      "name": "ReceiptExists",
+      "type": "error"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "receiptId",
+          "type": "bytes32"
+        }
+      ],
+      "name": "UnknownReceipt",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "ZeroReceiptId",
+      "type": "error"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "merkleRoot",
+          "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint32",
+          "name": "count",
+          "type": "uint32"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint64",
+          "name": "timestamp",
+          "type": "uint64"
+        }
+      ],
+      "name": "BatchLogged",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "receiptId",
+          "type": "bytes32"
+        },
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "assetRef",
+          "type": "bytes32"
+        },
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "userRef",
+          "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "internalType": "bytes32",
+          "name": "contentSha",
+          "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "internalType": "bytes32",
+          "name": "payloadCommit",
+          "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint64",
+          "name": "timestamp",
+          "type": "uint64"
+        }
+      ],
+      "name": "DecryptionLogged",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "receiptId",
+          "type": "bytes32"
+        },
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "assetRef",
+          "type": "bytes32"
+        },
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "userRef",
+          "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "internalType": "bytes32",
+          "name": "contentSha",
+          "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "internalType": "bytes32",
+          "name": "payloadCommit",
+          "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "internalType": "bytes32",
+          "name": "signatureCommit",
+          "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint64",
+          "name": "timestamp",
+          "type": "uint64"
+        }
+      ],
+      "name": "DecryptionLoggedWithSignature",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "previousAdminRole",
+          "type": "bytes32"
+        },
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "newAdminRole",
+          "type": "bytes32"
+        }
+      ],
+      "name": "RoleAdminChanged",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "sender",
+          "type": "address"
+        }
+      ],
+      "name": "RoleGranted",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "sender",
+          "type": "address"
+        }
+      ],
+      "name": "RoleRevoked",
+      "type": "event"
+    },
+    {
+      "inputs": [],
+      "name": "DEFAULT_ADMIN_ROLE",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "LOGGER_ROLE",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "receiptId",
+          "type": "bytes32"
+        }
+      ],
+      "name": "getReceipt",
+      "outputs": [
+        {
+          "components": [
+            {
+              "internalType": "bytes32",
+              "name": "assetRef",
+              "type": "bytes32"
+            },
+            {
+              "internalType": "bytes32",
+              "name": "userRef",
+              "type": "bytes32"
+            },
+            {
+              "internalType": "bytes32",
+              "name": "contentSha",
+              "type": "bytes32"
+            },
+            {
+              "internalType": "bytes32",
+              "name": "payloadCommit",
+              "type": "bytes32"
+            },
+            {
+              "internalType": "uint64",
+              "name": "timestamp",
+              "type": "uint64"
+            },
+            {
+              "internalType": "bool",
+              "name": "exists",
+              "type": "bool"
+            },
+            {
+              "internalType": "bytes32",
+              "name": "signatureCommit",
+              "type": "bytes32"
+            }
+          ],
+          "internalType": "struct DecryptionProvenance.Receipt",
+          "name": "",
+          "type": "tuple"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "role",
+          "type": "bytes32"
+        }
+      ],
+      "name": "getRoleAdmin",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "name": "grantLogger",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "name": "grantRole",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "receiptId",
+          "type": "bytes32"
+        }
+      ],
+      "name": "hasReceipt",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "name": "hasRole",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "merkleRoot",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "count",
+          "type": "uint32"
+        }
+      ],
+      "name": "logBatch",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "receiptId",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "assetRef",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "userRef",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "contentSha",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "payloadCommit",
+          "type": "bytes32"
+        }
+      ],
+      "name": "logDecryption",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "receiptId",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "assetRef",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "userRef",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "contentSha",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "payloadCommit",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "sigCommit",
+          "type": "bytes32"
+        }
+      ],
+      "name": "logDecryptionWithSignature",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "assetRef",
+          "type": "bytes32"
+        }
+      ],
+      "name": "receiptCountOfAsset",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "assetRef",
+          "type": "bytes32"
+        }
+      ],
+      "name": "receiptsOfAsset",
+      "outputs": [
+        {
+          "internalType": "bytes32[]",
+          "name": "",
+          "type": "bytes32[]"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "address",
+          "name": "callerConfirmation",
+          "type": "address"
+        }
+      ],
+      "name": "renounceRole",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "name": "revokeRole",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes4",
+          "name": "interfaceId",
+          "type": "bytes4"
+        }
+      ],
+      "name": "supportsInterface",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "totalReceipts",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x608060405234801561001057600080fd5b5061001c60003361004d565b506100477f566c814873eed56a69b28c40ab27cc2cb150d74068bae3e884ccd44f8de60f8a3361004d565b506100f9565b6000828152602081815260408083206001600160a01b038516845290915281205460ff166100ef576000838152602081815260408083206001600160a01b03861684529091529020805460ff191660011790556100a73390565b6001600160a01b0316826001600160a01b0316847f2f8788117e7eff1d82e926ec794901d17c78024a50270940304540a733656f0d60405160405180910390a45060016100f3565b5060005b92915050565b610bab806101086000396000f3fe608060405234801561001057600080fd5b506004361061010b5760003560e01c806383ff65be116100a2578063ced0339911610071578063ced0339914610216578063d547741f14610236578063eefa336b14610249578063f4e98e0b14610269578063fcecbb611461029657600080fd5b806383ff65be146101df57806391d14854146101f2578063a217fddf14610205578063a23a720f1461020d57600080fd5b806336568abe116100de57806336568abe146101915780635abb4f53146101a45780637bf0fbde146101b75780637ea8bede146101cc57600080fd5b806301ffc9a71461011057806322899d6b14610138578063248a9ca31461014d5780632f2ff15d1461017e575b600080fd5b61012361011e3660046109ad565b61030b565b60405190151581526020015b60405180910390f35b61014b6101463660046109de565b610342565b005b61017061015b366004610a17565b60009081526020819052604090206001015490565b60405190815260200161012f565b61014b61018c366004610a4c565b6103a8565b61014b61019f366004610a4c565b6103d3565b61014b6101b2366004610a78565b61040b565b610170600080516020610b5683398151915281565b61014b6101da366004610abb565b61043a565b61014b6101ed366004610af6565b610469565b610123610200366004610a4c565b61048c565b610170600081565b61017060035481565b610229610224366004610a17565b6104b5565b60405161012f9190610b11565b61014b610244366004610a4c565b610517565b610170610257366004610a17565b60009081526002602052604090205490565b610123610277366004610a17565b600090815260016020526040902060040154600160401b900460ff1690565b6102a96102a4366004610a17565b61053c565b60405161012f9190600060e0820190508251825260208301516020830152604083015160408301526060830151606083015267ffffffffffffffff608084015116608083015260a0830151151560a083015260c083015160c083015292915050565b60006001600160e01b03198216637965db0b60e01b148061033c57506301ffc9a760e01b6001600160e01b03198316145b92915050565b600080516020610b5683398151915261035a8161062a565b6040805163ffffffff8416815267ffffffffffffffff4216602082015284917eef94c77ee04ae2a9b2624cb37462fafe5629e5745e320fa0aaa0bdc1122f13910160405180910390a2505050565b6000828152602081905260409020600101546103c38161062a565b6103cd8383610637565b50505050565b6001600160a01b03811633146103fc5760405163334bd91960e11b815260040160405180910390fd5b61040682826106c9565b505050565b600080516020610b568339815191526104238161062a565b610431878787878787610734565b50505050505050565b600080516020610b568339815191526104528161062a565b61046186868686866000610734565b505050505050565b60006104748161062a565b610406600080516020610b5683398151915283610637565b6000918252602082815260408084206001600160a01b0393909316845291905290205460ff1690565b60008181526002602090815260409182902080548351818402810184019094528084526060939283018282801561050b57602002820191906000526020600020905b8154815260200190600101908083116104f7575b50505050509050919050565b6000828152602081905260409020600101546105328161062a565b6103cd83836106c9565b6040805160e081018252600080825260208201819052918101829052606081018290526080810182905260a0810182905260c0810191909152600082815260016020526040902060040154600160401b900460ff166105b65760405163123e9aab60e21b8152600481018390526024015b60405180910390fd5b50600090815260016020818152604092839020835160e08101855281548152928101549183019190915260028101549282019290925260038201546060820152600482015467ffffffffffffffff81166080830152600160401b900460ff16151560a082015260059091015460c082015290565b6106348133610970565b50565b6000610643838361048c565b6106c1576000838152602081815260408083206001600160a01b03861684529091529020805460ff191660011790556106793390565b6001600160a01b0316826001600160a01b0316847f2f8788117e7eff1d82e926ec794901d17c78024a50270940304540a733656f0d60405160405180910390a450600161033c565b50600061033c565b60006106d5838361048c565b156106c1576000838152602081815260408083206001600160a01b0386168085529252808320805460ff1916905551339286917ff6391f5c32d9c69d2a47ea670b442974b53935d1edc7fd64eb21e047a839171b9190a450600161033c565b8561075257604051639698ad7560e01b815260040160405180910390fd5b600086815260016020526040902060040154600160401b900460ff161561078f57604051632afdd1bb60e21b8152600481018790526024016105ad565b6040518060e001604052808681526020018581526020018481526020018381526020014267ffffffffffffffff16815260200160011515815260200182815250600160008881526020019081526020016000206000820151816000015560208201518160010155604082015181600201556060820151816003015560808201518160040160006101000a81548167ffffffffffffffff021916908367ffffffffffffffff16021790555060a08201518160040160086101000a81548160ff02191690831515021790555060c08201518160050155905050600260008681526020019081526020016000208690806001815401808255809150506001900390600052602060002001600090919091909150556003600081548092919060010191905055508385877fd3c06f209b6a922ab38001050a05081b4f7769ede83a2c629069385863166fdf86864260405161090393929190928352602083019190915267ffffffffffffffff16604082015260600190565b60405180910390a4801561046157604080518481526020810184905290810182905267ffffffffffffffff421660608201528490869088907f26ce97d86c5ceb1859ff227a458613aea5c4b7289ad45ddc88c213b27f5842b89060800160405180910390a4505050505050565b61097a828261048c565b6109a95760405163e2517d3f60e01b81526001600160a01b0382166004820152602481018390526044016105ad565b5050565b6000602082840312156109bf57600080fd5b81356001600160e01b0319811681146109d757600080fd5b9392505050565b600080604083850312156109f157600080fd5b82359150602083013563ffffffff81168114610a0c57600080fd5b809150509250929050565b600060208284031215610a2957600080fd5b5035919050565b80356001600160a01b0381168114610a4757600080fd5b919050565b60008060408385031215610a5f57600080fd5b82359150610a6f60208401610a30565b90509250929050565b60008060008060008060c08789031215610a9157600080fd5b505084359660208601359650604086013595606081013595506080810135945060a0013592509050565b600080600080600060a08688031215610ad357600080fd5b505083359560208501359550604085013594606081013594506080013592509050565b600060208284031215610b0857600080fd5b6109d782610a30565b6020808252825182820181905260009190848201906040850190845b81811015610b4957835183529284019291840191600101610b2d565b5090969550505050505056fe566c814873eed56a69b28c40ab27cc2cb150d74068bae3e884ccd44f8de60f8aa2646970667358221220d680df744f56c801cca8b888f4615ea2ab4d9d9701378e21f8da0621dd7d084264736f6c63430008180033"
+}

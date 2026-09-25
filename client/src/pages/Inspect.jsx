@@ -181,7 +181,7 @@ function Report({ report }) {
         </p>
       </div>
 
-      <MarkedPreview report={report} />
+      <MarkedPreview key={report.receiptId} report={report} />
     </div>
   );
 }
@@ -207,18 +207,22 @@ function Report({ report }) {
  */
 function MarkedPreview({ report }) {
   const [failed, setFailed] = useState(false);
+  const [page, setPage] = useState(1);
   const short = String(report.receiptId).replace(/^0x/, '').slice(0, 16);
   const isImage = (report.asset?.mimeType || '').startsWith('image/');
+  // A PDF is shown page by page, each page rendered as a picture.
+  const pages = report.pageCount || 0;
   const base = `/api/files/marked/${short}`;
+  const pageQ = pages ? `&page=${page}` : '';
 
-  if (!isImage || failed) {
+  if ((!isImage && !pages) || failed) {
     return (
       <div>
         <span className="eyebrow">The released copy</span>
         <p className="mt-2 rounded-2xl border border-line bg-muted px-4 py-3 text-[13px] text-ink-muted">
           {failed
             ? 'That copy could not be previewed here.'
-            : 'This document is a PDF — download it to view the released copy.'}
+            : 'This copy cannot be previewed — download it to view it.'}
         </p>
         <a
           href={base}
@@ -232,14 +236,39 @@ function MarkedPreview({ report }) {
 
   return (
     <div>
-      <span className="eyebrow">The released copy, both ways</span>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="eyebrow">The released copy, both ways</span>
+        {pages > 1 && (
+          <div className="flex items-center gap-2" role="group" aria-label="Page">
+            <button
+              type="button"
+              className="btn-ghost !px-3 !py-1.5 !text-xs"
+              disabled={page <= 1}
+              onClick={() => setPage((n) => Math.max(1, n - 1))}
+            >
+              ‹ Prev
+            </button>
+            <span className="mono text-xs text-ink-muted">
+              Page {page} of {pages}
+            </span>
+            <button
+              type="button"
+              className="btn-ghost !px-3 !py-1.5 !text-xs"
+              disabled={page >= pages}
+              onClick={() => setPage((n) => Math.min(pages, n + 1))}
+            >
+              Next ›
+            </button>
+          </div>
+        )}
+      </div>
 
       <div className="mt-2 grid gap-3 sm:grid-cols-2">
         <Pane
           title="Admin view"
           note="Stamped on request for this screen."
-          src={`${base}?inline=1&stamped=1`}
-          href={`${base}?stamped=1`}
+          src={`${base}?inline=1&stamped=1${pageQ}`}
+          href={`${base}?stamped=1${pageQ}`}
           alt={`${report.asset?.title}, stamped for review`}
           onError={() => setFailed(true)}
           badge="admin only"
@@ -247,8 +276,8 @@ function MarkedPreview({ report }) {
         <Pane
           title={`As ${report.recipient?.name || 'the officer'} sees it`}
           note="The file on disk. The mark is there, and invisible."
-          src={`${base}?inline=1`}
-          href={base}
+          src={`${base}?inline=1${pageQ}`}
+          href={pages ? `${base}?page=${page}` : base}
           alt={`${report.asset?.title}, as released`}
           onError={() => setFailed(true)}
         />

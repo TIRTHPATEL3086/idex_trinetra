@@ -197,7 +197,7 @@ const SUMMARY = [
   {
     title: 'Trace',
     body: 'A leaked file is matched back to the release it came from.',
-    dot: 'bg-chromia-yellow-500',
+    dot: 'bg-accent-bright',
   },
 ];
 
