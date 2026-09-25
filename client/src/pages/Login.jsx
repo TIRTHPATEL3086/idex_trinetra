@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { CheckIcon, ChevronLeftIcon, KeyIcon, ShieldIcon } from '../components/icons.jsx';
 
@@ -46,19 +46,18 @@ export default function Login() {
     setForm({ email: acc.email, password: acc.password });
     setError(null);
     setStatus('idle');
-    setMenuRole(acc.role);
   };
 
-  // The demo list is driven from two places — the role bar above the card and
-  // the drop-up under the form — so its state lives here.
+  // The role bar above the card picks the role; the demo box lists only that
+  // role's accounts. Both read this state.
   const [menuOpen, setMenuOpen] = useState(false);
-  const [menuRole, setMenuRole] = useState(null); // null = the role step
+  const [menuRole, setMenuRole] = useState(ROLE_GROUPS[0].role);
   const activeAccount = DEMO_ACCOUNTS.find(
     (a) => a.email.toLowerCase() === form.email.trim().toLowerCase()
   );
 
-  // A role with one account fills the form at once; one with several opens
-  // the drop-up on that role's accounts.
+  // A role with one account fills the form at once. One with several clears
+  // an account left over from another role and opens the list to choose from.
   const chooseRole = (role) => {
     const group = ROLE_GROUPS.find((g) => g.role === role);
     setMenuRole(role);
@@ -66,12 +65,14 @@ export default function Login() {
       fillDemo(group.accounts[0]);
       setMenuOpen(false);
     } else {
+      if (activeAccount && activeAccount.role !== role) setForm({ email: '', password: '' });
       setMenuOpen(true);
     }
   };
 
+  // Everything fits the screen, so the page itself never scrolls.
   return (
-    <div className="relative grid min-h-[100dvh] w-full place-items-center bg-shell p-3 sm:p-5 lg:p-6">
+    <div className="relative grid h-[100dvh] w-full place-items-center overflow-hidden bg-shell p-3 sm:p-5 lg:p-6">
       {/* A real route home, not history.back() — someone who opened /login
           directly, or followed a stale link, has no history to go back to. */}
       <Link
@@ -82,22 +83,20 @@ export default function Login() {
         Back
       </Link>
 
-      <div className="flex w-full max-w-[1080px] flex-col items-center gap-4 pt-14 sm:gap-5 sm:pt-16">
-        {/* The role just chosen wins over the account still in the form, so
-            tapping Officer lights Officer before an officer is picked. */}
-        <RoleBar active={menuRole ?? activeAccount?.role} onChoose={chooseRole} />
+      <div className="flex w-full max-w-[1080px] flex-col items-center gap-4 pt-12 sm:gap-5 sm:pt-0 [@media(max-height:700px)]:gap-3">
+        <RoleBar active={menuRole} onChoose={chooseRole} />
 
         <main className="w-full rounded-2xl bg-white shadow-app sm:rounded-3xl lg:grid lg:grid-cols-[1.02fr_1fr]">
           <BrandPanel />
 
           {/* ------------------------------------------------------ the form -- */}
-          <section className="flex flex-col justify-center px-5 py-8 sm:px-8 sm:py-10 lg:px-11 lg:py-12">
+          <section className="flex flex-col justify-center px-5 py-7 sm:px-8 sm:py-10 lg:px-11 lg:py-11 [@media(max-height:760px)]:lg:py-8 [@media(max-height:700px)]:py-5">
             {/* Mobile-only brand row — the panel beside it is hidden at this width. */}
-            <div className="mb-7 lg:hidden">
+            <div className="mb-6 lg:hidden [@media(max-height:700px)]:mb-4">
               <Logo size="sm" />
             </div>
 
-            <header className="mb-6">
+            <header className="mb-5 [@media(max-height:700px)]:mb-4">
               <h1 className="font-display text-2xl font-extrabold tracking-tight text-ink sm:text-[28px]">
                 Sign in
               </h1>
@@ -106,7 +105,19 @@ export default function Login() {
               </p>
             </header>
 
-            <form onSubmit={submit} className="space-y-4" noValidate>
+            <DemoAccounts
+              onPick={fillDemo}
+              activeAccount={activeAccount}
+              open={menuOpen}
+              setOpen={setMenuOpen}
+              role={menuRole}
+            />
+
+            <form
+              onSubmit={submit}
+              className="space-y-4 [@media(max-height:700px)]:space-y-3"
+              noValidate
+            >
               <label className="block">
                 <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-faint">
                   Email
@@ -122,11 +133,7 @@ export default function Login() {
                   className="input text-base sm:text-sm"
                   placeholder="name@example.gov"
                   value={form.email}
-                  onChange={(e) => {
-                    setForm({ ...form, email: e.target.value });
-                    // A typed address speaks for itself; drop the chosen role.
-                    setMenuRole(null);
-                  }}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
                 />
               </label>
 
@@ -174,15 +181,6 @@ export default function Login() {
                 {status === 'working' ? 'Signing in…' : 'Sign in'}
               </button>
             </form>
-
-            <DemoAccounts
-              onPick={fillDemo}
-              activeAccount={activeAccount}
-              open={menuOpen}
-              setOpen={setMenuOpen}
-              role={menuRole}
-              setRole={setMenuRole}
-            />
           </section>
         </main>
       </div>
@@ -217,7 +215,7 @@ const SUMMARY = [
 
 function BrandPanel() {
   return (
-    <aside className="relative hidden flex-col justify-between overflow-hidden rounded-l-3xl bg-gradient-to-br from-[#0d1117] to-noir p-11 text-white lg:flex">
+    <aside className="relative hidden flex-col justify-between overflow-hidden rounded-l-3xl bg-gradient-to-br from-[#0d1117] to-noir p-11 text-white lg:flex [@media(max-height:760px)]:p-8">
       {/* The artwork is merged into the panel rather than placed on it.
           `screen` is what does the work: the render's near-black background
           becomes nothing against the panel, so only its glow survives and
@@ -272,7 +270,7 @@ function BrandPanel() {
         {/* What the product is, in three lines. Someone at a sign-in screen
             wants to know what they are signing in to — not how the roles are
             split, which only matters once they are inside. */}
-        <h2 className="mt-10 font-display text-[32px] leading-[1.08] text-white">
+        <h2 className="mt-10 font-display text-[32px] [@media(max-height:760px)]:mt-6 leading-[1.08] text-white">
           The register for
           <br />
           <span className="text-accent">released documents.</span>
@@ -284,7 +282,7 @@ function BrandPanel() {
         </p>
       </div>
 
-      <ul className="relative z-10 mt-9 space-y-4 [text-shadow:0_1px_14px_rgba(15,10,20,0.75)]">
+      <ul className="relative z-10 mt-9 space-y-4 [@media(max-height:760px)]:mt-5 [@media(max-height:760px)]:space-y-3 [text-shadow:0_1px_14px_rgba(15,10,20,0.75)]">
         {SUMMARY.map((item) => (
           <li key={item.title} className="flex items-start gap-3">
             <span className={`mt-[6px] h-2 w-2 shrink-0 rounded-full ${item.dot}`} />
@@ -306,13 +304,12 @@ function BrandPanel() {
 /* -------------------------------------------------------- demo accounts --- */
 
 /**
- * Demo accounts selector.
+ * Demo accounts.
  *
- * A two-step drop-up: first the role, then the account inside it. A role with
- * a single account fills the form straight away, so there is no pointless
- * second step. The list floats over the form above the trigger rather than
- * opening inside the card, so the sign-in box keeps its size. A click outside
- * or Escape closes it; Escape on the account step goes back to the roles.
+ * The role bar above the card chooses the role; the box under the heading
+ * then lists that role's accounts and nothing else. The list drops down over
+ * the form rather than opening inside the card, so the sign-in box keeps its
+ * size. A click outside or Escape closes it.
  */
 const ROLE_GROUPS = [
   { role: 'ADMIN', label: 'Admin', hint: 'Registry, officers and custody' },
@@ -367,16 +364,30 @@ function RoleBar({ active, onChoose }) {
   );
 }
 
-function DemoAccounts({ onPick, activeAccount, open, setOpen, role, setRole }) {
+function DemoAccounts({ onPick, activeAccount, open, setOpen, role }) {
   const rootRef = useRef(null);
   const buttonRef = useRef(null);
+  const [maxH, setMaxH] = useState(320);
 
-  const group = ROLE_GROUPS.find((g) => g.role === role);
+  const group = ROLE_GROUPS.find((g) => g.role === role) ?? ROLE_GROUPS[0];
 
   const pick = (acc) => {
     onPick(acc);
     setOpen(false);
   };
+
+  // The page does not scroll, so the list may only use the room left below
+  // the trigger; anything beyond that scrolls inside the list itself.
+  useLayoutEffect(() => {
+    if (!open || !buttonRef.current) return;
+    const fit = () => {
+      const below = window.innerHeight - buttonRef.current.getBoundingClientRect().bottom;
+      setMaxH(Math.max(120, Math.floor(below - 16)));
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -385,12 +396,8 @@ function DemoAccounts({ onPick, activeAccount, open, setOpen, role, setRole }) {
     };
     const onKey = (e) => {
       if (e.key !== 'Escape') return;
-      if (role) {
-        setRole(null);
-      } else {
-        setOpen(false);
-        buttonRef.current?.focus();
-      }
+      setOpen(false);
+      buttonRef.current?.focus();
     };
     document.addEventListener('pointerdown', onPointer);
     document.addEventListener('keydown', onKey);
@@ -398,31 +405,14 @@ function DemoAccounts({ onPick, activeAccount, open, setOpen, role, setRole }) {
       document.removeEventListener('pointerdown', onPointer);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open, role, setOpen, setRole]);
-
-  const rowClass = (highlight) =>
-    `group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-      highlight
-        ? 'bg-line/60 shadow-sm ring-1 ring-accent/70'
-        : 'bg-white hover:bg-line/40 hover:shadow-sm'
-    }`;
-  const actionClass =
-    'shrink-0 rounded-md border border-line bg-surface px-2.5 py-1 text-[11px] font-bold text-ink-muted transition group-hover:border-accent group-hover:bg-accent group-hover:text-noir';
+  }, [open, setOpen]);
 
   return (
-    <div ref={rootRef} className="relative mt-6">
+    <div ref={rootRef} className="relative mb-5 [@media(max-height:700px)]:mb-3">
       <button
         ref={buttonRef}
         type="button"
-        onClick={() => {
-          // A fresh open goes straight to the chosen role's accounts when it
-          // has several to pick from, and to the role step otherwise.
-          if (!open) {
-            const g = ROLE_GROUPS.find((x) => x.role === (activeAccount?.role ?? role));
-            setRole(g && g.accounts.length > 1 ? g.role : null);
-          }
-          setOpen((o) => !o);
-        }}
+        onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-haspopup="true"
         className={`flex w-full items-center justify-between gap-2 rounded-2xl border bg-surface px-4 py-3 text-left transition hover:bg-line/20 focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 ${
@@ -431,146 +421,76 @@ function DemoAccounts({ onPick, activeAccount, open, setOpen, role, setRole }) {
       >
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="shrink-0 text-xs font-bold uppercase tracking-wide text-ink-faint">
-            Demo accounts
+            {group.label} demo {group.accounts.length > 1 ? 'accounts' : 'account'}
           </span>
-          {activeAccount && (
+          {activeAccount && activeAccount.role === group.role && (
             <span
               className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${activeAccount.badge} shadow-xs`}
             >
               <span className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
-              In use: {activeAccount.short} ({activeAccount.dept})
+              In use: {activeAccount.short}
             </span>
           )}
         </div>
         <span className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-ink-muted">
-          {activeAccount ? 'Change' : 'Choose'}
-          {/* Points the way the list opens: up, then down to close. */}
-          <ChevronIcon open={!open} />
+          {activeAccount?.role === group.role ? 'Change' : 'Choose'}
+          {/* Points the way the list opens: down, then up to close. */}
+          <ChevronIcon open={open} />
         </span>
       </button>
 
       {/* Kept mounted so it can animate both ways; hidden from focus and
-          assistive tech while closed. */}
-      <div
+          assistive tech while closed. Only the chosen role's accounts. */}
+      <ul
         aria-hidden={!open}
         inert={open ? undefined : ''}
-        className={`absolute inset-x-0 bottom-full z-30 mb-2 max-h-[min(60vh,380px)] origin-bottom overflow-y-auto rounded-2xl border border-line bg-white p-2 shadow-panel transition-[opacity,transform,visibility] duration-200 ease-out ${
+        style={{ maxHeight: maxH }}
+        className={`absolute inset-x-0 top-full z-30 mt-2 origin-top space-y-1.5 overflow-y-auto rounded-2xl border border-line bg-white p-2 shadow-panel transition-[opacity,transform,visibility] duration-200 ease-out ${
           open
             ? 'visible translate-y-0 scale-100 opacity-100'
-            : 'invisible translate-y-2 scale-[0.97] opacity-0'
+            : 'invisible -translate-y-2 scale-[0.97] opacity-0'
         }`}
       >
-        {!group ? (
-          <>
-            <p className="px-3 pb-1.5 pt-1 text-[11px] font-bold uppercase tracking-wide text-ink-faint">
-              Choose a role
-            </p>
-            <ul className="space-y-1.5">
-              {ROLE_GROUPS.map((g) => {
-                const single = g.accounts.length === 1;
-                const holdsActive = g.accounts.some((a) => a.email === activeAccount?.email);
-                return (
-                  <li key={g.role}>
-                    <button
-                      type="button"
-                      onClick={() => (single ? pick(g.accounts[0]) : setRole(g.role))}
-                      className={rowClass(holdsActive)}
-                    >
-                      <span
-                        className={`pill shrink-0 ${g.accounts[0].badge}`}
-                        style={{ minWidth: 96, justifyContent: 'center' }}
-                      >
-                        {g.label}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[13px] font-bold text-ink">{g.hint}</div>
-                        <div className="truncate text-[11px] text-ink-muted">
-                          {single
-                            ? g.accounts[0].email
-                            : `${g.accounts.length} accounts to choose from`}
-                        </div>
-                      </div>
-                      <span className={actionClass}>
-                        {single ? (
-                          'Use'
-                        ) : (
-                          <span className="flex items-center gap-0.5">
-                            Open <ChevronRight />
-                          </span>
-                        )}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </>
-        ) : (
-          <>
-            <div className="flex items-center gap-2 px-1 pb-1.5 pt-0.5">
+        {group.accounts.map((acc) => {
+          const isSelected = activeAccount?.email === acc.email;
+          return (
+            <li key={acc.email}>
               <button
                 type="button"
-                onClick={() => setRole(null)}
-                className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[12px] font-semibold text-ink-muted transition hover:bg-line/40 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                onClick={() => pick(acc)}
+                className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                  isSelected
+                    ? 'bg-line/60 shadow-sm ring-1 ring-accent/70'
+                    : 'bg-white hover:bg-line/40 hover:shadow-sm'
+                }`}
               >
-                <ChevronLeftIcon size={13} />
-                Roles
+                <span
+                  className={`pill shrink-0 ${acc.badge}`}
+                  style={{ minWidth: 80, justifyContent: 'center' }}
+                >
+                  {acc.short}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="mono truncate text-[12px] font-bold text-ink">{acc.email}</div>
+                  <div className="truncate text-[11px] text-ink-muted">
+                    {acc.name} · <span className="font-semibold text-ink-faint">{acc.dept}</span>
+                  </div>
+                </div>
+                {isSelected ? (
+                  <span className="flex shrink-0 items-center gap-1 rounded-md bg-accent px-2.5 py-1 text-[11px] font-extrabold text-noir shadow-xs">
+                    In Use <CheckIcon size={11} />
+                  </span>
+                ) : (
+                  <span className="shrink-0 rounded-md border border-line bg-surface px-2.5 py-1 text-[11px] font-bold text-ink-muted transition group-hover:border-accent group-hover:bg-accent group-hover:text-noir">
+                    Use
+                  </span>
+                )}
               </button>
-              <span className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">
-                {group.label} accounts
-              </span>
-            </div>
-            <ul className="space-y-1.5">
-              {group.accounts.map((acc) => {
-                const isSelected = activeAccount?.email === acc.email;
-                return (
-                  <li key={acc.email}>
-                    <button
-                      type="button"
-                      onClick={() => pick(acc)}
-                      className={rowClass(isSelected)}
-                    >
-                      <span
-                        className={`pill shrink-0 ${acc.badge}`}
-                        style={{ minWidth: 80, justifyContent: 'center' }}
-                      >
-                        {acc.short}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="mono truncate text-[12px] font-bold text-ink">
-                          {acc.email}
-                        </div>
-                        <div className="truncate text-[11px] text-ink-muted">
-                          {acc.name} ·{' '}
-                          <span className="font-semibold text-ink-faint">{acc.dept}</span>
-                        </div>
-                      </div>
-                      {isSelected ? (
-                        <span className="shrink-0 rounded-md bg-accent px-2.5 py-1 text-[11px] font-extrabold text-noir shadow-xs">
-                          <span className="flex items-center gap-1">
-                            In Use <CheckIcon size={11} />
-                          </span>
-                        </span>
-                      ) : (
-                        <span className={actionClass}>Use</span>
-                      )}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </>
-        )}
-      </div>
+            </li>
+          );
+        })}
+      </ul>
     </div>
-  );
-}
-
-function ChevronRight() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="m9 6 6 6-6 6" {...S} />
-    </svg>
   );
 }
 
