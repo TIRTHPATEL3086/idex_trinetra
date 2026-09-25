@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { CheckIcon, ChevronLeftIcon } from '../components/icons.jsx';
+import { CheckIcon, ChevronLeftIcon, KeyIcon, ShieldIcon } from '../components/icons.jsx';
 
 import Logo from '../components/Logo.jsx';
 import { useAuth, DEMO_ACCOUNTS } from '../lib/auth.jsx';
@@ -46,6 +46,28 @@ export default function Login() {
     setForm({ email: acc.email, password: acc.password });
     setError(null);
     setStatus('idle');
+    setMenuRole(acc.role);
+  };
+
+  // The demo list is driven from two places — the role bar above the card and
+  // the drop-up under the form — so its state lives here.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuRole, setMenuRole] = useState(null); // null = the role step
+  const activeAccount = DEMO_ACCOUNTS.find(
+    (a) => a.email.toLowerCase() === form.email.trim().toLowerCase()
+  );
+
+  // A role with one account fills the form at once; one with several opens
+  // the drop-up on that role's accounts.
+  const chooseRole = (role) => {
+    const group = ROLE_GROUPS.find((g) => g.role === role);
+    setMenuRole(role);
+    if (group.accounts.length === 1) {
+      fillDemo(group.accounts[0]);
+      setMenuOpen(false);
+    } else {
+      setMenuOpen(true);
+    }
   };
 
   return (
@@ -60,93 +82,110 @@ export default function Login() {
         Back
       </Link>
 
-      <main className="w-full max-w-[1080px] rounded-2xl bg-white shadow-app sm:rounded-3xl lg:grid lg:grid-cols-[1.02fr_1fr]">
-        <BrandPanel />
+      <div className="flex w-full max-w-[1080px] flex-col items-center gap-4 pt-14 sm:gap-5 sm:pt-16">
+        {/* The role just chosen wins over the account still in the form, so
+            tapping Officer lights Officer before an officer is picked. */}
+        <RoleBar active={menuRole ?? activeAccount?.role} onChoose={chooseRole} />
 
-        {/* ------------------------------------------------------ the form -- */}
-        <section className="flex flex-col justify-center px-5 py-8 sm:px-8 sm:py-10 lg:px-11 lg:py-12">
-          {/* Mobile-only brand row — the panel beside it is hidden at this width. */}
-          <div className="mb-7 lg:hidden">
-            <Logo size="sm" />
-          </div>
+        <main className="w-full rounded-2xl bg-white shadow-app sm:rounded-3xl lg:grid lg:grid-cols-[1.02fr_1fr]">
+          <BrandPanel />
 
-          <header className="mb-6">
-            <h1 className="font-display text-2xl font-extrabold tracking-tight text-ink sm:text-[28px]">
-              Sign in
-            </h1>
-            <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">
-              Every release and every investigation is recorded against the account that ran it.
-            </p>
-          </header>
+          {/* ------------------------------------------------------ the form -- */}
+          <section className="flex flex-col justify-center px-5 py-8 sm:px-8 sm:py-10 lg:px-11 lg:py-12">
+            {/* Mobile-only brand row — the panel beside it is hidden at this width. */}
+            <div className="mb-7 lg:hidden">
+              <Logo size="sm" />
+            </div>
 
-          <form onSubmit={submit} className="space-y-4" noValidate>
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-faint">
-                Email
-              </span>
-              <input
-                type="email"
-                name="email"
-                autoComplete="username"
-                inputMode="email"
-                autoCapitalize="none"
-                spellCheck="false"
-                required
-                className="input text-base sm:text-sm"
-                placeholder="name@example.gov"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-              />
-            </label>
-
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-faint">
-                Password
-              </span>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  name="password"
-                  autoComplete="current-password"
-                  required
-                  className="input pr-12 text-base sm:text-sm"
-                  placeholder="••••••••"
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  className="absolute inset-y-0 right-0 grid w-12 place-items-center rounded-r-xl text-ink-faint transition hover:text-ink focus:outline-none focus-visible:text-ink"
-                >
-                  {showPassword ? <EyeOffIcon /> : <EyeIcon />}
-                </button>
-              </div>
-            </label>
-
-            {error && (
-              <p
-                role="alert"
-                className="flex items-start gap-2 rounded-xl bg-probable/10 px-3.5 py-2.5 text-sm text-ink"
-              >
-                <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-probable" />
-                <span>{error}</span>
+            <header className="mb-6">
+              <h1 className="font-display text-2xl font-extrabold tracking-tight text-ink sm:text-[28px]">
+                Sign in
+              </h1>
+              <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">
+                Every release and every investigation is recorded against the account that ran it.
               </p>
-            )}
+            </header>
 
-            <button
-              type="submit"
-              className="btn-accent h-12 w-full text-[15px]"
-              disabled={status === 'working'}
-            >
-              {status === 'working' ? 'Signing in…' : 'Sign in'}
-            </button>
-          </form>
+            <form onSubmit={submit} className="space-y-4" noValidate>
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-faint">
+                  Email
+                </span>
+                <input
+                  type="email"
+                  name="email"
+                  autoComplete="username"
+                  inputMode="email"
+                  autoCapitalize="none"
+                  spellCheck="false"
+                  required
+                  className="input text-base sm:text-sm"
+                  placeholder="name@example.gov"
+                  value={form.email}
+                  onChange={(e) => {
+                    setForm({ ...form, email: e.target.value });
+                    // A typed address speaks for itself; drop the chosen role.
+                    setMenuRole(null);
+                  }}
+                />
+              </label>
 
-          <DemoAccounts onPick={fillDemo} currentEmail={form.email} />
-        </section>
-      </main>
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-faint">
+                  Password
+                </span>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    name="password"
+                    autoComplete="current-password"
+                    required
+                    className="input pr-12 text-base sm:text-sm"
+                    placeholder="••••••••"
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute inset-y-0 right-0 grid w-12 place-items-center rounded-r-xl text-ink-faint transition hover:text-ink focus:outline-none focus-visible:text-ink"
+                  >
+                    {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                  </button>
+                </div>
+              </label>
+
+              {error && (
+                <p
+                  role="alert"
+                  className="flex items-start gap-2 rounded-xl bg-probable/10 px-3.5 py-2.5 text-sm text-ink"
+                >
+                  <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-probable" />
+                  <span>{error}</span>
+                </p>
+              )}
+
+              <button
+                type="submit"
+                className="btn-accent h-12 w-full text-[15px]"
+                disabled={status === 'working'}
+              >
+                {status === 'working' ? 'Signing in…' : 'Sign in'}
+              </button>
+            </form>
+
+            <DemoAccounts
+              onPick={fillDemo}
+              activeAccount={activeAccount}
+              open={menuOpen}
+              setOpen={setMenuOpen}
+              role={menuRole}
+              setRole={setMenuRole}
+            />
+          </section>
+        </main>
+      </div>
     </div>
   );
 }
@@ -283,15 +322,55 @@ const ROLE_GROUPS = [
   .map((g) => ({ ...g, accounts: DEMO_ACCOUNTS.filter((a) => a.role === g.role) }))
   .filter((g) => g.accounts.length > 0);
 
-function DemoAccounts({ onPick, currentEmail }) {
-  const [open, setOpen] = useState(false);
-  const [role, setRole] = useState(null); // null = the role step
+/**
+ * The role bar above the card: one segment per role, the active one lifted
+ * into a pill. It sits in the page flow, centred, so on a phone it lands under
+ * the Back button instead of colliding with it.
+ */
+const ROLE_ICONS = { ADMIN: ShieldIcon, OFFICER: KeyIcon, INVESTIGATOR: SearchIcon };
+
+function RoleBar({ active, onChoose }) {
+  return (
+    <div
+      role="group"
+      aria-label="Demo role"
+      className="inline-flex max-w-full items-center gap-0.5 rounded-full border border-line bg-white/80 p-1 shadow-app backdrop-blur min-[360px]:gap-1 min-[360px]:p-1.5"
+    >
+      {ROLE_GROUPS.map((g) => {
+        const Icon = ROLE_ICONS[g.role];
+        const on = active === g.role;
+        return (
+          <button
+            key={g.role}
+            type="button"
+            aria-pressed={on}
+            onClick={() => onChoose(g.role)}
+            className={`relative inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-2 text-[12.5px] font-semibold min-[360px]:gap-2 min-[360px]:px-3.5 min-[360px]:text-[13px] transition focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 sm:px-5 sm:text-sm ${
+              on
+                ? 'bg-accent/25 text-ink shadow-sm ring-1 ring-accent/60'
+                : 'text-ink-muted hover:bg-line/40 hover:text-ink'
+            }`}
+          >
+            <Icon size={16} />
+            {g.label}
+            {/* the underline glow under the active segment */}
+            <span
+              aria-hidden="true"
+              className={`absolute inset-x-4 -bottom-1.5 h-0.5 rounded-full bg-accent transition-opacity ${
+                on ? 'opacity-100' : 'opacity-0'
+              }`}
+            />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function DemoAccounts({ onPick, activeAccount, open, setOpen, role, setRole }) {
   const rootRef = useRef(null);
   const buttonRef = useRef(null);
 
-  const activeAccount = DEMO_ACCOUNTS.find(
-    (a) => a.email.toLowerCase() === (currentEmail || '').trim().toLowerCase()
-  );
   const group = ROLE_GROUPS.find((g) => g.role === role);
 
   const pick = (acc) => {
@@ -319,7 +398,7 @@ function DemoAccounts({ onPick, currentEmail }) {
       document.removeEventListener('pointerdown', onPointer);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open, role]);
+  }, [open, role, setOpen, setRole]);
 
   const rowClass = (highlight) =>
     `group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
@@ -336,8 +415,12 @@ function DemoAccounts({ onPick, currentEmail }) {
         ref={buttonRef}
         type="button"
         onClick={() => {
-          // Every fresh open starts at the role step.
-          if (!open) setRole(null);
+          // A fresh open goes straight to the chosen role's accounts when it
+          // has several to pick from, and to the role step otherwise.
+          if (!open) {
+            const g = ROLE_GROUPS.find((x) => x.role === (activeAccount?.role ?? role));
+            setRole(g && g.accounts.length > 1 ? g.role : null);
+          }
           setOpen((o) => !o);
         }}
         aria-expanded={open}
@@ -517,6 +600,15 @@ function EyeOffIcon() {
       <path d="M9.9 5.8A9.6 9.6 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-3 3.8" {...S} />
       <path d="M6.4 7.9A17 17 0 0 0 2.5 12S6 18.5 12 18.5c1 0 1.9-.2 2.8-.5" {...S} />
       <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" {...S} />
+    </svg>
+  );
+}
+
+function SearchIcon({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="11" cy="11" r="6.5" {...S} />
+      <path d="m20 20-4.4-4.4" {...S} />
     </svg>
   );
 }
