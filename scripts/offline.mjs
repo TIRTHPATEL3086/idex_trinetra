@@ -20,10 +20,12 @@
  */
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import pg from 'pg';
+import { ContractFactory, JsonRpcProvider, Wallet } from 'ethers';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const log = (msg) => console.log(`  [field-kit] ${msg}`);
@@ -108,22 +110,96 @@ async function waitFor(check, what, ms = 60000) {
   throw new Error(`timed out waiting for ${what}`);
 }
 
-// ---- 1. local chain ---------------------------------------------------------
-log('starting local Hardhat chain on 127.0.0.1:8545 ...');
-start('chain', npx, ['hardhat', 'node', '--hostname', '127.0.0.1']);
-await waitFor(async () => {
-  const r = await fetch('http://127.0.0.1:8545', {
+/** Stop with a plain explanation instead of a stack trace. */
+function fail(message, fix) {
+  console.error(`\n  [field-kit] ${message}`);
+  if (fix) console.error(`  [field-kit] ${fix}`);
+  console.error('');
+  stopAll();
+  process.exit(1);
+}
+
+/** Whether something is already listening on a local port. */
+const portBusy = (port) =>
+  new Promise((resolve) => {
+    const probe = net.createServer();
+    probe.once('error', () => resolve(true));
+    probe.once('listening', () => probe.close(() => resolve(false)));
+    probe.listen(Number(port), '0.0.0.0');
+  });
+
+const chainUp = () =>
+  fetch('http://127.0.0.1:8545', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_chainId', params: [] }),
-  });
-  return r.ok;
-}, 'the local chain');
+    signal: AbortSignal.timeout(2000),
+  })
+    .then((r) => r.ok)
+    .catch(() => false);
+
+// ---- 0. already running? port free? --------------------------------------------
+const kitUp = await fetch(`http://127.0.0.1:${env.PORT}/api/health`, {
+  signal: AbortSignal.timeout(2000),
+})
+  .then((r) => r.ok)
+  .catch(() => false);
+if (kitUp) {
+  log(`already running — open http://localhost:${env.PORT}`);
+  log('(to restart it, stop it with Ctrl+C where it was started, then run this again)');
+  process.exit(0);
+}
+if (await portBusy(env.PORT)) {
+  fail(
+    `port ${env.PORT} is in use by another program.`,
+    'Close it, or choose another port with OFFLINE_PORT=... in .env.offline.'
+  );
+}
+
+// ---- 1. local chain ---------------------------------------------------------
+if (await chainUp()) {
+  log('using the local chain already running on 127.0.0.1:8545');
+} else {
+  if (await portBusy(8545)) {
+    fail(
+      'port 8545 (the local chain) is in use by a program that is not a blockchain node.',
+      'Close that program and run this again.'
+    );
+  }
+  log('starting local Hardhat chain on 127.0.0.1:8545 ...');
+  start('chain', npx, ['hardhat', 'node', '--hostname', '127.0.0.1']);
+  await waitFor(chainUp, 'the local chain').catch(() =>
+    fail('the local chain did not start.', 'Run `npx hardhat node` on its own to see why.')
+  );
+}
+
+// Deploy the compiled contract kept in the repository rather than compiling
+// it: compiling needs the Solidity compiler, which Hardhat downloads from the
+// internet the first time — exactly what an air-gapped machine cannot do.
 log('deploying DecryptionProvenance to the local chain ...');
-run(npx, ['hardhat', 'run', 'scripts/deploy.cjs', '--network', 'localhost'], { stdio: 'ignore' });
-const deployed = JSON.parse(
-  fs.readFileSync(path.join(ROOT, 'deployments', 'localhost.json'), 'utf8')
+const compiled = JSON.parse(
+  fs.readFileSync(path.join(ROOT, 'contracts', 'compiled', 'DecryptionProvenance.json'), 'utf8')
 );
+const provider = new JsonRpcProvider('http://127.0.0.1:8545');
+const deployer = new Wallet(HARDHAT_KEY_0, provider);
+const contract = await new ContractFactory(compiled.abi, compiled.bytecode, deployer).deploy();
+await contract.waitForDeployment();
+const deployTx = contract.deploymentTransaction();
+const deployReceipt = await deployTx.wait();
+const deployed = {
+  network: 'localhost',
+  address: await contract.getAddress(),
+  deployer: deployer.address,
+  txHash: deployTx.hash,
+  blockNumber: deployReceipt.blockNumber,
+  deployedAt: new Date().toISOString(),
+};
+fs.mkdirSync(path.join(ROOT, 'deployments'), { recursive: true });
+fs.writeFileSync(
+  path.join(ROOT, 'deployments', 'localhost.json'),
+  JSON.stringify(deployed, null, 2)
+);
+provider.destroy();
 env.LOCAL_CONTRACT_ADDRESS = deployed.address;
 log(`contract at ${deployed.address}`);
 
@@ -133,7 +209,16 @@ const dbName = dbUrl.pathname.replace(/^\//, '');
 const admin = new URL(env.DATABASE_URL);
 admin.pathname = '/postgres';
 const client = new pg.Client({ connectionString: admin.toString() });
-await client.connect();
+await client
+  .connect()
+  .catch((err) =>
+    fail(
+      `cannot reach PostgreSQL at ${dbUrl.host} (${err.code || err.message}).`,
+      err.code === '28P01'
+        ? 'The user name or password in OFFLINE_DATABASE_URL (.env.offline) is wrong.'
+        : 'Start PostgreSQL (Windows: Services → postgresql → Start), or point OFFLINE_DATABASE_URL in .env.offline at it.'
+    )
+  );
 const exists =
   (await client.query('SELECT 1 FROM pg_database WHERE datname = $1', [dbName])).rowCount > 0;
 if (!exists) {
