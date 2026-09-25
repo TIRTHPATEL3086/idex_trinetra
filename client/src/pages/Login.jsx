@@ -34,9 +34,10 @@ export default function Login() {
     setStatus('working');
     setError(null);
     try {
+      // signIn returns the whole login response; the user is inside it.
       const res = await signIn(form.email.trim(), form.password);
-      const targetUser = res?.user || res;
-      navigate(from || targetUser?.landing || '/assets', { replace: true });
+      const signedIn = res?.user || res;
+      navigate(from || signedIn?.landing || '/assets', { replace: true });
     } catch (err) {
       setError(err.message || 'Could not sign in.');
       setStatus('error');
@@ -76,8 +77,6 @@ export default function Login() {
     <div className="relative grid h-[100dvh] w-full grid-cols-[minmax(0,1fr)] place-items-center overflow-hidden bg-shell p-3 sm:p-5 lg:p-6">
       {/* A real route home, not history.back() — someone who opened /login
           directly, or followed a stale link, has no history to go back to. */}
-    <div className="relative grid min-h-[100dvh] w-full place-items-center bg-shell p-3 sm:p-5 lg:p-6">
-      {/* Real route home */}
       <Link
         to="/"
         className="absolute left-4 top-4 z-10 inline-flex items-center gap-1.5 rounded-full border border-line bg-white px-3.5 py-2 text-[13px] font-medium text-ink-muted shadow-sm transition hover:border-ink-faint hover:text-ink focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 sm:left-6 sm:top-6"
@@ -125,50 +124,6 @@ export default function Login() {
                 <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-faint">
                   Email
                 </span>
-      <main className="w-full max-w-[1080px] rounded-2xl bg-white shadow-app sm:rounded-3xl lg:grid lg:grid-cols-[1.02fr_1fr]">
-        <BrandPanel />
-
-        {/* ------------------------------------------------------ the form -- */}
-        <section className="flex flex-col justify-center px-5 py-8 sm:px-8 sm:py-10 lg:px-11 lg:py-12">
-          {/* Mobile-only brand row */}
-          <div className="mb-7 lg:hidden">
-            <Logo size="sm" />
-          </div>
-
-          <header className="mb-6">
-            <h1 className="font-display text-2xl font-extrabold tracking-tight text-ink sm:text-[28px]">
-              Sign in
-            </h1>
-            <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">
-              Every release and every investigation is recorded against the account that ran it.
-            </p>
-          </header>
-
-          <form onSubmit={submit} className="space-y-4" noValidate>
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-faint">
-                Email
-              </span>
-              <input
-                type="email"
-                name="email"
-                autoComplete="username"
-                inputMode="email"
-                autoCapitalize="none"
-                spellCheck="false"
-                required
-                className="input text-base sm:text-sm"
-                placeholder="name@example.gov"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-              />
-            </label>
-
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-faint">
-                Password
-              </span>
-              <div className="relative">
                 <input
                   type="email"
                   name="email"

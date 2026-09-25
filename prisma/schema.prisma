@@ -42,8 +42,6 @@ enum Role {
   INVESTIGATOR // Forensic analyst — traces leaks, and cannot decrypt anything.
 }
 
-
-
 /// A person who may decrypt. The NAME NEVER GOES ON CHAIN — only `userRef`.
 model User {
   id      Int     @id @default(autoincrement())
