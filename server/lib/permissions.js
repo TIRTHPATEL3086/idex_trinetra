@@ -65,7 +65,7 @@ export const CAPABILITIES = {
   'assets:upload': ['CRYPTO_CUSTODIAN', 'ADMIN'],
   'decrypt:any': ['CRYPTO_CUSTODIAN', 'ADMIN'], // Originator dispatch testing
   'decrypt:self': ['TACTICAL_OFFICER', 'OFFICER', 'CRYPTO_CUSTODIAN', 'ADMIN'], // Tactical recipient release
-  'trace:run': ['FORENSIC_ANALYST', 'INVESTIGATOR'], // STRICT: Custodian cannot trace
+  'trace:run': ['FORENSIC_ANALYST', 'INVESTIGATOR', 'CRYPTO_CUSTODIAN', 'ADMIN'],
   'trace:history': ['FORENSIC_ANALYST', 'INVESTIGATOR', 'NAVAL_AUDITOR', 'CRYPTO_CUSTODIAN', 'ADMIN'],
   'audit:read': ['NAVAL_AUDITOR', 'CRYPTO_CUSTODIAN', 'FORENSIC_ANALYST', 'ADMIN', 'INVESTIGATOR'],
   'audit:own': ['TACTICAL_OFFICER', 'OFFICER', 'CRYPTO_CUSTODIAN', 'ADMIN', 'FORENSIC_ANALYST', 'INVESTIGATOR', 'NAVAL_AUDITOR'],
