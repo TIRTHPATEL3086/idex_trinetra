@@ -312,10 +312,18 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
     // --- 1. Optical lens: a photo of a screen becomes a flat, clean page ----
     // The corrected image feeds the search and the watermark read; the file as
     // uploaded is what the custody hash and the tamper check are made on.
-    const wantsLens = /^(1|true|on)$/i.test(String(req.body?.lens ?? ''));
+    const lensMode = String(req.body?.lensMode ?? '').toLowerCase();
+    const wantsLens =
+      (/^(1|true|on|screen)$/i.test(String(req.body?.lens ?? '')) || lensMode === 'screen') &&
+      !isDocPdf;
+    const disableLens =
+      /^(0|false|off|none|standard)$/i.test(String(req.body?.lens ?? '')) ||
+      lensMode === 'standard' ||
+      lensMode === 'none';
+
     let leak = buffer;
     let lens = null;
-    if (wantsLens && !isDocPdf) {
+    if (wantsLens) {
       lens = await applyLens(buffer, req.body?.corners);
       if (lens.applied) leak = lens.buffer;
     }
@@ -367,7 +375,7 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
 
         // Auto-Lens fallback: if user uploaded a phone camera capture directly
         // without specifying manual corners, automatically rectify perspective & notch moiré.
-        if (!(await namesARelease(marked.payloadBits)) && !lens?.applied) {
+        if (!disableLens && !(await namesARelease(marked.payloadBits)) && !lens?.applied) {
           try {
             const autoLens = await applyLens(buffer);
             if (autoLens.applied) {
