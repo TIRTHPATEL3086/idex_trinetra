@@ -22,6 +22,8 @@ import {
 import { validate } from '../middleware/validate.js';
 import { verifyPassword } from '../lib/auth.js';
 import { encapsulateFor, recoverContentKey, userKeys } from '../lib/keyring.js';
+import { embedFragile } from '../core/fragile.js';
+import { psnr as computePsnr } from '../core/psnr.js';
 import { requireAuth, requireAnyCap, forbidden } from '../middleware/auth.js';
 import { can } from '../lib/permissions.js';
 import * as chain from '../core/chain.js';
@@ -262,6 +264,15 @@ export async function executeDecryption({
     ? await embedPdf(plaintext, payloadBits, receiptIdHex)
     : await embed(plaintext, payloadBits, delta);
 
+  // --- 8b. Fragile tamper-evidence layer (images) ----------------------------
+  // Over the robust mark: it identifies nobody, but breaks wherever the copy is
+  // later edited, so a leak can be checked for doctoring as well as attributed.
+  const fragileLayer = !isDocPdf;
+  if (fragileLayer) {
+    marked.buffer = await embedFragile(marked.buffer, receiptIdHex);
+    marked.psnrDb = await computePsnr(plaintext, marked.buffer);
+  }
+
   // --- 9. Perceptual hashes ------------------------------------------------
   let h;
   if (isDocPdf) {
@@ -310,6 +321,7 @@ export async function executeDecryption({
       chainMode: anchor.chainMode,
       deltaUsed: marked.deltaUsed ?? delta,
       psnrDb: Number.isFinite(marked.psnrDb) ? marked.psnrDb : 0,
+      fragileLayer,
     },
   });
 
@@ -323,6 +335,7 @@ export async function executeDecryption({
     etherscanUrl: anchor.etherscanUrl,
     payloadBits,
     psnrDb: Number.isFinite(marked.psnrDb) ? marked.psnrDb : null,
+    fragileLayer,
     deltaUsed: marked.deltaUsed ?? delta,
     downloadUrl: `/api/files/marked/${shortHexId}`,
     pqc: {

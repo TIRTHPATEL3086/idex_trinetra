@@ -107,7 +107,7 @@ export default {
       fontFamily: {
         sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         // Chromia sets its headlines in a heavy, soft-serifed display face.
-        display: ['Fraunces', 'ui-serif', 'Georgia', 'serif'],
+        display: ['Fraunces Variable', 'Fraunces', 'ui-serif', 'Georgia', 'serif'],
         wordmark: ['Comfortaa', 'ui-rounded', 'Inter', 'sans-serif'],
         mono: ['"JetBrains Mono"', 'ui-monospace', 'Menlo', 'Consolas', 'monospace'],
       },

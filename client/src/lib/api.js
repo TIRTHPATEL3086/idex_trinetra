@@ -169,10 +169,24 @@ export const revealAllotment = (assetId, password, userId) =>
     body: JSON.stringify({ password }),
   });
 
-export function traceFile(file) {
+/**
+ * Trace a leaked file. With `lens`, the server first flattens a photo of a
+ * screen; `corners` (TL, TR, BR, BL in the photo's pixels) override its own
+ * corner detection.
+ */
+export function traceFile(file, { lens = false, corners = null } = {}) {
   const form = new FormData();
   form.append('file', file);
+  if (lens) form.append('lens', '1');
+  if (lens && corners) form.append('corners', JSON.stringify(corners));
   return request('/api/trace', { method: 'POST', body: form });
+}
+
+/** Find a displayed document's corners in a photo, for the lens editor. */
+export function detectLensCorners(file) {
+  const form = new FormData();
+  form.append('file', file);
+  return request('/api/trace/lens/detect', { method: 'POST', body: form });
 }
 
 export const getInvestigations = () => request('/api/trace/investigations');

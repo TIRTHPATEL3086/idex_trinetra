@@ -126,7 +126,10 @@ model DecryptionEvent {
 
   deltaUsed Int
   psnrDb    Float
-  createdAt DateTime @default(now())
+  // Whether the fragile (tamper-evidence) layer was embedded in this release.
+  // Releases made before it existed carry only the robust layer.
+  fragileLayer Boolean @default(false)
+  createdAt    DateTime @default(now())
 
   @@index([pHash])
   @@index([dHash])
@@ -145,6 +148,10 @@ model Investigation {
   verdict      String // ATTRIBUTED / PROBABLE / INCONCLUSIVE
   reasons      String[]
   elapsedMs    Int?
+  bitsMatched  Int? // watermark bits agreeing with the identified receipt, of 48
+  tamper       Json? // fragile-layer verdict and per-region findings
+  lens         Json? // optical lens corrections applied to a camera/screen photo
+  stamps       Json? // examiners' ML-DSA-65 signatures over each dossier's evidence digest
   createdAt    DateTime @default(now())
 
   @@index([createdAt])

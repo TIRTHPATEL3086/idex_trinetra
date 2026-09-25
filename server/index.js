@@ -1,3 +1,4 @@
+import path from 'node:path';
 import express from 'express';
 import cors from 'cors';
 
@@ -6,7 +7,7 @@ BigInt.prototype.toJSON = function () {
   return this.toString();
 };
 
-import { env, warnAboutConfig } from './lib/env.js';
+import { env, ROOT, warnAboutConfig } from './lib/env.js';
 import { prisma, dbStatus } from './lib/prisma.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { attachUser } from './middleware/auth.js';
@@ -73,6 +74,19 @@ app.use('/api/audit', auditRouter);
 app.use('/api/metrics', metricsRouter);
 app.use('/api/keys', keysRouter);
 app.use('/api/files', filesRouter);
+
+// ------------------------------------------------ field kit: one port -----
+// The offline field kit (npm run offline) serves the built web app from this
+// same process, so the whole system is one address with nothing to fetch from
+// the internet. In development Vite serves the client instead.
+if (process.env.SERVE_CLIENT === '1') {
+  const dist = path.join(ROOT, 'client', 'dist');
+  app.use(express.static(dist, { index: false }));
+  app.get(/^(?!\/api\/).*/, (req, res, next) => {
+    if (!req.accepts('html')) return next();
+    res.sendFile(path.join(dist, 'index.html'));
+  });
+}
 
 // Root landing endpoint
 app.get('/', (req, res) => {

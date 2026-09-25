@@ -1,760 +1,577 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 
 /**
- * Generate an official Government of India / Ministry of Defence
- * Forensic Attribution & Cryptographic Provenance Dossier (PDF).
+ * Forensic Examination Report — the court dossier for one investigation, on a
+ * single A4 page, laid out the way an expert's report on electronic evidence
+ * is filed:
  *
- * Court-admissible under Section 65B of the Indian Evidence Act, 1872 /
- * Section 63 of Bharatiya Sakshya Adhiniyam (BSA), 2023.
+ *   letterhead · title · reference strip · title of the matter · finding
+ *   I   particulars of the matter        II  on-chain receipt and signature
+ *   III chain of custody (SHA-256)       IV  forensic analysis
+ *   V   opinion of the examiner          VI  certificate under Section 63, BSA
+ *   signatures, seal and the examiner's digital stamp
  *
- * @param {object} params
- * @returns {Promise<Buffer>} PDF file buffer
+ * A scales-of-justice seal marks the letterhead, and the Provenance seal the
+ * signature block, and also sits large and faint behind the page as its
+ * visible watermark (server/assets/dossier).
+ *
+ * Every value is the recorded one or says it is not recorded; a person is named
+ * only when the verdict and the release record both support it.
+ *
+ * Letterhead lines come from DOSSIER_AUTHORITY ("|"-separated). An emblem is
+ * printed only when the deploying authority supplies one through
+ * EMBLEM_IMAGE_PATH: the State Emblem of India, and court emblems that carry
+ * it, may be used only as the State Emblem of India (Prohibition of Improper
+ * Use) Act, 2005 permits, so this project does not ship one.
  */
-/**
- * Fit text into a column: returned unchanged when it fits, otherwise cut at a
- * word boundary where possible and ended with '...' — never mid-word.
- */
-function fit(text, font, size, maxWidth) {
-  if (font.widthOfTextAtSize(text, size) <= maxWidth) return text;
-  let cut = text;
-  while (cut.length > 1 && font.widthOfTextAtSize(cut + '...', size) > maxWidth) {
-    const space = cut.lastIndexOf(' ');
-    cut = space > cut.length * 0.6 ? cut.slice(0, space) : cut.slice(0, -1);
-  }
-  return cut.trimEnd() + '...';
+
+const A4 = [595.28, 841.89];
+
+const INK = rgb(0.08, 0.09, 0.12);
+const MUTED = rgb(0.36, 0.38, 0.44);
+const RULE = rgb(0.72, 0.74, 0.78);
+const SHADE = rgb(0.95, 0.95, 0.96);
+// A court filing is printed and photocopied: the report is black on white,
+// with emphasis carried by weight and rules rather than colour.
+const NAVY = rgb(0, 0, 0);
+const RED = rgb(0, 0, 0);
+const GREEN = rgb(0, 0, 0);
+const AMBER = rgb(0, 0, 0);
+
+const NR = 'Not recorded';
+
+/** The standard PDF fonts are WinAnsi; map the few typographic characters used. */
+function t(v) {
+  return String(v ?? '')
+    .replace(/[—–]/g, '-')
+    .replace(/…/g, '...')
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/×/g, 'x')
+    .replace(/[^ -~]/g, '');
 }
 
-export async function generateDossier({
-  investigation,
-  event,
-  verdict,
-  confidence,
-  reasons = [],
-  txHash,
-  blockNumber,
-  signatureCommit,
-  signatureAlgorithm,
-  chainMode = 'off',
-  contractAddress = null,
-  chainVerified = false,
-}) {
+function wrap(text, font, size, maxWidth) {
+  const out = [];
+  for (const para of t(text).split('\n')) {
+    let line = '';
+    for (const word of para.split(/\s+/)) {
+      if (!word) continue;
+      let w = word;
+      // Break unbroken strings (hashes) that are wider than the column.
+      while (font.widthOfTextAtSize(w, size) > maxWidth) {
+        let n = w.length;
+        while (n > 1 && font.widthOfTextAtSize(w.slice(0, n), size) > maxWidth) n--;
+        if (line) out.push(line);
+        out.push(w.slice(0, n));
+        line = '';
+        w = w.slice(n);
+      }
+      const next = line ? `${line} ${w}` : w;
+      if (font.widthOfTextAtSize(next, size) > maxWidth && line) {
+        out.push(line);
+        line = w;
+      } else line = next;
+    }
+    out.push(line);
+  }
+  return out;
+}
+
+const ist = (d) =>
+  d
+    ? `${new Date(d).toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      })} IST`
+    : NR;
+
+const ASSETS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'dossier');
+const readAsset = (name) => {
+  try {
+    return fs.readFileSync(path.join(ASSETS, name));
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * One A4 page. Every size is multiplied by `k`; if the content of a particular
+ * case does not fit at full size, the page is laid out again a little smaller
+ * until it does, so the report never runs onto a second page.
+ */
+export async function generateDossier(input) {
+  for (const k of [1, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7]) {
+    const out = await renderOnePage(input, k);
+    if (out.fits || k === 0.7) return out.buffer;
+  }
+  return null; // unreachable
+}
+
+async function renderOnePage(
+  {
+    investigation,
+    event,
+    verdict,
+    confidence,
+    reasons = [],
+    txHash,
+    blockNumber,
+    signatureCommit,
+    signatureAlgorithm,
+    chainMode = 'off',
+    contractAddress = null,
+    chainVerified = false,
+    blockTimestamp = null,
+    bitsMatched = null,
+    tamper = null,
+    lens = null,
+    custody = null,
+    examiner = null,
+    stamp = null,
+  },
+  k
+) {
   const doc = await PDFDocument.create();
-  // Standard A4: 595.28 pt wide x 841.89 pt high
-  const page = doc.addPage([595.28, 841.89]);
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
-  const fontMono = await doc.embedFont(StandardFonts.Courier);
-  const fontMonoBold = await doc.embedFont(StandardFonts.CourierBold);
-
-  const { width, height } = page.getSize();
-
-  // Premium National Security Colour Palette
-  const navyDark = rgb(0.04, 0.08, 0.18); // Deep Midnight Defence Navy
-  const gold = rgb(0.78, 0.6, 0.12); // Emblem Gold
-  const goldLight = rgb(0.97, 0.94, 0.85); // Gold Tint
-  const crimson = rgb(0.72, 0.1, 0.12); // Security Red
-  const emerald = rgb(0.04, 0.52, 0.28); // Attributed Green
-  const amber = rgb(0.82, 0.46, 0.06); // Probable Amber
-  const slateInk = rgb(0.12, 0.16, 0.24); // Primary Text
-  const slateMuted = rgb(0.38, 0.44, 0.52); // Secondary Text
-  const slateLight = rgb(0.96, 0.97, 0.98); // Card Background
-  const cardBorder = rgb(0.85, 0.88, 0.92); // Card Border
-  const white = rgb(1, 1, 1);
-
-  // ── Outer Security Framework & Corner Brackets ─────────────────────────────
-  page.drawRectangle({
-    x: 18,
-    y: 18,
-    width: width - 36,
-    height: height - 36,
-    borderColor: cardBorder,
-    borderWidth: 1.2,
-  });
-
-  page.drawRectangle({
-    x: 21,
-    y: 21,
-    width: width - 42,
-    height: height - 42,
-    borderColor: cardBorder,
-    borderWidth: 0.5,
-  });
-
-  // Corner decorative security crosshairs
-  const drawCorner = (cx, cy) => {
-    page.drawLine({
-      start: { x: cx - 6, y: cy },
-      end: { x: cx + 6, y: cy },
-      thickness: 0.8,
-      color: gold,
-    });
-    page.drawLine({
-      start: { x: cx, y: cy - 6 },
-      end: { x: cx, y: cy + 6 },
-      thickness: 0.8,
-      color: gold,
-    });
+  const F = {
+    serif: await doc.embedFont(StandardFonts.TimesRoman),
+    serifBold: await doc.embedFont(StandardFonts.TimesRomanBold),
+    serifItalic: await doc.embedFont(StandardFonts.TimesRomanItalic),
+    sans: await doc.embedFont(StandardFonts.Helvetica),
+    sansBold: await doc.embedFont(StandardFonts.HelveticaBold),
+    mono: await doc.embedFont(StandardFonts.Courier),
   };
-  drawCorner(28, height - 28);
-  drawCorner(width - 28, height - 28);
-  drawCorner(28, 28);
-  drawCorner(width - 28, 28);
+  const page = doc.addPage(A4);
+  const L = 30;
+  const R = A4[0] - 30;
+  const W = R - L;
+  const BOTTOM = 48;
+  let y = A4[1] - 30;
+  const s = (v) => v * k;
 
-  // ── Top National Header Banner (Midnight Navy & Gold Accent) ───────────────
-  let curY = height - 24;
-  const headerHeight = 56;
-
-  page.drawRectangle({
-    x: 23,
-    y: curY - headerHeight,
-    width: width - 46,
-    height: headerHeight,
-    color: navyDark,
-  });
-
-  // Gold accent bar right below header
-  page.drawRectangle({
-    x: 23,
-    y: curY - headerHeight - 2.5,
-    width: width - 46,
-    height: 2.5,
-    color: gold,
-  });
-
-  // Header Typography
-  page.drawText('GOVERNMENT OF INDIA  //  MINISTRY OF DEFENCE', {
-    x: 36,
-    y: curY - 17,
-    size: 10.5,
-    font: fontBold,
-    color: white,
-  });
-
-  page.drawText('WEAPONS & ELECTRONICS SYSTEMS ENGINEERING ESTABLISHMENT (WESEE)', {
-    x: 36,
-    y: curY - 31,
-    size: 8.5,
-    font: fontBold,
-    color: rgb(0.85, 0.9, 1.0),
-  });
-
-  page.drawText('DIRECTORATE OF FORENSIC CYBER INTELLIGENCE & QUANTUM CRYPTOGRAPHY', {
-    x: 36,
-    y: curY - 44,
-    size: 7,
-    font: font,
-    color: rgb(0.7, 0.76, 0.88),
-  });
-
-  // Security Classification Stamp (Top Right)
-  const stampWidth = 142;
-  const stampHeight = 32;
-  page.drawRectangle({
-    x: width - 36 - stampWidth,
-    y: curY - 46,
-    width: stampWidth,
-    height: stampHeight,
-    color: crimson,
-    borderColor: white,
-    borderWidth: 0.8,
-  });
-
-  page.drawText('CONFIDENTIAL // RESTRICTED', {
-    x: width - 36 - stampWidth + 8,
-    y: curY - 26,
-    size: 7.5,
-    font: fontBold,
-    color: white,
-  });
-
-  page.drawText('OFFICIAL COURT EVIDENTIARY DOSSIER', {
-    x: width - 36 - stampWidth + 6,
-    y: curY - 39,
-    size: 6.5,
-    font: fontBold,
-    color: rgb(1, 0.9, 0.9),
-  });
-
-  curY -= headerHeight + 14;
-
-  // ── File Reference & Metadata Strip (Cleanly Distributed) ─────────────────
-  const invNum = String(investigation?.id || 1).padStart(5, '0');
-  const fileNo = `MOD/WESEE/PQC-FOR/2026/INV-${invNum}`;
-  const genTimestamp = new Date().toUTCString().slice(5, 22);
-
-  page.drawRectangle({
-    x: 30,
-    y: curY - 18,
-    width: width - 60,
-    height: 20,
-    color: slateLight,
-    borderColor: cardBorder,
-    borderWidth: 0.8,
-  });
-
-  page.drawText(`EVIDENCE FILE NO: ${fileNo}`, {
-    x: 38,
-    y: curY - 12,
-    size: 7.5,
-    font: fontMonoBold,
-    color: navyDark,
-  });
-
-  const networkTag =
-    chainMode === 'sepolia'
-      ? 'NETWORK: SEPOLIA (11155111)'
-      : `NETWORK: ${String(chainMode).toUpperCase()}`;
-  page.drawText(networkTag, {
-    x: 275,
-    y: curY - 12,
-    size: 7,
-    font: fontMono,
-    color: slateMuted,
-  });
-
-  page.drawText(`DATE: ${genTimestamp} UTC`, {
-    x: 430,
-    y: curY - 12,
-    size: 7,
-    font: fontMono,
-    color: slateMuted,
-  });
-
-  curY -= 28;
-
-  // ── Executive Forensic Attribution Finding Banner (No Text Collision) ──────
+  // ---- facts ---------------------------------------------------------------
+  const invNo = `INV-${String(investigation?.id ?? 0).padStart(5, '0')}`;
+  const reportNo = `PRV/FOR/${new Date().getFullYear()}/${invNo}`;
+  const issuedAt = stamp?.evidence?.generatedAt || new Date().toISOString();
   const isAttributed = verdict === 'ATTRIBUTED';
   const isProbable = verdict === 'PROBABLE';
-  // The recorded score, including a real 0 — never a band-typical stand-in.
-  const rawConfidence = Number(confidence ?? 0);
-  const confPercent = (rawConfidence * 100).toFixed(1);
-
-  const verdictColor = isAttributed ? emerald : isProbable ? amber : slateMuted;
-  const verdictBannerBg = isAttributed
-    ? rgb(0.95, 0.99, 0.96)
-    : isProbable
-      ? rgb(1.0, 0.98, 0.94)
-      : rgb(0.96, 0.97, 0.99);
-
-  const bannerHeight = 44;
-  page.drawRectangle({
-    x: 30,
-    y: curY - bannerHeight,
-    width: width - 60,
-    height: bannerHeight,
-    color: verdictBannerBg,
-    borderColor: cardBorder,
-    borderWidth: 1,
-  });
-
-  // Solid vertical accent bar on the left of verdict box
-  page.drawRectangle({
-    x: 30,
-    y: curY - bannerHeight,
-    width: 4.5,
-    height: bannerHeight,
-    color: verdictColor,
-  });
-
-  // Row 1: Category on left, Legal Status on right
-  page.drawText('FORENSIC ATTRIBUTION FINDING & TARGET STATUS:', {
-    x: 42,
-    y: curY - 14,
-    size: 7.5,
-    font: fontBold,
-    color: slateMuted,
-  });
-
-  const statusPillText = isAttributed
-    ? chainVerified
-      ? 'STATUS: ATTRIBUTED, RECEIPT VERIFIED ON-CHAIN'
-      : 'STATUS: ATTRIBUTED, RECEIPT NOT VERIFIED ON-CHAIN'
-    : isProbable
-      ? 'STATUS: PROBABLE ATTRIBUTION CORRELATION'
-      : 'STATUS: INSUFFICIENT EVIDENCE (NO ATTRIBUTION)';
-
-  page.drawText(statusPillText, {
-    x: 330,
-    y: curY - 14,
-    size: 7,
-    font: fontBold,
-    color: verdictColor,
-  });
-
-  // Row 2: Large verdict title
-  const verdictTitle = isAttributed
-    ? `ATTRIBUTED  --  ${confPercent}% CONFIDENCE [DIRECT CRYPTOGRAPHIC MATCH]`
-    : isProbable
-      ? `PROBABLE  --  ${confPercent}% CONFIDENCE [HIGH PROBABILITY MATCH]`
-      : `INCONCLUSIVE  --  ${confPercent}% CONFIDENCE [NO CRYPTOGRAPHIC MATCH]`;
-
-  page.drawText(verdictTitle, {
-    x: 42,
-    y: curY - 32,
-    size: 10.5,
-    font: fontBold,
-    color: verdictColor,
-  });
-
-  curY -= bannerHeight + 12;
-
-  // ── Helper: Draw Clean Section Header ─────────────────────────────────────
-  const drawSectionHeader = (numberStr, titleStr) => {
-    page.drawRectangle({
-      x: 30,
-      y: curY - 14,
-      width: 18,
-      height: 14,
-      color: navyDark,
-    });
-    page.drawText(numberStr, {
-      x: 33.5,
-      y: curY - 10.5,
-      size: 7.5,
-      font: fontBold,
-      color: gold,
-    });
-
-    page.drawText(titleStr, {
-      x: 54,
-      y: curY - 11,
-      size: 8.5,
-      font: fontBold,
-      color: navyDark,
-    });
-
-    page.drawLine({
-      start: { x: 30, y: curY - 18 },
-      end: { x: width - 30, y: curY - 18 },
-      thickness: 0.8,
-      color: cardBorder,
-    });
-
-    curY -= 24;
-  };
-
-  // ── Section 1: Attributed Identity & Document Profile ─────────────────────
-  drawSectionHeader('01', 'ATTRIBUTED IDENTITY & DOCUMENT PROFILE');
-
-  // A person is named only when the verdict supports it AND the release record
-  // exists. Nothing in this report is ever filled in with a stand-in value.
   const hasTarget = (isAttributed || isProbable) && Boolean(event?.user);
-  const NR = 'Not recorded';
-
-  const suspectName = hasTarget ? event.user.name : 'No Target Identified';
-  const suspectDept = hasTarget ? event.user.dept || NR : 'External / Unclassified';
-  const suspectIdRole = hasTarget
-    ? `Account #${event.user.id} // ${event.user.role}`
-    : 'N/A // No Matching Personnel';
-  const docName = hasTarget
-    ? `${event.asset?.title || NR} [${event.asset?.classification || NR}]`
-    : 'Unregistered Artifact';
-  const terminal = hasTarget ? event.deviceLabel || NR : 'External Intake Node';
-  const decryptTimestamp =
-    hasTarget && event?.createdAt
-      ? new Date(event.createdAt).toUTCString().slice(0, 25)
-      : 'N/A (No Decryption Record)';
-  const onChainRef =
-    hasTarget && event?.user?.userRef
-      ? `0x${Buffer.from(event.user.userRef).toString('hex').slice(0, 24)}...`
-      : 'N/A (No On-Chain Reference)';
-  const fidelity = hasTarget
-    ? event?.psnrDb
-      ? `${Number(event.psnrDb).toFixed(1)} dB (Imperceptible)`
-      : NR
-    : 'Not applicable (no release identified)';
-
-  const s1BoxHeight = 54;
-  page.drawRectangle({
-    x: 30,
-    y: curY - s1BoxHeight,
-    width: width - 60,
-    height: s1BoxHeight,
-    color: slateLight,
-    borderColor: cardBorder,
-    borderWidth: 0.8,
-  });
-
-  const rowH = 12.5;
-  const s1Rows = [
-    [
-      ['Suspect Name:', suspectName],
-      ['Department:', suspectDept],
-    ],
-    [
-      ['Officer ID / Role:', suspectIdRole],
-      ['Decrypted At:', decryptTimestamp],
-    ],
-    [
-      ['Target Document:', docName],
-      ['Terminal Node:', terminal],
-    ],
-    [
-      ['On-Chain UserRef:', onChainRef],
-      ['Watermark Fidelity:', fidelity],
-    ],
-  ];
-
-  let rY = curY - 11;
-  for (const [[k1, v1], [k2, v2]] of s1Rows) {
-    page.drawText(k1, { x: 38, y: rY, size: 7.2, font: fontBold, color: slateMuted });
-    const f1 = k1.includes('UserRef') ? fontMono : font;
-    page.drawText(fit(String(v1), f1, 7.5, 180), {
-      x: 114,
-      y: rY,
-      size: 7.5,
-      font: f1,
-      color: hasTarget ? navyDark : crimson,
-    });
-
-    page.drawText(k2, { x: 298, y: rY, size: 7.2, font: fontBold, color: slateMuted });
-    const f2 = k2.includes('UserRef') ? fontMono : font;
-    page.drawText(fit(String(v2), f2, 7.5, 175), {
-      x: 385,
-      y: rY,
-      size: 7.5,
-      font: f2,
-      color: navyDark,
-    });
-    rY -= rowH;
-  }
-
-  curY -= s1BoxHeight + 10;
-
-  // ── Section 2: Immutable Blockchain Audit & Post-Quantum Evidence ─────────
-  drawSectionHeader('02', 'IMMUTABLE BLOCKCHAIN AUDIT & POST-QUANTUM EVIDENCE');
-
-  // Every value below is the recorded one or says it is not recorded — the
-  // report never shows a placeholder hash, block or address as if it were real.
-  const NOT_RECORDED = 'Not recorded';
+  const pct = Math.round(Number(confidence ?? 0) * 1000) / 10;
+  const classification = event?.asset?.classification || 'RESTRICTED';
+  const docTitle = event?.asset?.title;
+  const authority = (
+    process.env.DOSSIER_AUTHORITY ||
+    'GOVERNMENT OF INDIA|MINISTRY OF DEFENCE|Weapons & Electronics Systems Engineering Establishment (WESEE)|Directorate of Forensic Cyber Intelligence'
+  )
+    .split('|')
+    .map((x) => x.trim())
+    .filter(Boolean);
   const networkLabel =
     chainMode === 'sepolia'
-      ? 'Sepolia Ethereum Testnet (EVM Chain ID 11155111)'
+      ? 'Ethereum Sepolia testnet (11155111)'
       : chainMode === 'local'
-        ? 'Local Hardhat network'
-        : 'Chain disabled (CHAIN_MODE=off)';
-  const contractAddr = contractAddress ? `${contractAddress} (DecryptionProvenance)` : NOT_RECORDED;
-  const activeTxHash = txHash || NOT_RECORDED;
+        ? 'Local Hardhat network (air-gapped)'
+        : 'Chain disabled';
   const activeBlock =
     blockNumber ?? (event?.blockNumber != null ? Number(event.blockNumber) : null);
-  const activeSigCommit = signatureCommit || NOT_RECORDED;
-  const anchorStatement = !event
-    ? 'No release identified — nothing to anchor'
-    : chainVerified
-      ? 'Receipt found on-chain and verified at report time'
-      : 'Receipt could NOT be verified on-chain at report time';
+  const verdictColor = isAttributed ? GREEN : isProbable ? AMBER : MUTED;
 
-  const s2BoxHeight = 82;
-  page.drawRectangle({
-    x: 30,
-    y: curY - s2BoxHeight,
-    width: width - 60,
-    height: s2BoxHeight,
-    color: white,
-    borderColor: cardBorder,
-    borderWidth: 0.8,
-  });
+  const text = (str, x, yy, size, font, color = INK) =>
+    page.drawText(t(str), { x, y: yy, size, font, color });
+  const centre = (str, yy, size, font, color = INK) =>
+    text(str, (A4[0] - font.widthOfTextAtSize(t(str), size)) / 2, yy, size, font, color);
 
-  const s2Rows = [
-    ['Ledger Network:', networkLabel],
-    ['Smart Contract:', contractAddr],
-    ['Transaction Hash:', activeTxHash],
-    ['Block Height:', activeBlock != null ? `Block #${activeBlock}` : NOT_RECORDED],
-    [
-      'Signature Standard:',
-      signatureAlgorithm
-        ? `${signatureAlgorithm} (NIST FIPS 204 post-quantum signature)`
-        : 'No signature on record',
-    ],
-    ['Signature Commit:', activeSigCommit],
-    ['On-Chain Status:', anchorStatement],
-  ];
-
-  let r2Y = curY - 11;
-  for (const [k, v] of s2Rows) {
-    page.drawText(k, { x: 38, y: r2Y, size: 7.2, font: fontBold, color: slateMuted });
-    page.drawText(String(v), {
-      x: 140,
-      y: r2Y,
-      size: 6.8,
-      font: k.includes('Hash') || k.includes('Commit') || k.includes('Contract') ? fontMono : font,
-      color: k.includes('Non-Repudiation') ? emerald : navyDark,
+  // ---- visible watermark: the Provenance seal, large and faint --------------
+  const wmBytes = readAsset('provenance-seal.png');
+  if (wmBytes) {
+    const wm = await doc.embedPng(wmBytes);
+    const size = 400;
+    page.drawImage(wm, {
+      x: (A4[0] - size) / 2,
+      y: (A4[1] - size) / 2 - 10,
+      width: size,
+      height: size,
+      opacity: 0.08,
     });
-    r2Y -= 11.2;
   }
 
-  curY -= s2BoxHeight + 10;
-
-  // ── Section 3: Forensic Watermark & Reed-Solomon ECC Reconstruction ─────────
-  drawSectionHeader('03', 'FORENSIC WATERMARK & REED-SOLOMON ECC RECONSTRUCTION');
-
-  const s3BoxHeight = 48;
+  // ---- classification marking + frame ---------------------------------------
+  centre(classification, A4[1] - 20, 8, F.sansBold, RED);
+  centre(classification, 14, 8, F.sansBold, RED);
   page.drawRectangle({
-    x: 30,
-    y: curY - s3BoxHeight,
-    width: width - 60,
-    height: s3BoxHeight,
-    color: slateLight,
-    borderColor: cardBorder,
-    borderWidth: 0.8,
-  });
-
-  const s3Rows = [
-    [
-      'Embedding Technique:',
-      'Haar 2-Level Discrete Wavelet Transform (DWT) + QIM Quantization Index Modulation',
-    ],
-    [
-      'Payload Architecture:',
-      '48-bit (36-bit Short Receipt ID + 8-bit CRC-8 + 4-bit Protocol Version Header)',
-    ],
-    [
-      'Error Correction:',
-      'Pure JavaScript Reed-Solomon (RS) ECC Codeword [12, 6] (Corrects up to 3 Burst Errors)',
-    ],
-    [
-      'Attack Survivability:',
-      'Resistant to JPEG Q45, Gaussian Blur, 20% Crop, 50% Scaling, & Rotations (0/90/180/270 deg)',
-    ],
-  ];
-
-  let r3Y = curY - 11;
-  for (const [k, v] of s3Rows) {
-    page.drawText(k, { x: 38, y: r3Y, size: 7.2, font: fontBold, color: slateMuted });
-    page.drawText(String(v), { x: 155, y: r3Y, size: 7, font: font, color: navyDark });
-    r3Y -= 11.2;
-  }
-
-  curY -= s3BoxHeight + 10;
-
-  // ── Section 4: Investigative Findings & Audit Trail ────────────────────────
-  drawSectionHeader('04', 'INVESTIGATIVE FINDINGS & AUDIT TRAIL');
-
-  // The findings are the ones this investigation recorded — never a stock list.
-  const defaultReasons = ['No findings were recorded for this investigation.'];
-
-  const activeReasons = reasons && reasons.length > 0 ? reasons.slice(0, 4) : defaultReasons;
-
-  const s4BoxHeight = 46;
-  page.drawRectangle({
-    x: 30,
-    y: curY - s4BoxHeight,
-    width: width - 60,
-    height: s4BoxHeight,
-    color: white,
-    borderColor: cardBorder,
-    borderWidth: 0.8,
-  });
-
-  let r4Y = curY - 10.5;
-  for (const r of activeReasons) {
-    // Sanitize string to standard ASCII
-    const cleanR = String(r)
-      .replace(/—/g, '--')
-      .replace(/–/g, '-')
-      .replace(/…/g, '...')
-      .replace(/[^\x20-\x7E]/g, '');
-
-    page.drawCircle({
-      x: 40,
-      y: r4Y + 2.5,
-      size: 2,
-      color: verdictColor,
-    });
-    page.drawText(fit(cleanR, font, 7, width - 86), {
-      x: 48,
-      y: r4Y,
-      size: 7,
-      font: font,
-      color: slateInk,
-    });
-    r4Y -= 10.8;
-  }
-
-  curY -= s4BoxHeight + 9;
-
-  // ── Section 5: Statutory Certificate Under Section 65B Indian Evidence Act ──
-  const certBoxHeight = 44;
-  page.drawRectangle({
-    x: 30,
-    y: curY - certBoxHeight,
-    width: width - 60,
-    height: certBoxHeight,
-    color: goldLight,
-    borderColor: gold,
+    x: 22,
+    y: 24,
+    width: A4[0] - 44,
+    height: A4[1] - 50,
+    borderColor: NAVY,
     borderWidth: 1,
   });
-
-  page.drawText(
-    'STATUTORY CERTIFICATE UNDER SECTION 65B OF INDIAN EVIDENCE ACT, 1872 / SECTION 63 BSA, 2023',
-    { x: 38, y: curY - 11, size: 7.5, font: fontBold, color: navyDark }
-  );
-
-  // The certificate may only claim what this investigation established.
-  const certLines = [
-    'This is to certify that this computer output was produced by the automated cyber provenance architecture during ordinary course',
-    ...(hasTarget && chainVerified
-      ? [
-          'of operation. The released copy named above is backed by a receipt that was found and verified on the on-chain ledger',
-          'at the time this report was generated; the findings in section 04 are the evidence recorded for this investigation.',
-        ]
-      : [
-          'of operation. This investigation did NOT establish an attribution backed by a verified on-chain receipt; it must not be',
-          'relied on to identify any person. The findings in section 04 are the evidence recorded for this investigation.',
-        ]),
-  ];
-  certLines.forEach((line, i) =>
-    page.drawText(line, { x: 38, y: curY - 21.5 - i * 9, size: 6.8, font, color: slateInk })
-  );
-
-  curY -= certBoxHeight + 10;
-
-  // ── Section 6: Official Attestation & Signatures Block ─────────────────────
-  const sigBoxY = curY;
-
-  // Left Signature: Director
-  page.drawText('EXAMINED & VERIFIED BY:', {
-    x: 38,
-    y: sigBoxY,
-    size: 6.8,
-    font: fontBold,
-    color: slateMuted,
+  page.drawRectangle({
+    x: 25,
+    y: 27,
+    width: A4[0] - 50,
+    height: A4[1] - 56,
+    borderColor: RULE,
+    borderWidth: 0.4,
   });
+  y -= 6;
+
+  // ---- letterhead ------------------------------------------------------------
+  const head = y;
+  const sealBytes = readAsset('scales-seal.png');
+  const emblemPath = process.env.EMBLEM_IMAGE_PATH;
+  const sealSize = s(58);
+  // The deploying authority's emblem, when it supplies one (see the header).
+  let emblem = null;
+  if (emblemPath && fs.existsSync(emblemPath)) {
+    const b = fs.readFileSync(emblemPath);
+    emblem = /\.png$/i.test(emblemPath) ? await doc.embedPng(b) : await doc.embedJpg(b);
+    const w = (emblem.width / emblem.height) * sealSize;
+    page.drawImage(emblem, { x: L + 6, y: head - sealSize, width: w, height: sealSize });
+  }
+  const seal = sealBytes ? await doc.embedPng(sealBytes) : null;
+  if (seal) {
+    page.drawImage(seal, {
+      x: R - sealSize - 6,
+      y: head - sealSize,
+      width: sealSize,
+      height: sealSize,
+    });
+    if (!(emblemPath && fs.existsSync(emblemPath))) {
+      page.drawImage(seal, { x: L + 6, y: head - sealSize, width: sealSize, height: sealSize });
+    }
+  }
+  authority.forEach((line, i) => {
+    const size = s(i === 0 ? 12.5 : i === 1 ? 11 : 8.5);
+    const f = i < 2 ? F.serifBold : F.serif;
+    y -= size + s(3);
+    centre(line, y, size, f, i < 2 ? INK : MUTED);
+  });
+  y = Math.min(y, head - sealSize) - s(8);
+  page.drawLine({ start: { x: L, y }, end: { x: R, y }, thickness: 1.3, color: NAVY });
   page.drawLine({
-    start: { x: 38, y: sigBoxY - 15 },
-    end: { x: 180, y: sigBoxY - 15 },
-    thickness: 0.8,
-    color: slateMuted,
+    start: { x: L, y: y - 2.5 },
+    end: { x: R, y: y - 2.5 },
+    thickness: 0.4,
+    color: NAVY,
   });
-  page.drawText('(Dr. S. K. Ramanathan, Sc. G)', {
-    x: 38,
-    y: sigBoxY - 24,
-    size: 7.5,
-    font: fontBold,
-    color: navyDark,
-  });
-  page.drawText('Director, Forensic Cyber Intelligence', {
-    x: 38,
-    y: sigBoxY - 32,
-    size: 6.5,
-    font: font,
-    color: slateMuted,
-  });
-  page.drawText('WESEE // Ministry of Defence', {
-    x: 38,
-    y: sigBoxY - 40,
-    size: 6.5,
-    font: font,
-    color: slateMuted,
-  });
+  y -= s(20);
+  centre('FORENSIC EXAMINATION REPORT', y, s(15), F.serifBold, NAVY);
+  y -= s(12);
+  centre(
+    'Electronic record certified under Section 63 of the Bharatiya Sakshya Adhiniyam, 2023',
+    y,
+    s(8.5),
+    F.serifItalic,
+    MUTED
+  );
+  y -= s(10);
 
-  // Center: Official Government Seal
-  const sealWidth = 140;
-  const sealHeight = 44;
-  const sealX = (width - sealWidth) / 2;
-
+  // ---- reference strip ---------------------------------------------------------
+  const refH = s(16);
   page.drawRectangle({
-    x: sealX,
-    y: sigBoxY - 42,
-    width: sealWidth,
-    height: sealHeight,
-    color: white,
-    borderColor: gold,
-    borderWidth: 1.2,
-  });
-
-  page.drawRectangle({
-    x: sealX + 2,
-    y: sigBoxY - 40,
-    width: sealWidth - 4,
-    height: sealHeight - 4,
-    borderColor: gold,
+    x: L,
+    y: y - refH,
+    width: W,
+    height: refH,
+    color: SHADE,
+    borderColor: RULE,
     borderWidth: 0.5,
   });
+  const refs = [
+    `Report No. ${reportNo}`,
+    `Date: ${ist(issuedAt)}`,
+    `Examiner: ${examiner ? `${examiner.name} (${examiner.role})` : NR}`,
+  ];
+  refs.forEach((r, i) => text(r, L + 6 + (i * W) / 3, y - refH + s(5), s(7.2), F.sansBold, MUTED));
+  y -= refH + s(8);
 
-  page.drawText('GOVERNMENT OF INDIA', {
-    x: sealX + 20,
-    y: sigBoxY - 11,
-    size: 6.8,
-    font: fontBold,
-    color: gold,
-  });
-  page.drawText('[ OFFICIAL SEAL ]', {
-    x: sealX + 34,
-    y: sigBoxY - 22,
-    size: 7,
-    font: fontBold,
-    color: navyDark,
-  });
-  page.drawText('MINISTRY OF DEFENCE // WESEE', {
-    x: sealX + 14,
-    y: sigBoxY - 32,
-    size: 5.8,
-    font: fontBold,
-    color: gold,
-  });
-  page.drawText('SEPOLIA LEDGER ANCHORED', {
-    x: sealX + 22,
-    y: sigBoxY - 39,
-    size: 5,
-    font: fontMonoBold,
-    color: emerald,
-  });
-
-  // Right Signature: Senior Cryptographic Officer
-  page.drawText('ATTESTED & COUNTERSIGNED:', {
-    x: 395,
-    y: sigBoxY,
-    size: 6.8,
-    font: fontBold,
-    color: slateMuted,
-  });
-  page.drawLine({
-    start: { x: 395, y: sigBoxY - 15 },
-    end: { x: 550, y: sigBoxY - 15 },
-    thickness: 0.8,
-    color: slateMuted,
-  });
-  page.drawText('(Capt. V. K. Sharma, IN)', {
-    x: 395,
-    y: sigBoxY - 24,
-    size: 7.5,
-    font: fontBold,
-    color: navyDark,
-  });
-  page.drawText('Senior Cryptographic Security Officer', {
-    x: 395,
-    y: sigBoxY - 32,
-    size: 6.5,
-    font: font,
-    color: slateMuted,
-  });
-  page.drawText('Naval Cyber Defence Provenance Group', {
-    x: 395,
-    y: sigBoxY - 40,
-    size: 6.5,
-    font: font,
-    color: slateMuted,
-  });
-
-  // ── Bottom Security Microprint Footer ──────────────────────────────────────
-  page.drawLine({
-    start: { x: 28, y: 28 },
-    end: { x: width - 28, y: 28 },
-    thickness: 0.5,
-    color: cardBorder,
-  });
-  page.drawText(
-    'RESTRICTED // WESEE FORENSIC PROVENANCE DOSSIER // COURT ADMISSIBLE DOCUMENT UNDER SECTION 65B IEA // PAGE 1 OF 1',
-    {
-      x: 38,
-      y: 20,
-      size: 5.5,
-      font: fontMonoBold,
-      color: slateMuted,
+  // ---- matter -------------------------------------------------------------------
+  const paraAt = (str, x, width, size, font, color = INK, lh = 1.3) => {
+    for (const line of wrap(str, font, size, width)) {
+      y -= size * lh;
+      text(line, x, y, size, font, color);
     }
+  };
+  const mTop = y;
+  y -= s(3);
+  text('IN THE MATTER OF:', L + 8, y - s(9), s(8.5), F.serifBold);
+  y -= s(9);
+  paraAt(
+    docTitle
+      ? `Unauthorised disclosure of the protected document "${docTitle}" (${classification}), and forensic examination of the electronic record SHA-256 ${custody?.leakSha || NR} submitted in investigation ${invNo}.`
+      : `Forensic examination of the electronic record SHA-256 ${custody?.leakSha || NR}, submitted in investigation ${invNo} as a possible leak of a protected document.`,
+    L + 8,
+    W - 16,
+    s(8.5),
+    F.serif
   );
+  y -= s(5);
+  page.drawRectangle({ x: L, y, width: W, height: mTop - y, borderColor: INK, borderWidth: 0.7 });
+  y -= s(8);
 
-  const pdfBytes = await doc.save();
-  return Buffer.from(pdfBytes);
+  // ---- finding --------------------------------------------------------------------
+  const fH = s(34);
+  page.drawRectangle({
+    x: L,
+    y: y - fH,
+    width: W,
+    height: fH,
+    color: SHADE,
+    borderColor: verdictColor,
+    borderWidth: 1.2,
+  });
+  text('FINDING', L + 14, y - s(11), s(7), F.sansBold, MUTED);
+  text(`${verdict} - ${pct}% confidence`, L + 14, y - s(26), s(13), F.serifBold, verdictColor);
+  const fNote = hasTarget
+    ? `Attributed to the release made to ${event.user.name} (Account #${event.user.id}${event.user.dept ? `, ${event.user.dept}` : ''}).`
+    : 'No person is identified by this examination.';
+  const fNoteW = F.serif.widthOfTextAtSize(t(fNote), s(9));
+  text(fNote, R - 10 - Math.min(fNoteW, W * 0.52), y - s(22), s(9), F.serif, INK);
+  y -= fH + s(10);
+
+  // ---- section helper ---------------------------------------------------------------
+  const heading = (roman, title, x = L, w = W) => {
+    const h = s(13);
+    text(`${roman}.  ${title.toUpperCase()}`, x + 1, y - h + s(3.8), s(8.2), F.serifBold, INK);
+    page.drawLine({
+      start: { x, y: y - h },
+      end: { x: x + w, y: y - h },
+      thickness: 0.9,
+      color: INK,
+    });
+    y -= h + s(4);
+  };
+  /** Key/value rows in a column; returns the bottom y. */
+  const kv = (rows, x, w, labelW, { mono = [] } = {}) => {
+    for (const [key, v] of rows) {
+      const isMono = mono.includes(key);
+      const vf = isMono ? F.mono : F.serif;
+      const vs = s(isMono ? 6.6 : 7.8);
+      const lines = wrap(v ?? NR, vf, vs, w - labelW - 6);
+      const h = lines.length * vs * 1.25 + s(3.5);
+      page.drawLine({
+        start: { x, y: y - h },
+        end: { x: x + w, y: y - h },
+        thickness: 0.35,
+        color: RULE,
+      });
+      text(key, x + 2, y - s(8.5), s(6.8), F.sansBold, MUTED);
+      lines.forEach((line, i) =>
+        text(line, x + labelW, y - s(8.5) - i * vs * 1.25, vs, vf, v ? INK : MUTED)
+      );
+      y -= h;
+    }
+    return y;
+  };
+
+  // ---- I & III side by side ----------------------------------------------------------
+  const colW = (W - 12) / 2;
+  const top2 = y;
+  heading('I', 'Particulars of the matter', L, colW);
+  const leftEnd = kv(
+    hasTarget
+      ? [
+          ['Document', `${docTitle || NR} [${classification}]`],
+          ['Recipient', `${event.user.name} - Account #${event.user.id}, ${event.user.role}`],
+          ['Department', event.user.dept || NR],
+          ['Released on', ist(event.createdAt)],
+          ['Terminal', event.deviceLabel || NR],
+          [
+            'Receipt ID',
+            event.receiptId ? `0x${Buffer.from(event.receiptId).toString('hex')}` : NR,
+          ],
+          [
+            'Fidelity',
+            event.psnrDb ? `${Number(event.psnrDb).toFixed(1)} dB PSNR vs original` : NR,
+          ],
+        ]
+      : [
+          ['Document', 'Not identified'],
+          ['Recipient', 'None'],
+          ['Reason', 'No release in the register is linked to this file by the evidence.'],
+        ],
+    L,
+    colW,
+    s(62),
+    { mono: ['Receipt ID'] }
+  );
+  y = top2;
+  heading('II', 'On-chain receipt & signature', L + colW + 12, colW);
+  const rightEnd = kv(
+    [
+      ['Network', networkLabel],
+      ['Contract', contractAddress],
+      ['Tx hash', txHash || null],
+      [
+        'Block',
+        activeBlock != null
+          ? `#${activeBlock}${blockTimestamp ? ` - ${ist(blockTimestamp * 1000)}` : ''}`
+          : null,
+      ],
+      [
+        'Status',
+        !event
+          ? 'No release identified'
+          : chainVerified
+            ? 'Receipt verified on-chain'
+            : 'NOT verified on-chain',
+      ],
+      [
+        'Signature',
+        signatureAlgorithm ? `${signatureAlgorithm} (NIST FIPS 204)` : 'No signature on record',
+      ],
+      ['Sig. commit', signatureCommit || null],
+    ],
+    L + colW + 12,
+    colW,
+    s(52),
+    { mono: ['Contract', 'Tx hash', 'Sig. commit'] }
+  );
+  y = Math.min(leftEnd, rightEnd) - s(8);
+
+  // ---- III custody -------------------------------------------------------------------
+  heading('III', 'Chain of custody (SHA-256)');
+  kv(
+    [
+      ['1. Original', custody?.originalSha || null],
+      ['2. Released copy', custody?.releasedSha || null],
+      ['3. Leaked file', custody?.leakSha || null],
+      ['4. This report', custody?.evidenceDigest || null],
+    ],
+    L,
+    W,
+    s(82),
+    { mono: ['1. Original', '2. Released copy', '3. Leaked file', '4. This report'] }
+  );
+  y -= s(8);
+
+  // ---- IV analysis --------------------------------------------------------------------
+  heading('IV', 'Forensic analysis');
+  const obs = reasons.length ? reasons : ['No observations were recorded for this investigation.'];
+  obs.slice(0, 7).forEach((r, i) => {
+    const lines = wrap(r, F.serif, s(7.8), W - 16);
+    lines.forEach((line, j) => {
+      y -= s(7.8) * 1.28;
+      if (j === 0) text(`${i + 1}.`, L + 2, y, s(7.8), F.serif);
+      text(line, L + 14, y, s(7.8), F.serif);
+    });
+  });
+  y -= s(4);
+  const tamperText = !tamper
+    ? 'Not applicable'
+    : tamper.status === 'intact'
+      ? 'INTACT - not altered since release'
+      : tamper.status === 'tampered'
+        ? `ALTERED - ${tamper.failed}/${tamper.blocks} blocks changed${
+            tamper.regions?.length
+              ? ` at (x,y,w,h) ${tamper.regions
+                  .slice(0, 3)
+                  .map((r) => `(${r.x},${r.y},${r.w},${r.h})`)
+                  .join(' ')}`
+              : ''
+          }`
+        : 'Not assessable (copy re-encoded or resized)';
+  kv(
+    [
+      [
+        'Watermark',
+        bitsMatched != null
+          ? `${bitsMatched}/48 bits agree with the identified receipt`
+          : 'Not applicable',
+      ],
+      ['Tamper check', tamperText],
+      [
+        'Optical lens',
+        lens?.applied
+          ? `Applied (${lens.autoDetected ? 'auto' : 'examiner'} corners, ${lens.moirePeaks} moire peaks removed)`
+          : 'Not applied',
+      ],
+    ],
+    L,
+    W,
+    s(62)
+  );
+  y -= s(8);
+
+  // ---- V opinion ------------------------------------------------------------------------
+  heading('V', 'Opinion of the examiner');
+  const opinion = hasTarget
+    ? `The submitted file is a copy of "${docTitle}" released to ${event.user.name} on ${ist(event.createdAt)}. Finding: ${verdict}, ${pct}% confidence; the receipt ${chainVerified ? 'was verified on-chain' : 'could NOT be verified on-chain'}. ${
+        tamper?.status === 'tampered'
+          ? 'The copy was ALTERED after release in the regions stated; its contents there must not be relied on.'
+          : tamper?.status === 'intact'
+            ? 'Its contents are exactly as released.'
+            : 'Whether its contents were altered cannot be determined from this copy.'
+      } ${isProbable ? 'A PROBABLE finding is a lead and must be corroborated before action against any person.' : 'This concerns the provenance of the copy, not by itself who disclosed it or why.'}`
+    : 'The submitted file is NOT attributed to any release in the register, and this report must not be relied on to identify any person.';
+  paraAt(opinion, L + 2, W - 4, s(8), F.serif);
+  y -= s(8);
+
+  // ---- VI certificate ---------------------------------------------------------------------
+  heading('VI', 'Certificate under Section 63, BSA, 2023');
+  paraAt(
+    `Part A: I certify that the electronic record in item 3 of Part III, and this report, were produced by the Provenance decryption-register system in its regular use; that the system was operating properly throughout; and that the SHA-256 digests above were computed by it at the stages stated.`,
+    L + 2,
+    W - 4,
+    s(7.6),
+    F.serif
+  );
+  paraAt(
+    `Part B: I have examined that record with the system's forensic engine; Parts II and IV set out the evidence and Part V my opinion.${stamp ? ' I have signed the evidence digest (item 4) with my ML-DSA-65 key.' : ''}`,
+    L + 2,
+    W - 4,
+    s(7.6),
+    F.serif
+  );
+  y -= s(26);
+
+  // Signatures and seal.
+  const sigW = s(170);
+  const sig = (x, role, who) => {
+    page.drawLine({ start: { x, y }, end: { x: x + sigW, y }, thickness: 0.6, color: INK });
+    text(role, x, y - s(9), s(7), F.sansBold, MUTED);
+    text(who || 'Name & designation:', x, y - s(18), s(7.4), F.serif, who ? INK : MUTED);
+  };
+  sig(L + 2, 'Part A - Person in charge of the system', null);
+  sig(R - sigW - 2, 'Part B - Expert', examiner ? `${examiner.name} (${examiner.role})` : null);
+  // Centre of the signature block: the authority's emblem when supplied,
+  // otherwise the project's own Provenance seal.
+  const projectSealBytes = readAsset('provenance-seal.png');
+  const projectSeal = projectSealBytes ? await doc.embedPng(projectSealBytes) : null;
+  const centreMark = emblem || projectSeal || seal;
+  if (centreMark) {
+    const h = s(62);
+    const w = (centreMark.width / centreMark.height) * h;
+    page.drawImage(centreMark, {
+      x: (A4[0] - w) / 2,
+      y: y - h / 2 - s(4),
+      width: w,
+      height: h,
+      opacity: 1,
+    });
+  }
+  y -= s(40); // clear the seal before the stamp line
+  if (stamp) {
+    const stampLine = `Examiner's digital stamp: ML-DSA-65 over sha256:${stamp.digest} - signature sha256 ${stamp.signatureSha.slice(0, 24)}... - verify at /api/trace/${investigation?.id}/dossier/verify`;
+    paraAt(stampLine, L + 2, W - 4, s(6.4), F.mono, MUTED, 1.25);
+  }
+
+  // Footer.
+  const fits = y >= BOTTOM + 10;
+  page.drawLine({ start: { x: L, y: 44 }, end: { x: R, y: 44 }, thickness: 0.5, color: RULE });
+  text(`Forensic Examination Report - ${reportNo}`, L, 34, 6.8, F.sans, MUTED);
+  const pn = 'Certified under Section 63, BSA, 2023 - Page 1 of 1';
+  text(pn, R - F.sans.widthOfTextAtSize(pn, 6.8), 34, 6.8, F.sans, MUTED);
+
+  return { fits, buffer: Buffer.from(await doc.save()) };
 }

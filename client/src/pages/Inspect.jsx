@@ -109,8 +109,10 @@ export default function Inspect() {
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-semibold text-ink">
                         {r.recipient}
-                        {r.dept && <span className="font-normal text-ink-muted"> · {r.dept}</span>}
                       </span>
+                      {r.dept && (
+                        <span className="block truncate text-xs text-ink-muted">{r.dept}</span>
+                      )}
                       <span className="mono mt-0.5 block text-[11px] text-ink-faint">
                         {shortHash(r.receiptId, 10, 6)}
                       </span>

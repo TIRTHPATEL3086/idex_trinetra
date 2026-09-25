@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { traceFile, getInvestigations, shortHash } from '../lib/api.js';
+import LensEditor from '../components/LensEditor.jsx';
+import { LensPanel, TamperPanel } from '../components/ForensicPanels.jsx';
 import { Header, Notice } from './Assets.jsx';
 import Select from '../components/Select.jsx';
 
@@ -19,6 +21,9 @@ export default function Trace() {
   const [timeRange, setTimeRange] = useState('all'); // 'all' | '7d' | '30d' | '1y'
   const [sortBy, setSortBy] = useState('newest'); // 'newest' | 'oldest' | 'confidence-desc' | 'confidence-asc' | 'verdict'
   const [searchQuery, setSearchQuery] = useState('');
+  // Optical lens: a photo of a screen goes through the corner editor first.
+  const [lensOn, setLensOn] = useState(false);
+  const [lensFile, setLensFile] = useState(null);
   const inputRef = useRef(null);
 
   const loadHistory = useCallback(async () => {
@@ -76,14 +81,28 @@ export default function Trace() {
     return list;
   }, [investigations, timeRange, sortBy, searchQuery]);
 
-  async function run(file) {
+  function pick(file) {
+    if (!file) return;
+    if (lensOn && file.type.startsWith('image/')) {
+      setFileName(file.name);
+      setResult(null);
+      setError(null);
+      setStatus('idle');
+      setLensFile(file);
+      return;
+    }
+    run(file);
+  }
+
+  async function run(file, lens = null) {
     if (!file) return;
     setFileName(file.name);
     setStatus('working');
     setError(null);
     setResult(null);
     try {
-      const r = await traceFile(file);
+      const r = await traceFile(file, lens ? { lens: true, corners: lens.corners } : {});
+      setLensFile(null);
       setResult(r);
       setStatus('done');
       loadHistory(); // refresh history list
@@ -118,7 +137,7 @@ export default function Trace() {
           e.preventDefault();
           e.stopPropagation();
           setIsDragging(false);
-          run(e.dataTransfer.files?.[0]);
+          pick(e.dataTransfer.files?.[0]);
         }}
         onClick={() => inputRef.current?.click()}
         className={`card grid cursor-pointer place-items-center border-2 border-dashed px-6 py-10 text-center transition-all duration-200 ${
@@ -132,7 +151,10 @@ export default function Trace() {
           type="file"
           accept="image/*,.pdf"
           className="hidden"
-          onChange={(e) => run(e.target.files?.[0])}
+          onChange={(e) => {
+            pick(e.target.files?.[0]);
+            e.target.value = '';
+          }}
         />
         <div
           className={`grid h-12 w-12 place-items-center rounded-full bg-accent text-noir transition-transform duration-200 shadow-sm ${
@@ -152,6 +174,35 @@ export default function Trace() {
           It will be hashed, matched, and the watermark extracted — nothing is stored as plaintext.
         </div>
       </div>
+
+      {/* The lens switch: for a photo taken of a screen with a phone. */}
+      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-line bg-white px-4 py-3">
+        <input
+          type="checkbox"
+          checked={lensOn}
+          onChange={(e) => {
+            setLensOn(e.target.checked);
+            if (!e.target.checked) setLensFile(null);
+          }}
+          className="mt-0.5 h-4 w-4 shrink-0 rounded text-accent focus:ring-accent"
+        />
+        <span className="min-w-0">
+          <span className="block text-sm font-bold text-ink">Optical forensic lens</span>
+          <span className="block text-xs leading-relaxed text-ink-muted">
+            For a phone photo of a screen: find the document&rsquo;s corners, straighten the
+            perspective, remove moir&eacute; and correct the exposure before reading the watermark.
+          </span>
+        </span>
+      </label>
+
+      {lensFile && (
+        <LensEditor
+          file={lensFile}
+          busy={status === 'working'}
+          onCancel={() => setLensFile(null)}
+          onTrace={(corners) => run(lensFile, { corners })}
+        />
+      )}
 
       {status === 'working' && (
         <div className="card grid place-items-center p-8 text-center space-y-3">
@@ -334,7 +385,7 @@ export default function Trace() {
                             <line x1="9" y1="15" x2="12" y2="18" />
                             <line x1="15" y1="15" x2="12" y2="18" />
                           </svg>
-                          Export Dossier (PDF)
+                          Generate Court Evidence Dossier
                         </a>
                       </td>
                     </tr>
@@ -427,7 +478,7 @@ function Verdict({ result }) {
                 <line x1="9" y1="15" x2="12" y2="18" />
                 <line x1="15" y1="15" x2="12" y2="18" />
               </svg>
-              Export Dossier (PDF)
+              Generate Court Evidence Dossier
             </a>
           )}
         </div>
@@ -536,7 +587,7 @@ function Verdict({ result }) {
                       <line x1="9" y1="15" x2="12" y2="18" />
                       <line x1="15" y1="15" x2="12" y2="18" />
                     </svg>
-                    Export Dossier (PDF)
+                    Generate Court Evidence Dossier
                   </a>
                 </div>
               )}
@@ -645,7 +696,7 @@ function Verdict({ result }) {
                       <line x1="9" y1="15" x2="12" y2="18" />
                       <line x1="15" y1="15" x2="12" y2="18" />
                     </svg>
-                    Export Dossier (PDF)
+                    Generate Court Evidence Dossier
                   </a>
                 </div>
               )}
@@ -679,7 +730,7 @@ function Verdict({ result }) {
                       <line x1="9" y1="15" x2="12" y2="18" />
                       <line x1="15" y1="15" x2="12" y2="18" />
                     </svg>
-                    Export Dossier (PDF)
+                    Generate Court Evidence Dossier
                   </a>
                 </div>
               )}
@@ -702,6 +753,9 @@ function Verdict({ result }) {
           </div>
         </div>
       </div>
+
+      <LensPanel lens={result.lens} />
+      <TamperPanel tamper={result.tamper} />
     </div>
   );
 }

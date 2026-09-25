@@ -135,7 +135,7 @@ export default function Select({
   }
 
   return (
-    <div ref={rootRef} className={`relative ${className}`}>
+    <div ref={rootRef} className={`relative min-w-0 ${className}`}>
       <button
         ref={buttonRef}
         type="button"
@@ -150,7 +150,7 @@ export default function Select({
           ${open ? 'border-accent ring-4 ring-accent/20' : 'border-line hover:border-ink-faint'}
           disabled:cursor-not-allowed disabled:opacity-60 ${buttonClassName}`}
       >
-        <span className={`truncate ${selected ? '' : 'text-ink-faint'}`}>
+        <span className={`min-w-0 truncate ${selected ? '' : 'text-ink-faint'}`}>
           {selected ? selected.label : placeholder}
         </span>
         <Chevron open={open} />

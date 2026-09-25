@@ -1,3 +1,4 @@
+import fs from 'node:fs/promises';
 import { Router } from 'express';
 import sharp from 'sharp';
 
@@ -11,8 +12,11 @@ import * as chain from '../core/chain.js';
 import * as bktree from '../core/bktree.js';
 import { hashes, extract, score, sha256, hamming, isPdf, extractPdf } from '../core/index.js';
 import { parsePayload, bitAgreement, bitsMatching, PAYLOAD_BITS } from '../core/payload.js';
-import { verifyDecryptionSignature } from '../core/pqc.js';
+import { signDecryptionReceipt, verifyDecryptionSignature } from '../core/pqc.js';
+import { userKeys } from '../lib/keyring.js';
 import { generateDossier } from '../core/dossier.js';
+import { detectQuad, dewarp, removeMoire, matchTones } from '../core/lens.js';
+import { verifyFragile } from '../core/fragile.js';
 
 /**
  * Attribution: hash, search, extract, cross-check, score.
@@ -57,6 +61,25 @@ async function namesARelease(bits) {
   }
 }
 
+/**
+ * SHA-256 of evidence in canonical form — keys sorted at every level — so the
+ * digest is the same after a round trip through PostgreSQL's JSONB, which does
+ * not keep key order.
+ */
+function evidenceDigest(evidence) {
+  const canon = (v) =>
+    Array.isArray(v)
+      ? v.map(canon)
+      : v && typeof v === 'object'
+        ? Object.fromEntries(
+            Object.keys(v)
+              .sort()
+              .map((k) => [k, canon(v[k])])
+          )
+        : v;
+  return sha256(Buffer.from(JSON.stringify(canon(evidence)))).toString('hex');
+}
+
 /** Candidates the pHash search itself matched — a genuine visual resemblance. */
 const visualMatches = (candidates) => candidates.filter((c) => c.pHashDist != null);
 
@@ -66,9 +89,12 @@ const visualMatches = (candidates) => candidates.filter((c) => c.pHashDist != nu
  * when it agrees with that copy's own payload well beyond chance (the same
  * bar the candidate ranking below uses), not only when its CRC holds.
  *
+ * With `tones`, the aligned image's tone curve is also matched to that copy's
+ * before reading — undoing a camera's exposure and white balance.
+ *
  * @returns the best such reading, or null
  */
-async function extractAtCandidateSizes(buffer, candidates) {
+async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {}) {
   const events = await prisma.decryptionEvent.findMany({
     where: { id: { in: visualMatches(candidates).map((c) => c.id) } },
     select: { markedPath: true, payloadBits: true },
@@ -83,14 +109,17 @@ async function extractAtCandidateSizes(buffer, candidates) {
     } catch {
       continue; // the released file is gone from disk; nothing to align to
     }
-    if (size.width === leak.width && size.height === leak.height) continue;
-    const key = `${size.width}x${size.height}`;
+    if (!tones && size.width === leak.width && size.height === leak.height) continue;
+    const dims = `${size.width}x${size.height}`;
+    // Tone matching is against one particular copy, so it is decoded per copy.
+    const key = tones ? `${dims}#${ev.markedPath}` : dims;
     if (!readings.has(key)) {
-      const aligned = await sharp(buffer)
+      let aligned = await sharp(buffer)
         .resize(size.width, size.height, { fit: 'fill' })
         .png()
         .toBuffer();
-      readings.set(key, { ...(await extract(aligned)), rescaledTo: `${key} px` });
+      if (tones) aligned = await matchTones(aligned, await fs.readFile(ev.markedPath));
+      readings.set(key, { ...(await extract(aligned)), rescaledTo: `${dims} px` });
     }
     const reading = readings.get(key);
     const matches = bitsMatching(reading.payloadBits, ev.payloadBits);
@@ -101,6 +130,74 @@ async function extractAtCandidateSizes(buffer, candidates) {
   return best?.reading ?? null;
 }
 
+/**
+ * Run the optical lens on an uploaded photo. Corners come from the examiner
+ * (dragged on the Trace page) or, failing that, from automatic detection.
+ */
+async function applyLens(buffer, cornersField) {
+  let corners = null;
+  let autoDetected = false;
+  if (cornersField) {
+    try {
+      const parsed = JSON.parse(cornersField);
+      if (
+        Array.isArray(parsed) &&
+        parsed.length === 4 &&
+        parsed.every((p) => Number.isFinite(p?.x) && Number.isFinite(p?.y))
+      ) {
+        corners = parsed.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) }));
+      }
+    } catch {
+      throw badInput('corners must be a JSON array of four {x, y} points.');
+    }
+  }
+  if (!corners) {
+    const found = await detectQuad(buffer);
+    if (found) {
+      corners = found.corners;
+      autoDetected = true;
+    }
+  }
+  if (!corners) {
+    return {
+      applied: false,
+      reason: 'The document’s corners could not be found automatically; place them by hand.',
+    };
+  }
+  const flat = await dewarp(buffer, corners);
+  const clean = await removeMoire(flat.buffer);
+  const preview = await sharp(clean.buffer)
+    .resize({ width: 640, withoutEnlargement: true })
+    .jpeg({ quality: 80 })
+    .toBuffer();
+  return {
+    applied: true,
+    buffer: clean.buffer,
+    autoDetected,
+    corners,
+    size: { width: flat.width, height: flat.height },
+    moirePeaks: clean.peaks,
+    preview: `data:image/jpeg;base64,${preview.toString('base64')}`,
+  };
+}
+
+/** Corner detection alone, so the Trace page can place its handles. */
+router.post('/lens/detect', requireCap('trace:run'), singleFile, async (req, res, next) => {
+  try {
+    if (!req.file) throw badInput('No file uploaded. Send multipart field "file".');
+    const meta = await sharp(req.file.buffer).rotate().metadata();
+    const found = await detectQuad(req.file.buffer);
+    res.json({
+      width: meta.width,
+      height: meta.height,
+      corners: found?.corners ?? null,
+      coverage: found?.coverage ?? null,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => {
   const startedAt = Date.now();
   try {
@@ -109,13 +206,24 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
     const buffer = req.file.buffer;
     const isDocPdf = req.file.mimetype === 'application/pdf' || isPdf(buffer);
 
+    // --- 1. Optical lens: a photo of a screen becomes a flat, clean page ----
+    // The corrected image feeds the search and the watermark read; the file as
+    // uploaded is what the custody hash and the tamper check are made on.
+    const wantsLens = /^(1|true|on)$/i.test(String(req.body?.lens ?? ''));
+    let leak = buffer;
+    let lens = null;
+    if (wantsLens && !isDocPdf) {
+      lens = await applyLens(buffer, req.body?.corners);
+      if (lens.applied) leak = lens.buffer;
+    }
+
     // --- 2. Perceptual hashes of the leaked file ---------------------------
     let leaked;
     if (isDocPdf) {
       const pdfHash = BigInt('0x' + sha256(buffer).toString('hex').slice(0, 16));
       leaked = { pHash: pdfHash, dHash: pdfHash, aHash: pdfHash };
     } else {
-      leaked = await hashes(buffer);
+      leaked = await hashes(leak);
     }
 
     // --- 3. BK-tree OR-vote across dHash / pHash / aHash -------------------
@@ -130,12 +238,14 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
         eccCorrected: false,
       };
     } else {
-      marked = await extract(buffer);
+      marked = await extract(leak);
       // A leak that was scaled and left at the new size no longer lines up with
       // the grid the mark was embedded on. The hashes still find the document,
       // so scale the leak back to each candidate's released size and read again.
       if (visualMatches(candidates).length && !(await namesARelease(marked.payloadBits))) {
-        const rescaled = await extractAtCandidateSizes(buffer, candidates);
+        const rescaled = await extractAtCandidateSizes(leak, candidates, {
+          tones: Boolean(lens?.applied),
+        });
         if (rescaled) marked = rescaled;
       }
     }
@@ -293,6 +403,40 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
       reasons.unshift('No candidate file in the register resembled this upload.');
     }
 
+    // --- 7.3 Tamper check: the fragile layer, on the file exactly as uploaded --
+    let tamper = null;
+    if (event && !isDocPdf) {
+      if (!event.fragileLayer) {
+        tamper = {
+          status: 'unassessable',
+          reason:
+            'This release predates the fragile layer, so its contents cannot be checked for edits.',
+        };
+      } else {
+        let released = null;
+        try {
+          const m = await sharp(event.markedPath).metadata();
+          released = { width: m.width, height: m.height };
+        } catch {
+          // The released copy is not on disk; verify against the upload's own size.
+        }
+        tamper = await verifyFragile(buffer, bufferToHex(event.receiptId), released);
+      }
+      reasons.push(
+        tamper.status === 'intact'
+          ? 'Fragile layer intact — the copy has not been altered since release.'
+          : tamper.status === 'tampered'
+            ? `Fragile layer broken in ${tamper.regions.length} region(s) — the copy was ALTERED after release.`
+            : 'Fragile layer not assessable — contents cannot be checked for edits.'
+      );
+    }
+    if (lens?.applied) {
+      reasons.push(
+        `Optical lens applied: ${lens.autoDetected ? 'auto-detected' : 'examiner-placed'} corners, perspective corrected to ${lens.size.width}x${lens.size.height}, ${lens.moirePeaks} moire peak(s) removed.`
+      );
+    }
+    const bitsMatched = event ? bitsMatching(marked.payloadBits, event.payloadBits) : null;
+
     const elapsedMs = Date.now() - startedAt;
 
     // --- 8. Persist the investigation --------------------------------------
@@ -309,6 +453,11 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
         verdict: verdictResult.verdict,
         reasons,
         elapsedMs,
+        bitsMatched,
+        // The heatmap image is returned to the examiner, not stored; the
+        // regions are what the dossier cites.
+        tamper: tamper ? { ...tamper, heatmap: undefined } : undefined,
+        lens: lens ? { ...lens, buffer: undefined, preview: undefined } : undefined,
       },
     });
 
@@ -326,7 +475,11 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
             userId: event.user.id,
             userName: event.user.name,
             department: event.user.dept,
+            assetId: event.asset.id,
             assetTitle: event.asset.title,
+            eventId: event.id,
+            receiptId: bufferToHex(event.receiptId),
+            bitsMatched,
             decryptedAt: event.createdAt.toISOString(),
             deviceLabel: event.deviceLabel,
             txHash: txHashHex,
@@ -347,6 +500,8 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
         : null,
       suspects: suspects,
       reasons,
+      tamper,
+      lens: lens ? { ...lens, buffer: undefined } : null,
       candidatesChecked: checked || candidates.length || allRecentEvents.length,
       elapsedMs,
     });
@@ -407,6 +562,59 @@ router.get('/:investigationId/dossier', requireCap('trace:run'), async (req, res
     const blockNumber = event?.blockNumber != null ? Number(event.blockNumber) : null;
     const sigCommit = event?.signatureCommit ? bufferToHex(event.signatureCommit) : null;
 
+    // What the report may say about the chain is looked up, not assumed.
+    const onChain = event ? await chain.getReceipt(bufferToHex(event.receiptId)) : null;
+    const hex = (b) => (b ? Buffer.from(b).toString('hex') : null);
+
+    // The evidence this dossier asserts, in a fixed order. Its SHA-256 is what
+    // the examiner signs, and what the verify endpoint checks later.
+    const generatedAt = new Date().toISOString();
+    const evidence = {
+      investigationId: investigation.id,
+      generatedAt,
+      verdict: investigation.verdict,
+      confidence: investigation.confidence,
+      bitsMatched: investigation.bitsMatched ?? null,
+      leakSha: hex(investigation.uploadedSha),
+      originalSha: hex(event?.asset?.originalSha),
+      releasedSha: hex(event?.contentSha),
+      receiptId: event ? bufferToHex(event.receiptId) : null,
+      txHash,
+      blockNumber,
+      blockTimestamp: onChain?.receipt?.timestamp ?? null,
+      contractAddress: chain.chainConfig().address || null,
+      chainVerified: Boolean(onChain?.verified),
+      tamper: investigation.tamper?.status ?? null,
+      lensApplied: Boolean(investigation.lens?.applied),
+      examinerId: req.user.id,
+    };
+    const digest = evidenceDigest(evidence);
+
+    // Examiner's stamp: their own ML-DSA-65 key signs the evidence digest.
+    const examinerRow = await prisma.user.findUnique({ where: { id: req.user.id } });
+    const examinerKeys = userKeys(examinerRow);
+    let stamp = null;
+    if (examinerKeys?.dsaSecretKey && examinerRow.dsaPublicKey) {
+      const signature = Buffer.from(
+        signDecryptionReceipt(Buffer.from(digest, 'hex'), examinerKeys.dsaSecretKey)
+      );
+      stamp = {
+        digest,
+        signature: signature.toString('hex'),
+        signatureSha: sha256(signature).toString('hex'),
+        publicKey: Buffer.from(examinerRow.dsaPublicKey).toString('hex'),
+        publicKeySha: sha256(Buffer.from(examinerRow.dsaPublicKey)).toString('hex'),
+        examiner: { id: examinerRow.id, name: examinerRow.name, role: examinerRow.role },
+        evidence,
+      };
+      await prisma.investigation.update({
+        where: { id: investigation.id },
+        data: {
+          stamps: [...(Array.isArray(investigation.stamps) ? investigation.stamps : []), stamp],
+        },
+      });
+    }
+
     const pdfBuffer = await generateDossier({
       investigation,
       event,
@@ -420,9 +628,19 @@ router.get('/:investigationId/dossier', requireCap('trace:run'), async (req, res
       // What the report may say about the chain is looked up, not assumed.
       chainMode: chain.chainConfig().mode,
       contractAddress: chain.chainConfig().address || null,
-      chainVerified: event
-        ? (await chain.getReceipt(bufferToHex(event.receiptId))).verified
-        : false,
+      chainVerified: Boolean(onChain?.verified),
+      blockTimestamp: evidence.blockTimestamp,
+      bitsMatched: investigation.bitsMatched,
+      tamper: investigation.tamper,
+      lens: investigation.lens,
+      custody: {
+        originalSha: evidence.originalSha,
+        releasedSha: evidence.releasedSha,
+        leakSha: evidence.leakSha,
+        evidenceDigest: digest,
+      },
+      examiner: { id: examinerRow.id, name: examinerRow.name, role: examinerRow.role },
+      stamp,
     });
 
     res.setHeader('Content-Type', 'application/pdf');
@@ -435,5 +653,55 @@ router.get('/:investigationId/dossier', requireCap('trace:run'), async (req, res
     next(err);
   }
 });
+
+/**
+ * Verify a dossier's examiner stamp: the evidence recorded when it was issued
+ * hashes to the digest printed on it, and the ML-DSA-65 signature over that
+ * digest checks against the examiner's public key.
+ */
+router.get(
+  '/:investigationId/dossier/verify',
+  requireCap('trace:history'),
+  async (req, res, next) => {
+    try {
+      const invId = Number(req.params.investigationId);
+      const digest = String(req.query.digest || '')
+        .toLowerCase()
+        .replace(/^sha256:/, '');
+      const inv = await prisma.investigation.findUnique({ where: { id: invId } });
+      if (!inv)
+        return res.status(404).json({ error: { message: 'Investigation record not found' } });
+      const stamp = (Array.isArray(inv.stamps) ? inv.stamps : []).find(
+        (s) => digest && s.digest.startsWith(digest)
+      );
+      if (!stamp)
+        return res.json({
+          valid: false,
+          reason: 'No dossier with that digest was issued for this investigation.',
+        });
+      const recomputed = evidenceDigest(stamp.evidence);
+      const signatureValid = verifyDecryptionSignature(
+        Buffer.from(stamp.signature, 'hex'),
+        Buffer.from(stamp.digest, 'hex'),
+        Buffer.from(stamp.publicKey, 'hex')
+      );
+      const valid = recomputed === stamp.digest && signatureValid;
+      res.json({
+        valid,
+        reason: valid
+          ? `Signed by ${stamp.examiner.name} (${stamp.examiner.role}); the evidence and the signature both verify.`
+          : recomputed !== stamp.digest
+            ? 'The recorded evidence no longer hashes to the stamped digest.'
+            : 'The ML-DSA-65 signature does not verify against the examiner key.',
+        digest: stamp.digest,
+        examiner: stamp.examiner,
+        issuedAt: stamp.evidence.generatedAt,
+        evidence: stamp.evidence,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 
 export default router;

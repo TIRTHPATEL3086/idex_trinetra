@@ -2,6 +2,7 @@ import { Router } from 'express';
 
 import { env } from '../lib/env.js';
 import { dbStatus } from '../lib/prisma.js';
+import { networkProfile } from '../lib/network.js';
 import * as chain from '../core/chain.js';
 import * as bktree from '../core/bktree.js';
 
@@ -34,6 +35,7 @@ router.get('/', async (_req, res, next) => {
       },
       index: bktree.stats(),
       watermark: { delta: env.watermarkDelta },
+      network: networkProfile(),
 
       warnings: buildWarnings({ db, chainInfo }),
     });

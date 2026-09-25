@@ -15,26 +15,8 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <meta name="theme-color" content="#1f1a23" />
 
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <!-- Fraunces carries the display type, matching the heavy, soft-serifed
-         headlines of the Chromia reference. Inter runs the interface, Comfortaa
-         the wordmark, and JetBrains Mono the hashes and small labels. -->
-    <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,900&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
-    />
-
-    <!-- The wordmark is requested separately with `display=block` rather than
-         `swap`. Swap is right for body text — show something immediately,
-         correct it when the font lands — but on a logo that reads as the brand
-         briefly rendering in the wrong typeface. Block holds the glyphs
-         invisible for a moment instead, so the mark only ever appears once,
-         correctly. It is four short words, so nothing is kept from the reader. -->
-    <link
-      href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@700&display=block"
-      rel="stylesheet"
-    />
+    <!-- Fonts are bundled with the app (see src/main.jsx), so nothing here is
+         fetched from the internet and the page renders the same air-gapped. -->
   </head>
   <body>
     <div id="root"></div>
