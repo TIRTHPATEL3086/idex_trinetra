@@ -44,6 +44,15 @@ router.get('/', async (_req, res, next) => {
   }
 });
 
+/**
+ * A liveness check that touches nothing: no database, no chain RPC. An uptime
+ * monitor pings this to keep a free Render instance awake without also keeping
+ * the database awake or spending RPC quota.
+ */
+router.get('/ping', (_req, res) => {
+  res.json({ ok: true, uptimeSec: Math.round((Date.now() - bootedAt) / 1000) });
+});
+
 function buildWarnings({ db, chainInfo }) {
   const w = [];
   if (db !== 'up') w.push('PostgreSQL is not reachable. Check DATABASE_URL.');
