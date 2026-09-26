@@ -562,6 +562,19 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
       }
     }
 
+    // Traitor tracing: how the named officer's copy compares with the
+    // closest copy released to anyone else. Chance agreement is about 24/48.
+    let traitor = null;
+    if (event) {
+      const rival = rankedCandidates.find((c) => c.event.userId !== event.userId);
+      traitor = {
+        namedBits: bitsMatching(marked.payloadBits, event.payloadBits),
+        rival: rival ? { userName: rival.event.user.name, bits: rival.matches } : null,
+        officersCompared: new Set(rankedCandidates.map((c) => c.event.userId)).size,
+        totalBits: PAYLOAD_BITS,
+      };
+    }
+
     // Build Suspect Pool (शक का दायरा) ranking top candidate officers
     const suspects = rankedCandidates.slice(0, 5).map((c, idx) => ({
       rank: idx + 1,
@@ -769,6 +782,7 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
           }
         : null,
       suspects: suspects,
+      traitor,
       reasons,
       tamper,
       lens: lens ? { ...lens, buffer: undefined } : null,

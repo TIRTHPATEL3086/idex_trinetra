@@ -473,6 +473,114 @@ export default function Trace() {
   );
 }
 
+/**
+ * Traitor tracing, from the bits the server actually read: how well the copy
+ * matches the named officer, against the closest copy released to anyone else.
+ * Two unrelated copies agree on about half the bits by chance.
+ */
+function TraitorPanel({ result }) {
+  const t = result.traitor;
+  if (!t) return null;
+  const pct = (bits) => Math.round((bits / t.totalBits) * 100);
+  const chance = t.totalBits / 2;
+  const rivalBits = t.rival?.bits ?? 0;
+  const margin = t.namedBits - rivalBits;
+  // A rival well above chance is worth an examiner's attention.
+  const rivalHigh = t.rival && rivalBits >= chance + 8;
+  return (
+    <div className="space-y-2.5 rounded-xl border border-white/10 bg-white/5 p-3.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs font-bold uppercase tracking-wider text-accent">
+          Traitor tracing — other recipients compared
+        </span>
+        <span
+          className={`rounded px-2 py-0.5 text-[10px] font-bold ${
+            rivalHigh ? 'bg-probable/25 text-probable-bright' : 'bg-accent/20 text-accent'
+          }`}
+        >
+          {rivalHigh ? 'REVIEW RUNNER-UP' : `LEADS BY ${margin} BITS`}
+        </span>
+      </div>
+      <p className="text-[11px] leading-relaxed text-white/70">
+        The mark read from this file was compared with the copies released to {t.officersCompared}{' '}
+        officer{t.officersCompared === 1 ? '' : 's'}. Unrelated copies agree on about {chance} of{' '}
+        {t.totalBits} bits by chance.
+      </p>
+      <Meter
+        label={result.match.userName}
+        bits={t.namedBits}
+        total={t.totalBits}
+        tone="bg-accent"
+      />
+      {t.rival ? (
+        <Meter
+          label={`Closest other officer: ${t.rival.userName}`}
+          bits={rivalBits}
+          total={t.totalBits}
+          tone={rivalHigh ? 'bg-probable' : 'bg-white/30'}
+        />
+      ) : (
+        <p className="text-[10px] text-white/40">No other officer holds a copy to compare.</p>
+      )}
+      {t.rival && (
+        <p className="text-[10px] text-white/40">
+          Named officer {pct(t.namedBits)}% · closest other {pct(rivalBits)}% · chance ~50%
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Meter({ label, bits, total, tone }) {
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between gap-2 text-[11px]">
+        <span className="min-w-0 font-semibold text-white/80">{label}</span>
+        <span className="mono shrink-0 font-bold text-white/90">
+          {bits}/{total}
+        </span>
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+        <div
+          className={`h-full rounded-full ${tone}`}
+          style={{ width: `${(bits / total) * 100}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+const INTEGRITY = {
+  intact: { chip: 'INTACT', tone: 'text-emerald-400', bg: 'bg-emerald-500/20' },
+  tampered: { chip: 'ALTERED AFTER RELEASE', tone: 'text-red-300', bg: 'bg-red-500/20' },
+  unassessable: { chip: 'CANNOT BE CHECKED', tone: 'text-white/70', bg: 'bg-white/10' },
+};
+
+/** Document integrity, straight from the fragile-layer check on this file. */
+function IntegrityPanel({ tamper }) {
+  const look = INTEGRITY[tamper?.status] || INTEGRITY.unassessable;
+  return (
+    <div className="space-y-1.5 rounded-xl border border-white/10 bg-white/5 p-3.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className={`text-xs font-bold uppercase tracking-wider ${look.tone}`}>
+          Document integrity (fragile layer)
+        </span>
+        <span className={`rounded px-2 py-0.5 text-[10px] font-bold ${look.bg} ${look.tone}`}>
+          {look.chip}
+        </span>
+      </div>
+      <p className="text-[11px] leading-relaxed text-white/70">
+        {tamper?.reason || 'This file was not checked for edits.'}
+      </p>
+      {tamper?.blocks > 0 && (
+        <p className="mono text-[10px] text-white/40">
+          {tamper.blocks - (tamper.failed || 0)} of {tamper.blocks} blocks verify
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** The court dossier for one investigation, as a PDF download. */
 function DossierLink({ id, short = false }) {
   return (
@@ -633,54 +741,9 @@ function Verdict({ result }) {
                 </div>
               )}
 
-              {/* Anti-Collusion & Traitor Tracing Analysis */}
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3.5 space-y-2.5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-accent flex items-center gap-1.5">
-                    <span>🛡️</span> Traitor Tracing & Collusion Analysis
-                  </span>
-                  <span className="rounded bg-accent/20 px-2 py-0.5 text-[10px] font-bold text-accent">
-                    SOLO ATTRIBUTION (0% COLLUSION)
-                  </span>
-                </div>
-                <p className="text-[11px] text-white/70 leading-relaxed">
-                  Orthogonal correlation scan across all registered officer codebooks proves this
-                  file carries a <strong>solitary watermark</strong>. No 2-way or 3-way averaging,
-                  layer blending, or mosaic patchwork was detected.
-                </p>
-                <div className="space-y-1">
-                  <div className="flex justify-between gap-2 text-[11px]">
-                    <span className="min-w-0 font-semibold text-white/80">
-                      {result.match.userName} (Signal Energy):
-                    </span>
-                    <span className="mono text-accent font-bold">98.4%</span>
-                  </div>
-                  <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
-                    <div className="h-full bg-accent rounded-full" style={{ width: '98.4%' }} />
-                  </div>
-                  <div className="flex flex-wrap justify-between gap-x-3 pt-0.5 text-[10px] text-white/40">
-                    <span>Background Noise: 1.6%</span>
-                    <span>Secondary Officer Energy: 0.0% (Clean)</span>
-                  </div>
-                </div>
-              </div>
+              <TraitorPanel result={result} />
 
-              {/* Document Integrity & Fragile Watermark Verification */}
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3.5 space-y-1.5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-                    <span>🔍</span> Document Integrity Verification (Layer 2 Fragile)
-                  </span>
-                  <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-400">
-                    INTEGRITY INTACT
-                  </span>
-                </div>
-                <p className="text-[11px] text-white/70 leading-relaxed">
-                  Spatial frequency hash verification passed (SSIM 0.998). No textual editing, date
-                  manipulation, or Photoshop inpainting detected. Document contents match the
-                  original release.
-                </p>
-              </div>
+              <IntegrityPanel tamper={result.tamper} />
 
               {/* Post-Quantum Non-Repudiation Proof Card */}
               {result.match.pqcProof && (
