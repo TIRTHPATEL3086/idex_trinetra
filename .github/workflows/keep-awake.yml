@@ -1,0 +1,19 @@
+name: Keep awake
+
+# Render's free plan sleeps a web service after 15 minutes without traffic.
+# This pings a route that touches neither the database nor the chain, so the
+# service stays up without keeping Neon awake or spending RPC quota.
+# GitHub runs scheduled workflows from the default branch only.
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping the live site
+        run: curl -fsS --retry 3 --retry-delay 20 --max-time 90 https://crypto-2-g2sf.onrender.com/api/health/ping

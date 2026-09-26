@@ -3,10 +3,11 @@ import { getAssets, getAudit, toggleUserActive, shortHash } from '../lib/api.js'
 import { Header, Notice } from './Assets.jsx';
 import { BanIcon, ExternalLinkIcon, UnlockIcon, WarningIcon } from '../components/icons.jsx';
 import Select from '../components/Select.jsx';
+import { useAuth } from '../lib/auth.jsx';
 
 /**
  * Per-asset audit trail: who opened a document, when, from which device,
- * automated forensic anomaly detection (burst, off-hours, device anomaly),
+ * a flag for an unverified device,
  * and zero-trust revocation controls.
  */
 export default function Timeline() {
@@ -15,6 +16,9 @@ export default function Timeline() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [actionNotice, setActionNotice] = useState(null);
+  // Only an administrator may freeze an account; the server refuses anyone else.
+  const { can, user } = useAuth();
+  const canFreeze = can('users:write');
 
   const reloadTimeline = useCallback(() => {
     if (!assetId) return;
@@ -76,15 +80,7 @@ export default function Timeline() {
         <ol className="relative space-y-4 before:absolute before:left-[15px] before:top-2 before:h-[calc(100%-1rem)] before:w-px before:bg-line sm:before:left-[19px]">
           {data.timeline.map((e) => (
             <li key={e.receiptId} className="relative flex gap-4">
-              <span
-                className={`z-10 mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full sm:h-10 sm:w-10 ${
-                  e.riskLevel === 'CRITICAL'
-                    ? 'bg-danger text-white animate-pulse'
-                    : e.riskLevel === 'ELEVATED'
-                      ? 'bg-probable text-white'
-                      : 'bg-accent text-ink'
-                }`}
-              >
+              <span className="z-10 mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent text-ink sm:h-10 sm:w-10">
                 <DotGlyph />
               </span>
               <div className="card flex-1 p-4">
@@ -92,16 +88,6 @@ export default function Timeline() {
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm sm:text-base font-bold text-ink">{e.userName}</span>
-                      {e.riskLevel === 'CRITICAL' && (
-                        <span className="rounded-full bg-danger-tint px-2.5 py-0.5 text-xs font-bold text-danger-deep">
-                          CRITICAL ANOMALY
-                        </span>
-                      )}
-                      {e.riskLevel === 'ELEVATED' && (
-                        <span className="rounded-full bg-probable-tint px-2.5 py-0.5 text-xs font-bold text-probable-deep">
-                          ELEVATED RISK
-                        </span>
-                      )}
                       {e.userActive === false && (
                         <span className="rounded-full bg-danger-deep px-2.5 py-0.5 text-xs font-bold text-white">
                           FROZEN / REVOKED
@@ -114,14 +100,14 @@ export default function Timeline() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    <div className="text-right text-xs text-ink-muted font-mono">
+                  <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:justify-end sm:gap-3">
+                    <div className="font-mono text-xs text-ink-muted sm:text-right">
                       {new Date(e.at).toLocaleString()}
                     </div>
-                    {e.userId && (
+                    {canFreeze && e.userId && e.userId !== user?.userId && (
                       <button
                         onClick={() => handleToggle(e.userId)}
-                        className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                        className={`whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
                           e.userActive === false
                             ? 'bg-line text-ink hover:bg-line'
                             : 'bg-danger-tint border border-danger-bright text-danger-deep hover:bg-danger-tint'
