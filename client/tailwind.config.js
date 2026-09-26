@@ -78,11 +78,14 @@ export default {
           bright: chromia.green[500],
           tint: '#e4fbe3',
         },
+        // A deeper violet from the brand purple — not yellow, which clashed
+        // with the palette — for the in-between states: probable, online,
+        // pending, warnings.
         probable: {
-          DEFAULT: chromia.yellow[800],
-          deep: '#a85e00',
-          bright: chromia.yellow[500],
-          tint: '#fff1d6',
+          DEFAULT: '#8a4cc4',
+          deep: '#6a3499',
+          bright: '#b98ae8',
+          tint: '#f1e6fb',
         },
         inconclusive: {
           DEFAULT: '#6e6472',

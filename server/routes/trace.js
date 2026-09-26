@@ -1,4 +1,3 @@
-import fs from 'node:fs/promises';
 import { Router } from 'express';
 import sharp from 'sharp';
 
@@ -17,6 +16,8 @@ import { userKeys } from '../lib/keyring.js';
 import { generateDossier } from '../core/dossier.js';
 import { detectQuad, dewarp, removeMoire, matchTones } from '../core/lens.js';
 import { verifyFragile } from '../core/fragile.js';
+import { recoverFromCapture } from '../core/recover.js';
+import { readMarked } from '../lib/files.js';
 
 /**
  * Attribution: hash, search, extract, cross-check, score.
@@ -59,6 +60,17 @@ async function namesARelease(bits) {
   } catch {
     return false;
   }
+}
+
+/** Whether a reading already names a release, one way or the other. */
+async function readingIdentifies(bits) {
+  if (await namesARelease(bits)) return true;
+  const recent = await prisma.decryptionEvent.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: 50,
+    select: { payloadBits: true },
+  });
+  return recent.some((e) => bitsMatching(bits, e.payloadBits) >= MIN_BITS_WITHOUT_CRC);
 }
 
 /**
@@ -109,6 +121,8 @@ async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {
     orderBy: { createdAt: 'desc' },
     take: 25,
     select: { id: true, markedPath: true, payloadBits: true },
+    where: { id: { in: visualMatches(candidates).map((c) => c.id) } },
+    select: { id: true, markedPath: true, payloadBits: true, deltaUsed: true },
   });
   const readings = new Map();
   let best = null;
@@ -168,6 +182,20 @@ async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {
           best = { reading, matches };
         }
       }
+    const copy = await readMarked(ev);
+    if (!copy) continue; // the released copy is gone; nothing to align to
+    const size = await sharp(copy).metadata();
+    if (!tones && size.width === leak.width && size.height === leak.height) continue;
+    const dims = `${size.width}x${size.height}`;
+    // Tone matching is against one particular copy, so it is decoded per copy.
+    const key = tones ? `${dims}#${ev.id}` : `${dims}@${ev.deltaUsed}`;
+    if (!readings.has(key)) {
+      let aligned = await sharp(buffer)
+        .resize(size.width, size.height, { fit: 'fill' })
+        .png()
+        .toBuffer();
+      if (tones) aligned = await matchTones(aligned, copy);
+      readings.set(key, { ...(await extract(aligned, ev.deltaUsed)), rescaledTo: `${dims} px` });
     }
 
     // Pass 2: tone-matched alignment (only when optical lens or tones explicitly active)
@@ -231,6 +259,67 @@ async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {
     }
   }
   return best?.reading ?? null;
+}
+
+/**
+ * Releases worth trying a capture against: the ones the hash search matched,
+ * then the most recent. A photo or screenshot rarely hashes close to the file
+ * it shows, so recency is what keeps the search short.
+ */
+const CAPTURE_CANDIDATES = 12;
+
+async function recoverCapture(buffer, candidates) {
+  const recent = await prisma.decryptionEvent.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: CAPTURE_CANDIDATES,
+    select: { id: true },
+  });
+  const ids = [
+    ...new Set([...visualMatches(candidates).map((c) => c.id), ...recent.map((e) => e.id)]),
+  ].slice(0, CAPTURE_CANDIDATES);
+  const events = await prisma.decryptionEvent.findMany({
+    where: { id: { in: ids } },
+    select: {
+      id: true,
+      markedPath: true,
+      payloadBits: true,
+      deltaUsed: true,
+      asset: { select: { mimeType: true } },
+    },
+  });
+  const releases = [];
+  for (const id of ids) {
+    const ev = events.find((e) => e.id === id);
+    if (!ev || !(ev.asset?.mimeType || '').startsWith('image/')) continue;
+    const copy = await readMarked(ev);
+    if (copy)
+      releases.push({
+        id: ev.id,
+        payloadBits: ev.payloadBits,
+        deltaUsed: ev.deltaUsed,
+        buffer: copy,
+      });
+  }
+  if (!releases.length) return null;
+  const found = await recoverFromCapture(buffer, releases, { minBits: MIN_BITS_WITHOUT_CRC });
+  if (!found) return null;
+  // How alike the captured region and the same region of the release look —
+  // the visual evidence, measured on the part of the page actually captured.
+  const rel = releases.find((r) => r.id === found.releaseId);
+  const v = found.visible;
+  const region = { left: v.x0, top: v.y0, width: v.x1 - v.x0, height: v.y1 - v.y0 };
+  const [seen, ref] = await Promise.all([
+    hashes(await sharp(found.canvas).extract(region).png().toBuffer()),
+    hashes(await sharp(rel.buffer).extract(region).png().toBuffer()),
+  ]);
+  return {
+    ...found,
+    dists: {
+      pHashDist: hamming(seen.pHash, ref.pHash),
+      dHashDist: hamming(seen.dHash, ref.dHash),
+      aHashDist: hamming(seen.aHash, ref.aHash),
+    },
+  };
 }
 
 /**
@@ -357,6 +446,7 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
 
     // --- 4. Pull the 48 bits back out of the document or pixels ------------
     let marked;
+    let capture = null;
     if (isDocPdf) {
       marked = (await extractPdf(buffer)) || {
         payloadBits: '0'.repeat(PAYLOAD_BITS),
@@ -368,6 +458,11 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
       // If direct extract did not yield a verified release, attempt candidate-size
       // alignment using BK-tree candidates OR recent releases.
       if (!(await namesARelease(marked.payloadBits))) {
+      marked = await extract(leak, env.watermarkDelta);
+      // A leak that was scaled and left at the new size no longer lines up with
+      // the grid the mark was embedded on. The hashes still find the document,
+      // so scale the leak back to each candidate's released size and read again.
+      if (visualMatches(candidates).length && !(await namesARelease(marked.payloadBits))) {
         const rescaled = await extractAtCandidateSizes(leak, candidates, {
           tones: Boolean(lens?.applied),
         });
@@ -411,6 +506,12 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
             }
           } catch {}
         }
+      }
+      // Still nothing: the page may be only part of the upload — a phone
+      // photo of a screen, a screenshot with the viewer around it, a crop.
+      if (!(await readingIdentifies(marked.payloadBits))) {
+        capture = await recoverCapture(leak, candidates);
+        if (capture) marked = capture.reading;
       }
     }
 
@@ -499,13 +600,16 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
 
     // --- Distances between the leaked file and the candidate we settled on --
     const cand = event ? candidates.find((c) => c.id === event.id) : null;
-    const dists = {
-      pHashDist: cand?.pHashDist ?? (event ? hamming(leaked.pHash, event.pHash) : 64),
-      dHashDist:
-        cand?.dHashDist ?? (event?.dHash != null ? hamming(leaked.dHash, event.dHash) : 64),
-      aHashDist:
-        cand?.aHashDist ?? (event?.aHash != null ? hamming(leaked.aHash, event.aHash) : 64),
-    };
+    const dists =
+      capture && event?.id === capture.releaseId
+        ? capture.dists
+        : {
+            pHashDist: cand?.pHashDist ?? (event ? hamming(leaked.pHash, event.pHash) : 64),
+            dHashDist:
+              cand?.dHashDist ?? (event?.dHash != null ? hamming(leaked.dHash, event.dHash) : 64),
+            aHashDist:
+              cand?.aHashDist ?? (event?.aHash != null ? hamming(leaked.aHash, event.aHash) : 64),
+          };
 
     // --- 6. Cross-check the chain. Never throws — an unreachable RPC just
     //        means `chainVerified: false`, which lowers confidence. ----------
@@ -582,7 +686,13 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
     // --- 7.3 Tamper check: the fragile layer, on the file exactly as uploaded --
     let tamper = null;
     if (event && !isDocPdf) {
-      if (!event.fragileLayer) {
+      if (capture && event.id === capture.releaseId) {
+        tamper = {
+          status: 'unassessable',
+          reason:
+            'A photo or screenshot re-renders every pixel, so the copy cannot be checked for edits.',
+        };
+      } else if (!event.fragileLayer) {
         tamper = {
           status: 'unassessable',
           reason:
@@ -590,11 +700,10 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
         };
       } else {
         let released = null;
-        try {
-          const m = await sharp(event.markedPath).metadata();
+        const copy = await readMarked(event);
+        if (copy) {
+          const m = await sharp(copy).metadata();
           released = { width: m.width, height: m.height };
-        } catch {
-          // The released copy is not on disk; verify against the upload's own size.
         }
         tamper = await verifyFragile(buffer, bufferToHex(event.receiptId), released);
       }
@@ -604,6 +713,11 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
           : tamper.status === 'tampered'
             ? `Fragile layer broken in ${tamper.regions.length} region(s) — the copy was ALTERED after release.`
             : 'Fragile layer not assessable — contents cannot be checked for edits.'
+      );
+    }
+    if (capture && event?.id === capture.releaseId) {
+      reasons.push(
+        `${capture.method === 'quad' ? 'Photo of a screen' : 'Screenshot or crop'} recognised: the released page was found inside the upload at ${Math.round(capture.fit.scale * 100)}% scale, ${Math.round(capture.visibleShare * 100)}% of it in view, and the mark read from that part alone.`
       );
     }
     if (lens?.applied) {
@@ -678,6 +792,15 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
       reasons,
       tamper,
       lens: lens ? { ...lens, buffer: undefined } : null,
+      capture:
+        capture && event?.id === capture.releaseId
+          ? {
+              method: capture.method,
+              scale: Math.round(capture.fit.scale * 1000) / 1000,
+              visibleShare: capture.visibleShare,
+              corners: capture.corners,
+            }
+          : null,
       candidatesChecked: checked || candidates.length || allRecentEvents.length,
       elapsedMs,
     });

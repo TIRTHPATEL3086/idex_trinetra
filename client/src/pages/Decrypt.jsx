@@ -457,10 +457,10 @@ export default function Decrypt() {
                 </Field>
 
                 {/* Military Two-Man Rule Notice for Classified Files */}
-                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3.5 space-y-2">
+                <div className="rounded-2xl border border-probable/30 bg-probable-tint p-3.5 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wide text-amber-700">
-                      <span className="inline-block w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                    <span className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wide text-probable-deep">
+                      <span className="inline-block w-2 h-2 rounded-full bg-probable animate-pulse" />
                       Two-Man Rule Protocol (Classification: {selectedAsset?.classification || 'SECRET'})
                     </span>
                     <button
@@ -469,7 +469,7 @@ export default function Decrypt() {
                       className={`text-[11px] font-bold px-2 py-0.5 rounded-md transition ${
                         breakGlass
                           ? 'bg-danger text-white'
-                          : 'bg-amber-600/20 text-amber-800 hover:bg-amber-600/30'
+                          : 'bg-probable/15 text-probable-deep hover:bg-probable/25'
                       }`}
                     >
                       {breakGlass ? '🚨 Break-Glass Active' : 'Emergency Override'}
@@ -477,7 +477,7 @@ export default function Decrypt() {
                   </div>
                   {breakGlass ? (
                     <div className="rounded-xl bg-danger/10 border border-danger/30 p-2 text-[11px] font-semibold text-danger leading-relaxed">
-                      ⚠️ <strong>TACTICAL BREAK-GLASS OVERRIDE ENGAGED:</strong> Unilateral decryption permitted under operational emergency. High-priority audit flag permanently anchored to blockchain ledger for Court of Inquiry review.
+                      <strong>TACTICAL BREAK-GLASS OVERRIDE ENGAGED:</strong> Unilateral decryption permitted under operational emergency. High-priority audit flag permanently anchored to blockchain ledger for Court of Inquiry review.
                     </div>
                   ) : (
                     <div className="text-[11px] text-ink-muted leading-relaxed">
@@ -500,7 +500,7 @@ export default function Decrypt() {
                             : 'text-ink-muted hover:text-ink'
                         }`}
                       >
-                        💳 Naval PKI Token (FIPS 140-3)
+                        Naval PKI Token (FIPS 140-3)
                       </button>
                       <button
                         type="button"
@@ -511,7 +511,7 @@ export default function Decrypt() {
                             : 'text-ink-muted hover:text-ink'
                         }`}
                       >
-                        🔑 Software Key
+                        Software Key
                       </button>
                     </div>
                   </label>
@@ -618,7 +618,7 @@ export default function Decrypt() {
                             Configure your secret verification question. If an unauthorized colleague (e.g. Officer 2) sits at your laptop to decrypt files, they cannot pass without this secret answer.
                           </p>
                           <div className="mt-1.5 inline-block rounded-lg border border-probable/40 bg-probable/10 px-2.5 py-1 font-mono text-[11px] font-bold text-probable-deep">
-                            ⚠️ EXACT MATCH REQUIRED: Capital letters, spaces & punctuation are verified verbatim.
+                            EXACT MATCH REQUIRED: Capital letters, spaces & punctuation are verified verbatim.
                           </div>
                         </div>
                       </div>
@@ -946,7 +946,7 @@ function Receipt({ result, officer, asset, device }) {
           <Reg k="Department" v={officer?.dept} />
           <Reg k="Document" v={asset?.title} />
           <Reg k="Device" v={device} />
-          <Reg k="PSNR" v={result.psnrDb != null ? `${result.psnrDb.toFixed(1)} dB` : '—'} />
+          <Reg k="PSNR" v={result.psnrDb > 0 ? `${result.psnrDb.toFixed(1)} dB` : '—'} />
           <Reg k="QIM strength" v={`Δ = ${result.deltaUsed}`} />
         </dl>
 

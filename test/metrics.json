@@ -1,61 +1,62 @@
 {
   "source": "attack-suite",
   "generatedAt": "2026-09-25T20:40:23.504Z",
+  "generatedAt": "2026-09-25T09:33:01.947Z",
   "attacks": [
     {
       "name": "JPEG q90",
       "survived": true,
       "bitsRecovered": 48,
-      "psnrDb": 48.065558238402346,
+      "psnrDb": 44.677372672868536,
       "target": 48
     },
     {
       "name": "JPEG q75",
       "survived": true,
       "bitsRecovered": 48,
-      "psnrDb": 48.065558238402346,
+      "psnrDb": 44.677372672868536,
       "target": 46
     },
     {
       "name": "JPEG q60",
       "survived": true,
       "bitsRecovered": 48,
-      "psnrDb": 48.065558238402346,
+      "psnrDb": 44.677372672868536,
       "target": 44
     },
     {
       "name": "JPEG q45",
       "survived": true,
       "bitsRecovered": 48,
-      "psnrDb": 48.065558238402346,
+      "psnrDb": 44.677372672868536,
       "target": 41
     },
     {
       "name": "Resize 50%",
       "survived": true,
-      "bitsRecovered": 43,
-      "psnrDb": 48.065558238402346,
+      "bitsRecovered": 48,
+      "psnrDb": 44.677372672868536,
       "target": 43
     },
     {
       "name": "Crop 20%",
       "survived": true,
       "bitsRecovered": 43,
-      "psnrDb": 48.065558238402346,
+      "psnrDb": 44.677372672868536,
       "target": 40
     },
     {
       "name": "Gaussian noise",
       "survived": true,
-      "bitsRecovered": 43,
-      "psnrDb": 48.065558238402346,
+      "bitsRecovered": 48,
+      "psnrDb": 44.677372672868536,
       "target": 42
     },
     {
       "name": "Screenshot sim",
       "survived": true,
-      "bitsRecovered": 43,
-      "psnrDb": 48.065558238402346,
+      "bitsRecovered": 48,
+      "psnrDb": 44.677372672868536,
       "target": 40
     }
   ],
@@ -64,25 +65,27 @@
       "delta": 4,
       "psnrDb": 57.60798333279559,
       "bitsRecovered": 43
+      "psnrDb": 54.21979776726178,
+      "bitsRecovered": 48
     },
     {
       "delta": 8,
-      "psnrDb": 51.587383419515966,
+      "psnrDb": 48.199197853982156,
       "bitsRecovered": 48
     },
     {
       "delta": 12,
-      "psnrDb": 48.065558238402346,
+      "psnrDb": 44.677372672868536,
       "bitsRecovered": 48
     },
     {
       "delta": 16,
-      "psnrDb": 45.56678350623635,
+      "psnrDb": 42.17859794070254,
       "bitsRecovered": 48
     },
     {
       "delta": 24,
-      "psnrDb": 42.04495832512272,
+      "psnrDb": 38.65677275958891,
       "bitsRecovered": 48
     }
   ]

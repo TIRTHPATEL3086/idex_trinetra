@@ -44,7 +44,7 @@ const RELEASE_STEPS = [
     n: '03',
     title: 'Embed and index',
     body: 'A 48-bit payload goes into the HL/LH sub-bands of a 2-level Haar DWT, and the perceptual hashes are indexed for later search.',
-    fill: 'bg-chromia-yellow-500',
+    fill: 'bg-accent-bright',
   },
 ];
 
@@ -58,6 +58,9 @@ const ROLE_CHIPS = [
     label: 'Tactical Recipient Officer (Fleet)',
     body: 'Decrypts operational dispatches with personal ML-KEM key; signs release receipt with ML-DSA-65. Cannot investigate.',
     fill: 'bg-chromia-yellow-500',
+    label: 'Clearance Holder',
+    body: 'Releases a marked copy to themselves and nothing more. Cannot investigate.',
+    fill: 'bg-accent-bright',
   },
   {
     label: 'Naval Cyber Forensic Analyst (Provost)',
@@ -239,7 +242,7 @@ function Hero() {
         invisible
       </Sticker>
       <Sticker
-        fill="bg-chromia-yellow-500"
+        fill="bg-accent-bright"
         rotate={9}
         out={[280, -70]}
         progress={progress}

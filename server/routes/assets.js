@@ -1,10 +1,10 @@
 import crypto from 'node:crypto';
 import { Router } from 'express';
-import fs from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 
 import { prisma } from '../lib/prisma.js';
+import { writeDurable } from '../lib/files.js';
 import { env } from '../lib/env.js';
 import { badInput, notFound } from '../lib/errors.js';
 import { assetRef, hexToBuffer, bufferToHex } from '../lib/refs.js';
@@ -69,8 +69,6 @@ router.post(
       // Encrypt before anything touches the filesystem.
       const { ciphertext, iv, authTag } = encrypt(plaintext, contentKey);
 
-      await fs.mkdir(env.cipherDir, { recursive: true });
-
       // Create the row first so the id is available for the filename and the ref.
       const created = await prisma.asset.create({
         data: {
@@ -87,7 +85,7 @@ router.post(
       });
 
       const cipherPath = path.join(env.cipherDir, `asset-${created.id}.bin`);
-      await fs.writeFile(cipherPath, ciphertext);
+      await writeDurable('cipher', cipherPath, ciphertext);
 
       const asset = await prisma.asset.update({
         where: { id: created.id },

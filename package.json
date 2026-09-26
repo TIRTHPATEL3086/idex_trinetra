@@ -34,6 +34,7 @@
     "offline": "node scripts/offline.mjs"
   },
   "dependencies": {
+    "@napi-rs/canvas": "^1.0.9",
     "@noble/post-quantum": "^0.7.1",
     "@openzeppelin/contracts": "^5.0.2",
     "@prisma/client": "^5.22.0",
@@ -45,6 +46,7 @@
     "lombokecc": "^0.2.0",
     "multer": "^2.4.0",
     "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^6.3.289",
     "pg": "^8.13.1",
     "sharp": "^0.35.4",
     "sharp-phash": "^2.2.0",

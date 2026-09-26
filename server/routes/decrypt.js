@@ -1,11 +1,12 @@
 import { Router } from 'express';
-import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import sharp from 'sharp';
 import { z } from 'zod';
+import { PDFDocument } from 'pdf-lib';
 
 import { prisma } from '../lib/prisma.js';
+import { readCipher, readMarked, writeDurable } from '../lib/files.js';
 import { env } from '../lib/env.js';
 import { notFound, badInput } from '../lib/errors.js';
 import {
@@ -23,6 +24,7 @@ import { validate } from '../middleware/validate.js';
 import { verifyPassword } from '../lib/auth.js';
 import { encapsulateFor, recoverContentKey, userKeys } from '../lib/keyring.js';
 import { embedFragile } from '../core/fragile.js';
+import { renderPdfPage } from '../core/pdfpreview.js';
 import { psnr as computePsnr } from '../core/psnr.js';
 import { requireAuth, requireAnyCap, forbidden } from '../middleware/auth.js';
 import { can } from '../lib/permissions.js';
@@ -236,7 +238,10 @@ export async function executeDecryption({
   if (!encapsulation && user.kemPublicKey) {
     await encapsulateFor(assetId, user, contentKey);
   }
-  const ciphertext = await fs.readFile(asset.cipherPath);
+  const ciphertext = await readCipher(asset);
+  if (!ciphertext) {
+    throw notFound(`Asset ${assetId}: its encrypted file is missing from storage.`);
+  }
   const plaintext = aesDecrypt(
     ciphertext,
     contentKey,
@@ -340,10 +345,9 @@ export async function executeDecryption({
   }
 
   // Persist released copy
-  await fs.mkdir(env.markedDir, { recursive: true });
   const shortHexId = receiptIdHex.replace(/^0x/, '').slice(0, 16);
   const markedPath = path.join(env.markedDir, `${shortHexId}${extFor(asset.mimeType)}`);
-  await fs.writeFile(markedPath, marked.buffer);
+  await writeDurable('marked', markedPath, marked.buffer);
 
   // --- 10. INSERT DecryptionEvent ------------------------------------------
   const event = await prisma.decryptionEvent.create({
@@ -715,7 +719,8 @@ router.post('/inspect/:receiptId', requireAnyCap('decrypt:any'), async (req, res
     if (!event) throw notFound(`No release for ${key}`);
     if (!event.markedPath) throw notFound('That release has no stored copy to inspect.');
 
-    const buffer = await fs.readFile(event.markedPath);
+    const buffer = await readMarked(event);
+    if (!buffer) throw notFound('The released copy is missing from storage.');
     const recovered = isPdf(buffer)
       ? await extractPdf(buffer)
       : await extract(buffer, event.deltaUsed);
@@ -739,6 +744,10 @@ router.post('/inspect/:receiptId', requireAnyCap('decrypt:any'), async (req, res
       releasedAt: event.createdAt,
       psnrDb: event.psnrDb,
       deltaUsed: event.deltaUsed,
+      // A PDF previews page by page on the Watermark screen.
+      pageCount: isPdf(buffer)
+        ? (await PDFDocument.load(buffer, { ignoreEncryption: true })).getPageCount()
+        : 0,
       embeddedBits,
       recoveredBits,
       bitsMatching: matching,
@@ -822,10 +831,18 @@ filesRouter.get('/marked/:receiptId', requireAuth, async (req, res, next) => {
       throw forbidden('That copy was released to another officer.');
     }
 
-    const buffer = await fs.readFile(event.markedPath).catch(() => null);
-    if (!buffer) throw notFound('The marked file is no longer on disk.');
+    const released = await readMarked(event);
+    if (!released) throw notFound('The released copy is missing from storage.');
 
-    const mime = event.asset?.mimeType || 'application/octet-stream';
+    // A released PDF previews page by page: ?page=N returns that page as a
+    // picture, so both views work for PDFs the way they do for images.
+    let buffer = released;
+    let mime = event.asset?.mimeType || 'application/octet-stream';
+    const pageNo = Number(req.query.page) || 0;
+    if (pageNo > 0 && isPdf(released)) {
+      buffer = (await renderPdfPage(released, pageNo)).png;
+      mime = 'image/png';
+    }
     const wantsStamp = Boolean(req.query.stamped) && mime.startsWith('image/');
 
     // The stamped rendering is an administrator's aid, so it is gated the same
@@ -858,7 +875,9 @@ filesRouter.get('/marked/:receiptId', requireAuth, async (req, res, next) => {
       'Content-Disposition',
       `${req.query.inline ? 'inline' : 'attachment'}; filename="${
         wantsStamp ? 'stamped' : 'marked'
-      }-${key.slice(0, 16)}${wantsStamp ? '.png' : extFor(event.asset?.mimeType)}"`
+      }-${key.slice(0, 16)}${pageNo ? `-p${pageNo}` : ''}${
+        wantsStamp || mime === 'image/png' ? '.png' : extFor(event.asset?.mimeType)
+      }"`
     );
     res.setHeader('X-Receipt-Id', bufferToHex(event.receiptId));
     res.send(payload);
