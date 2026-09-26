@@ -4,6 +4,7 @@ import LensEditor from '../components/LensEditor.jsx';
 import { CapturePanel, LensPanel, TamperPanel } from '../components/ForensicPanels.jsx';
 import { Header, Notice } from './Assets.jsx';
 import Select from '../components/Select.jsx';
+import { CameraIcon, CheckIcon, FileIcon } from '../components/icons.jsx';
 
 /**
  * Upload a leaked file; the register returns a confidence band, never a bare
@@ -124,50 +125,9 @@ export default function Trace() {
     <section className="space-y-6">
       <Header eyebrow="Investigation" title="Trace a leaked file" />
 
-      {/* Optical Forensic Lens Control (Camera Screen-Photo / WhatsApp Leak Dewarp) */}
-      <div className="rounded-2xl border border-line bg-gradient-to-r from-surface to-white p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span
-              className={`flex h-2.5 w-2.5 rounded-full ${opticalLensMode ? 'bg-emerald-500 animate-ping' : 'bg-ink-muted'}`}
-            />
-            <span className="text-xs font-extrabold uppercase tracking-wide text-ink">
-              {opticalLensMode
-                ? 'Optical Forensic Lens (Camera Screen-Photo Mode)'
-                : 'Standard Digital File Mode'}
-            </span>
-            <span className="rounded bg-accent/20 px-2 py-0.5 text-[10px] font-bold text-accent">
-              {opticalLensMode ? 'MoD Vector #1' : 'Direct File'}
-            </span>
-          </div>
-          <p className="text-xs text-ink-muted">
-            {opticalLensMode
-              ? 'Auto-rectifies smartphone photos of computer screens: 4-point homography dewarping, Moiré frequency suppression & adaptive CLAHE.'
-              : 'Direct watermark extraction for original PDFs, downloaded PNGs, or clean OS screenshots without camera/screen distortion.'}
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-1.5 self-start sm:self-auto bg-noir/5 p-1 rounded-xl">
-          <button
-            type="button"
-            onClick={() => setOpticalLensMode(true)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-              opticalLensMode ? 'bg-accent text-noir shadow-sm' : 'text-ink-muted hover:text-ink'
-            }`}
-          >
-            <span>📱 Optical Lens (Camera/Screen)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setOpticalLensMode(false)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-              !opticalLensMode ? 'bg-ink text-white shadow-sm' : 'text-ink-muted hover:text-ink'
-            }`}
-          >
-            <span>📄 Standard Extraction</span>
-          </button>
-        </div>
-      </div>
+      {/* What kind of file is being traced — decides whether the page is
+          straightened and cleaned before the mark is read. */}
+      <ModePicker value={opticalLensMode} onChange={setOpticalLensMode} />
 
       {/* dropzone with smooth drag & drop feedback */}
       <div
@@ -578,6 +538,88 @@ function IntegrityPanel({ tamper }) {
         </p>
       )}
     </div>
+  );
+}
+
+const MODES = [
+  {
+    lens: true,
+    Icon: CameraIcon,
+    title: 'Photo or screenshot',
+    body: 'A phone photo of a screen, or a screenshot. The page is found, straightened and cleaned before the mark is read.',
+  },
+  {
+    lens: false,
+    Icon: FileIcon,
+    title: 'Original file',
+    body: 'A PDF or image exactly as it was downloaded. The mark is read directly, with nothing corrected.',
+  },
+];
+
+/** Two option cards, one per kind of leak; arrow keys move between them. */
+function ModePicker({ value, onChange }) {
+  const onKey = (e) => {
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+      e.preventDefault();
+      onChange(!value);
+      const next = e.currentTarget.parentElement.querySelector(`[data-lens="${!value}"]`);
+      next?.focus();
+    }
+  };
+  return (
+    <fieldset className="card p-4 sm:p-5">
+      <legend className="sr-only">What are you tracing?</legend>
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <span className="eyebrow">What are you tracing?</span>
+        <span className="text-xs text-ink-faint">A clean file is always read as it is first.</span>
+      </div>
+      <div
+        role="radiogroup"
+        aria-label="What are you tracing?"
+        className="grid gap-3 sm:grid-cols-2"
+      >
+        {MODES.map(({ lens, Icon, title, body }) => {
+          const on = value === lens;
+          return (
+            <button
+              key={title}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              tabIndex={on ? 0 : -1}
+              data-lens={String(lens)}
+              onClick={() => onChange(lens)}
+              onKeyDown={onKey}
+              className={`group flex items-start gap-3 rounded-2xl border-2 p-3.5 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-deep focus-visible:ring-offset-2 ${
+                on
+                  ? 'border-accent-deep bg-accent/15 shadow-sm'
+                  : 'border-line bg-white hover:border-accent/60 hover:bg-accent/5'
+              }`}
+            >
+              <span
+                className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl transition ${
+                  on ? 'bg-accent text-noir' : 'bg-surface text-ink-muted group-hover:text-ink'
+                }`}
+              >
+                <Icon size={20} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-bold text-ink">{title}</span>
+                <span className="mt-0.5 block text-xs leading-relaxed text-ink-muted">{body}</span>
+              </span>
+              <span
+                aria-hidden="true"
+                className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 transition ${
+                  on ? 'border-accent-deep bg-accent-deep text-white' : 'border-line bg-white'
+                }`}
+              >
+                {on && <CheckIcon size={12} />}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
   );
 }
 

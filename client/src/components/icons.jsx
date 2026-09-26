@@ -56,6 +56,31 @@ export function EyeOffIcon(p) {
   );
 }
 
+/* -- sources of a leak ----------------------------------------------------- */
+
+/** A photo taken of something — a phone pointed at a screen. */
+export function CameraIcon(p) {
+  return (
+    <Icon {...p}>
+      <path
+        d="M4.5 8h2.6l1.6-2.3h6.6L16.9 8h2.6a1.5 1.5 0 0 1 1.5 1.5v8.3a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.8V9.5A1.5 1.5 0 0 1 4.5 8Z"
+        {...S}
+      />
+      <circle cx="12" cy="13.4" r="3.4" {...S} />
+    </Icon>
+  );
+}
+
+/** A file exactly as it was released. */
+export function FileIcon(p) {
+  return (
+    <Icon {...p}>
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z" {...S} />
+      <path d="M14 3v5h5M9 13h6M9 17h4" {...S} />
+    </Icon>
+  );
+}
+
 /* -- state ----------------------------------------------------------------- */
 
 export function CheckIcon(p) {
