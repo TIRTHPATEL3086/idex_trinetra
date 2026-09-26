@@ -392,7 +392,7 @@ function AccountMenu({ user }) {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-md overflow-hidden rounded-3xl border border-line/90 bg-white/95 p-6 sm:p-7 shadow-2xl backdrop-blur-xl transition-all duration-200 animate-in zoom-in-95 space-y-5"
+            className="relative max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-3xl border border-line/90 bg-white/95 p-5 sm:p-7 shadow-2xl backdrop-blur-xl transition-all duration-200 animate-in zoom-in-95 space-y-5"
           >
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-line/70 pb-4">

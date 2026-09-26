@@ -150,13 +150,13 @@ export default function PqcEnroll() {
           <div className="p-8 text-center text-sm text-ink-muted">Loading officer credentials…</div>
         ) : (
           <div className="overflow-x-auto scroll-slim">
-            <table className="w-full min-w-[520px] text-left text-sm">
+            <table className="w-full text-left text-sm sm:min-w-[520px]">
               <thead className="border-b border-line/60 bg-noir/20 text-xs font-bold uppercase tracking-wider text-ink-muted">
                 <tr>
-                  <th className="px-6 py-3.5">Officer / Role</th>
-                  <th className="px-6 py-3.5">Department</th>
-                  <th className="px-6 py-3.5">PQC Status</th>
-                  <th className="px-6 py-3.5 text-right">Action</th>
+                  <th className="px-4 py-3.5 sm:px-6">Officer / Role</th>
+                  <th className="hidden px-6 py-3.5 sm:table-cell">Department</th>
+                  <th className="hidden px-6 py-3.5 sm:table-cell">PQC Status</th>
+                  <th className="px-4 py-3.5 text-right sm:px-6">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line/40">
@@ -166,16 +166,30 @@ export default function PqcEnroll() {
 
                   return (
                     <tr key={u.userId} className="transition-colors hover:bg-muted">
-                      <td className="px-6 py-4">
+                      <td className="px-4 py-4 sm:px-6">
                         <div className="font-bold text-ink text-sm">{u.name}</div>
                         <div className="mt-0.5 text-xs font-semibold text-ink-muted">
                           {u.roleLabel || u.role}
                         </div>
+                        <div className="mt-0.5 text-xs text-ink-muted sm:hidden">{u.dept}</div>
+                        <div className="mt-2 sm:hidden">
+                          {isEnrolled ? (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-attributed/10 px-2.5 py-1 text-xs font-bold text-attributed-deep ring-1 ring-attributed/20">
+                              <span className="h-1.5 w-1.5 rounded-full bg-attributed animate-pulse" />
+                              Enrolled
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-probable/10 px-2.5 py-1 text-xs font-bold text-probable-deep ring-1 ring-probable/20">
+                              <span className="h-1.5 w-1.5 rounded-full bg-probable" />
+                              Pending
+                            </span>
+                          )}
+                        </div>
                       </td>
-                      <td className="px-6 py-4 text-xs sm:text-sm text-ink-muted font-medium">
+                      <td className="hidden px-6 py-4 text-sm font-medium text-ink-muted sm:table-cell">
                         {u.dept}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="hidden px-6 py-4 sm:table-cell">
                         {isEnrolled ? (
                           <span className="inline-flex items-center gap-1.5 rounded-full bg-attributed/10 px-2.5 py-1 text-xs font-bold text-attributed-deep ring-1 ring-attributed/20">
                             <span className="h-1.5 w-1.5 rounded-full bg-attributed animate-pulse" />
@@ -188,7 +202,7 @@ export default function PqcEnroll() {
                           </span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="px-4 py-4 text-right sm:px-6">
                         <button
                           type="button"
                           onClick={() => openEnrollModal(u)}
@@ -209,7 +223,7 @@ export default function PqcEnroll() {
       {/* Enhanced Enrollment Modal with Passphrase Controls */}
       {enrollingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-line bg-white p-6 shadow-2xl">
+          <div className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-line bg-white p-5 shadow-2xl sm:p-6">
             <div className="flex items-center justify-between border-b border-line/60 pb-4">
               <div>
                 <h3 className="text-lg font-semibold text-ink">Set Officer PQC Passphrase</h3>

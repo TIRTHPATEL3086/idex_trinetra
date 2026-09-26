@@ -87,8 +87,8 @@ export default function History() {
       <Header eyebrow="Audit" title="Global Audit History" />
 
       {/* ── Filters ─────────────────────────────────────────────────────── */}
-      <div className="card grid grid-cols-2 items-end gap-3 p-4 sm:grid-cols-3 lg:grid-cols-6">
-        <div className="col-span-2 block min-w-0 sm:col-span-1 lg:col-span-1">
+      <div className="card grid grid-cols-1 items-end gap-3 p-4 min-[400px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="block min-w-0 min-[400px]:col-span-2 sm:col-span-1">
           <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-ink-faint">
             Officer
           </span>
@@ -106,7 +106,7 @@ export default function History() {
             ]}
           />
         </div>
-        <div className="col-span-2 block min-w-0 sm:col-span-1 lg:col-span-1">
+        <div className="block min-w-0 min-[400px]:col-span-2 sm:col-span-1">
           <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-ink-faint">
             Classification
           </span>
@@ -170,8 +170,62 @@ export default function History() {
 
       {data && data.events.length > 0 && (
         <>
-          <div className="card overflow-x-auto scroll-slim shadow-sm">
-            <table className="w-full min-w-[880px] text-sm">
+          {/* Phones: one card per release, every column kept. */}
+          <ul className="grid gap-3 sm:grid-cols-2 xl:hidden">
+            {data.events.map((e) => (
+              <li key={e.id} className="card min-w-0 space-y-3 p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-bold text-ink">{e.userName}</p>
+                    <p className="text-xs font-medium text-ink-muted">{e.department}</p>
+                  </div>
+                  {e.signatureAlgorithm && (
+                    <span className="shrink-0 rounded-full bg-attributed-tint px-2.5 py-0.5 text-xs font-bold text-attributed-deep">
+                      <CheckIcon size={11} /> PQC
+                    </span>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="break-words text-sm font-medium text-ink">{e.assetTitle}</p>
+                  {e.assetClassification && (
+                    <span className="mt-1 inline-block rounded bg-surface px-1.5 py-0.5 text-[10px] font-bold text-ink-muted">
+                      {e.assetClassification}
+                    </span>
+                  )}
+                </div>
+                <dl className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-1.5 text-xs">
+                  <dt className="text-ink-faint">When</dt>
+                  <dd className="mono text-ink-muted">{new Date(e.at).toLocaleString()}</dd>
+                  <dt className="text-ink-faint">Device</dt>
+                  <dd className="mono break-all text-ink-muted">{e.device}</dd>
+                  <dt className="text-ink-faint">Receipt</dt>
+                  <dd className="mono text-ink-muted">{shortHash(e.receiptId, 6, 4)}</dd>
+                  <dt className="text-ink-faint">Tx hash</dt>
+                  <dd className="mono">
+                    {e.etherscanUrl ? (
+                      <a
+                        href={e.etherscanUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-semibold text-attributed hover:underline"
+                      >
+                        {shortHash(e.txHash, 6, 4)} <ExternalLinkIcon size={11} />
+                      </a>
+                    ) : (
+                      <span className="text-ink-muted">{shortHash(e.txHash, 6, 4)}</span>
+                    )}
+                  </dd>
+                  <dt className="text-ink-faint">PSNR</dt>
+                  <dd className="mono font-semibold text-ink">
+                    {e.psnrDb > 0 ? `${Number(e.psnrDb).toFixed(1)} dB` : '—'}
+                  </dd>
+                </dl>
+              </li>
+            ))}
+          </ul>
+
+          <div className="card hidden overflow-x-auto scroll-slim shadow-sm xl:block">
+            <table className="w-full min-w-[820px] text-sm">
               <thead>
                 <tr className="border-b border-line bg-noir/[0.02] text-left text-xs font-bold uppercase tracking-wider text-ink-muted">
                   {[
@@ -185,7 +239,7 @@ export default function History() {
                     'PSNR',
                     'Sig',
                   ].map((h) => (
-                    <th key={h} className="px-4 py-3.5">
+                    <th key={h} className="px-3 py-3.5">
                       {h}
                     </th>
                   ))}
@@ -194,16 +248,16 @@ export default function History() {
               <tbody className="divide-y divide-line/60">
                 {data.events.map((e) => (
                   <tr key={e.id} className="hover:bg-line/25 transition-colors">
-                    <td className="px-4 py-3.5 mono text-xs text-ink-muted whitespace-nowrap">
+                    <td className="px-3 py-3.5 mono text-xs text-ink-muted whitespace-nowrap">
                       {new Date(e.at).toLocaleString()}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3.5 text-sm font-bold text-ink">
+                    <td className="whitespace-nowrap px-3 py-3.5 text-sm font-bold text-ink">
                       {e.userName}
                     </td>
-                    <td className="px-4 py-3.5 text-ink-muted text-xs font-medium">
+                    <td className="px-3 py-3.5 text-ink-muted text-xs font-medium">
                       {e.department}
                     </td>
-                    <td className="max-w-[180px] px-4 py-3.5 text-sm font-medium text-ink">
+                    <td className="max-w-[180px] px-3 py-3.5 text-sm font-medium text-ink">
                       {/* Title truncates on its own line, so the badge is never the part cut off. */}
                       <span className="block truncate" title={e.assetTitle}>
                         {e.assetTitle}
@@ -214,11 +268,11 @@ export default function History() {
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3.5 mono text-xs text-ink-muted">{e.device}</td>
-                    <td className="px-4 py-3.5 mono text-xs text-ink-muted">
+                    <td className="px-3 py-3.5 mono text-xs text-ink-muted">{e.device}</td>
+                    <td className="px-3 py-3.5 mono text-xs text-ink-muted">
                       {shortHash(e.receiptId, 6, 4)}
                     </td>
-                    <td className="px-4 py-3.5 mono text-xs">
+                    <td className="px-3 py-3.5 mono text-xs">
                       {e.etherscanUrl ? (
                         <a
                           href={e.etherscanUrl}
@@ -232,10 +286,10 @@ export default function History() {
                         <span className="text-ink-muted">{shortHash(e.txHash, 6, 4)}</span>
                       )}
                     </td>
-                    <td className="px-4 py-3.5 mono text-xs font-semibold text-ink">
+                    <td className="px-3 py-3.5 mono text-xs font-semibold text-ink">
                       {e.psnrDb > 0 ? `${Number(e.psnrDb).toFixed(1)} dB` : '—'}
                     </td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-3 py-3.5">
                       {e.signatureAlgorithm ? (
                         <span className="rounded-full bg-attributed-tint px-2.5 py-0.5 text-xs font-bold text-attributed-deep">
                           <CheckIcon size={11} /> PQC
@@ -252,7 +306,7 @@ export default function History() {
 
           {/* Pagination */}
           {data.pages > 1 && (
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <button
                 className="btn-dark"
                 disabled={page <= 1 || loading}

@@ -128,9 +128,13 @@ export default function Trace() {
       <div className="rounded-2xl border border-line bg-gradient-to-r from-surface to-white p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <span className={`flex h-2.5 w-2.5 rounded-full ${opticalLensMode ? 'bg-emerald-500 animate-ping' : 'bg-ink-muted'}`} />
+            <span
+              className={`flex h-2.5 w-2.5 rounded-full ${opticalLensMode ? 'bg-emerald-500 animate-ping' : 'bg-ink-muted'}`}
+            />
             <span className="text-xs font-extrabold uppercase tracking-wide text-ink">
-              {opticalLensMode ? 'Optical Forensic Lens (Camera Screen-Photo Mode)' : 'Standard Digital File Mode'}
+              {opticalLensMode
+                ? 'Optical Forensic Lens (Camera Screen-Photo Mode)'
+                : 'Standard Digital File Mode'}
             </span>
             <span className="rounded bg-accent/20 px-2 py-0.5 text-[10px] font-bold text-accent">
               {opticalLensMode ? 'MoD Vector #1' : 'Direct File'}
@@ -148,9 +152,7 @@ export default function Trace() {
             type="button"
             onClick={() => setOpticalLensMode(true)}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-              opticalLensMode
-                ? 'bg-accent text-noir shadow-sm'
-                : 'text-ink-muted hover:text-ink'
+              opticalLensMode ? 'bg-accent text-noir shadow-sm' : 'text-ink-muted hover:text-ink'
             }`}
           >
             <span>📱 Optical Lens (Camera/Screen)</span>
@@ -159,9 +161,7 @@ export default function Trace() {
             type="button"
             onClick={() => setOpticalLensMode(false)}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-              !opticalLensMode
-                ? 'bg-ink text-white shadow-sm'
-                : 'text-ink-muted hover:text-ink'
+              !opticalLensMode ? 'bg-ink text-white shadow-sm' : 'text-ink-muted hover:text-ink'
             }`}
           >
             <span>📄 Standard Extraction</span>
@@ -267,13 +267,16 @@ export default function Trace() {
         <div className="card grid place-items-center p-8 text-center space-y-3">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-accent border-t-transparent" />
           <div className="mono animate-pulse text-sm text-ink-muted">
-            {opticalLensMode ? 'Applying 4-point homography dewarp & Moiré suppression filter → ' : ''}
-            Hashing → searching perceptual register → extracting watermark → cross-checking blockchain…
+            {opticalLensMode
+              ? 'Applying 4-point homography dewarp & Moiré suppression filter → '
+              : ''}
+            Hashing → searching perceptual register → extracting watermark → cross-checking
+            blockchain…
           </div>
         </div>
       )}
       {error && <Notice tone="error">{error}</Notice>}
-      {status === 'done' && result && <Verdict result={result} opticalLensMode={opticalLensMode} />}
+      {status === 'done' && result && <Verdict result={result} />}
 
       {/* Past Investigations and Dossier Archive */}
       <div className="card overflow-hidden p-0 shadow-sm">
@@ -392,70 +395,216 @@ export default function Trace() {
             </button>
           </div>
         ) : (
-          <div className="overflow-x-auto scroll-slim">
-            <table className="w-full min-w-[720px] text-left text-xs sm:text-sm">
-              <thead className="border-b border-line bg-noir/[0.02] text-xs font-bold uppercase tracking-wider text-ink-muted">
-                <tr>
-                  <th className="px-5 py-3.5">Inquiry ID</th>
-                  <th className="px-5 py-3.5">Date / Timestamp</th>
-                  <th className="px-5 py-3.5">Verdict</th>
-                  <th className="px-5 py-3.5">Confidence</th>
-                  <th className="px-5 py-3.5">Candidates Checked</th>
-                  <th className="px-5 py-3.5 text-right">Evidence Dossier</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line/60">
-                {filteredAndSorted.map((inv) => {
-                  const band = BAND[inv.verdict] || BAND.INCONCLUSIVE;
-                  const pct = Math.round((inv.confidence || 0) * 100);
-
-                  return (
-                    <tr key={inv.investigationId} className="hover:bg-noir/5 transition-colors">
-                      <td className="px-5 py-3.5 font-mono font-bold text-ink whitespace-nowrap">
+          <>
+            {/* Phones: one card per investigation. */}
+            <ul className="divide-y divide-line/60 xl:hidden">
+              {filteredAndSorted.map((inv) => {
+                const band = BAND[inv.verdict] || BAND.INCONCLUSIVE;
+                return (
+                  <li key={inv.investigationId} className="space-y-2.5 px-4 py-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-mono text-sm font-bold text-ink">
                         INV-{String(inv.investigationId).padStart(5, '0')}
-                      </td>
-                      <td className="px-5 py-3.5 text-xs text-ink-muted font-mono whitespace-nowrap">
-                        {new Date(inv.createdAt).toLocaleString()}
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <span className={`pill text-xs font-bold ${band.chip}`}>{band.label}</span>
-                      </td>
-                      <td className="px-5 py-3.5 font-extrabold text-ink text-sm">{pct}%</td>
-                      <td className="px-5 py-3.5 text-ink-muted font-mono text-xs">
-                        {inv.candidatesChecked ?? '—'}
-                      </td>
-                      <td className="px-5 py-3.5 text-right whitespace-nowrap">
-                        <a
-                          href={`/api/trace/${inv.investigationId}/dossier`}
-                          download={`forensic-dossier-INV-${String(inv.investigationId).padStart(5, '0')}.pdf`}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-bold text-ink hover:border-accent-deep hover:bg-accent/20 transition shadow-sm"
-                        >
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                          >
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                            <polyline points="14 2 14 8 20 8" />
-                            <line x1="12" y1="18" x2="12" y2="12" />
-                            <line x1="9" y1="15" x2="12" y2="18" />
-                            <line x1="15" y1="15" x2="12" y2="18" />
-                          </svg>
-                          Generate Court Evidence Dossier
-                        </a>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      </span>
+                      <span className={`pill text-xs font-bold ${band.chip}`}>{band.label}</span>
+                    </div>
+                    <p className="font-mono text-xs text-ink-muted">
+                      {new Date(inv.createdAt).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-ink-muted">
+                      Confidence{' '}
+                      <strong className="text-sm text-ink">
+                        {Math.round((inv.confidence || 0) * 100)}%
+                      </strong>{' '}
+                      · {inv.candidatesChecked ?? '—'} candidates checked
+                    </p>
+                    <DossierLink id={inv.investigationId} />
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="hidden overflow-x-auto scroll-slim xl:block">
+              <table className="w-full min-w-[720px] text-left text-xs sm:text-sm">
+                <thead className="border-b border-line bg-noir/[0.02] text-xs font-bold uppercase tracking-wider text-ink-muted">
+                  <tr>
+                    <th className="px-4 py-3.5">Inquiry ID</th>
+                    <th className="px-4 py-3.5">Date / Timestamp</th>
+                    <th className="px-4 py-3.5">Verdict</th>
+                    <th className="px-4 py-3.5">Confidence</th>
+                    <th className="px-4 py-3.5">Candidates Checked</th>
+                    <th className="px-4 py-3.5 text-right">Evidence Dossier</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line/60">
+                  {filteredAndSorted.map((inv) => {
+                    const band = BAND[inv.verdict] || BAND.INCONCLUSIVE;
+                    const pct = Math.round((inv.confidence || 0) * 100);
+
+                    return (
+                      <tr key={inv.investigationId} className="hover:bg-noir/5 transition-colors">
+                        <td className="px-4 py-3.5 font-mono font-bold text-ink whitespace-nowrap">
+                          INV-{String(inv.investigationId).padStart(5, '0')}
+                        </td>
+                        <td className="px-4 py-3.5 text-xs text-ink-muted font-mono whitespace-nowrap">
+                          {new Date(inv.createdAt).toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <span className={`pill text-xs font-bold ${band.chip}`}>
+                            {band.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 font-extrabold text-ink text-sm">{pct}%</td>
+                        <td className="px-4 py-3.5 text-ink-muted font-mono text-xs">
+                          {inv.candidatesChecked ?? '—'}
+                        </td>
+                        <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                          <DossierLink id={inv.investigationId} short />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </section>
+  );
+}
+
+/**
+ * Traitor tracing, from the bits the server actually read: how well the copy
+ * matches the named officer, against the closest copy released to anyone else.
+ * Two unrelated copies agree on about half the bits by chance.
+ */
+function TraitorPanel({ result }) {
+  const t = result.traitor;
+  if (!t) return null;
+  const pct = (bits) => Math.round((bits / t.totalBits) * 100);
+  const chance = t.totalBits / 2;
+  const rivalBits = t.rival?.bits ?? 0;
+  const margin = t.namedBits - rivalBits;
+  // A rival well above chance is worth an examiner's attention.
+  const rivalHigh = t.rival && rivalBits >= chance + 8;
+  return (
+    <div className="space-y-2.5 rounded-xl border border-white/10 bg-white/5 p-3.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs font-bold uppercase tracking-wider text-accent">
+          Traitor tracing — other recipients compared
+        </span>
+        <span
+          className={`rounded px-2 py-0.5 text-[10px] font-bold ${
+            rivalHigh ? 'bg-probable/25 text-probable-bright' : 'bg-accent/20 text-accent'
+          }`}
+        >
+          {rivalHigh ? 'REVIEW RUNNER-UP' : `LEADS BY ${margin} BITS`}
+        </span>
+      </div>
+      <p className="text-[11px] leading-relaxed text-white/70">
+        The mark read from this file was compared with the copies released to {t.officersCompared}{' '}
+        officer{t.officersCompared === 1 ? '' : 's'}. Unrelated copies agree on about {chance} of{' '}
+        {t.totalBits} bits by chance.
+      </p>
+      <Meter
+        label={result.match.userName}
+        bits={t.namedBits}
+        total={t.totalBits}
+        tone="bg-accent"
+      />
+      {t.rival ? (
+        <Meter
+          label={`Closest other officer: ${t.rival.userName}`}
+          bits={rivalBits}
+          total={t.totalBits}
+          tone={rivalHigh ? 'bg-probable' : 'bg-white/30'}
+        />
+      ) : (
+        <p className="text-[10px] text-white/40">No other officer holds a copy to compare.</p>
+      )}
+      {t.rival && (
+        <p className="text-[10px] text-white/40">
+          Named officer {pct(t.namedBits)}% · closest other {pct(rivalBits)}% · chance ~50%
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Meter({ label, bits, total, tone }) {
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between gap-2 text-[11px]">
+        <span className="min-w-0 font-semibold text-white/80">{label}</span>
+        <span className="mono shrink-0 font-bold text-white/90">
+          {bits}/{total}
+        </span>
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+        <div
+          className={`h-full rounded-full ${tone}`}
+          style={{ width: `${(bits / total) * 100}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+const INTEGRITY = {
+  intact: { chip: 'INTACT', tone: 'text-emerald-400', bg: 'bg-emerald-500/20' },
+  tampered: { chip: 'ALTERED AFTER RELEASE', tone: 'text-red-300', bg: 'bg-red-500/20' },
+  unassessable: { chip: 'CANNOT BE CHECKED', tone: 'text-white/70', bg: 'bg-white/10' },
+};
+
+/** Document integrity, straight from the fragile-layer check on this file. */
+function IntegrityPanel({ tamper }) {
+  const look = INTEGRITY[tamper?.status] || INTEGRITY.unassessable;
+  return (
+    <div className="space-y-1.5 rounded-xl border border-white/10 bg-white/5 p-3.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className={`text-xs font-bold uppercase tracking-wider ${look.tone}`}>
+          Document integrity (fragile layer)
+        </span>
+        <span className={`rounded px-2 py-0.5 text-[10px] font-bold ${look.bg} ${look.tone}`}>
+          {look.chip}
+        </span>
+      </div>
+      <p className="text-[11px] leading-relaxed text-white/70">
+        {tamper?.reason || 'This file was not checked for edits.'}
+      </p>
+      {tamper?.blocks > 0 && (
+        <p className="mono text-[10px] text-white/40">
+          {tamper.blocks - (tamper.failed || 0)} of {tamper.blocks} blocks verify
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** The court dossier for one investigation, as a PDF download. */
+function DossierLink({ id, short = false }) {
+  return (
+    <a
+      href={`/api/trace/${id}/dossier`}
+      download={`forensic-dossier-INV-${String(id).padStart(5, '0')}.pdf`}
+      className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-bold text-ink hover:border-accent-deep hover:bg-accent/20 transition shadow-sm"
+    >
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+      >
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+        <line x1="12" y1="18" x2="12" y2="12" />
+        <line x1="9" y1="15" x2="12" y2="18" />
+        <line x1="15" y1="15" x2="12" y2="18" />
+      </svg>
+      {short ? 'Court dossier' : 'Generate Court Evidence Dossier'}
+    </a>
   );
 }
 
@@ -490,7 +639,7 @@ const BAND = {
   },
 };
 
-function Verdict({ result, opticalLensMode }) {
+function Verdict({ result }) {
   const band = BAND[result.verdict] || BAND.INCONCLUSIVE;
   const pct = Math.round((result.confidence || 0) * 100);
   const showSuspectPool =
@@ -575,10 +724,10 @@ function Verdict({ result, opticalLensMode }) {
               )}
 
               {/* Optical Lens Dewarp & Moiré Status */}
-              {opticalLensMode && (
-                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-emerald-400" />
+              {result.lens?.applied && (
+                <div className="flex flex-col gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-400" />
                     <span className="font-bold text-emerald-300">
                       Optical Forensic Lens Applied:
                     </span>
@@ -586,54 +735,15 @@ function Verdict({ result, opticalLensMode }) {
                       4-point homography perspective dewarped · Moiré grid notch filter cleared
                     </span>
                   </div>
-                  <span className="font-mono text-[10px] text-emerald-400 font-bold bg-emerald-950/60 px-2 py-0.5 rounded">
+                  <span className="self-start rounded bg-emerald-950/60 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-400 sm:self-auto">
                     RECTIFIED
                   </span>
                 </div>
               )}
 
-              {/* Anti-Collusion & Traitor Tracing Analysis */}
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3.5 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-accent flex items-center gap-1.5">
-                    <span>🛡️</span> Traitor Tracing & Collusion Analysis
-                  </span>
-                  <span className="rounded bg-accent/20 px-2 py-0.5 text-[10px] font-bold text-accent">
-                    SOLO ATTRIBUTION (0% COLLUSION)
-                  </span>
-                </div>
-                <p className="text-[11px] text-white/70 leading-relaxed">
-                  Orthogonal correlation scan across all registered officer codebooks proves this file carries a <strong>solitary watermark</strong>. No 2-way or 3-way averaging, layer blending, or mosaic patchwork was detected.
-                </p>
-                <div className="space-y-1">
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-white/80 font-semibold">{result.match.userName} (Signal Energy):</span>
-                    <span className="mono text-accent font-bold">98.4%</span>
-                  </div>
-                  <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
-                    <div className="h-full bg-accent rounded-full" style={{ width: '98.4%' }} />
-                  </div>
-                  <div className="flex justify-between text-[10px] text-white/40 pt-0.5">
-                    <span>Background Noise: 1.6%</span>
-                    <span>Secondary Officer Energy: 0.0% (Clean)</span>
-                  </div>
-                </div>
-              </div>
+              <TraitorPanel result={result} />
 
-              {/* Document Integrity & Fragile Watermark Verification */}
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3.5 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-                    <span>🔍</span> Document Integrity Verification (Layer 2 Fragile)
-                  </span>
-                  <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-400">
-                    INTEGRITY INTACT
-                  </span>
-                </div>
-                <p className="text-[11px] text-white/70 leading-relaxed">
-                  Spatial frequency hash verification passed (SSIM 0.998). No textual editing, date manipulation, or Photoshop inpainting detected. Document contents match the original release.
-                </p>
-              </div>
+              <IntegrityPanel tamper={result.tamper} />
 
               {/* Post-Quantum Non-Repudiation Proof Card */}
               {result.match.pqcProof && (
