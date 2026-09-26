@@ -191,7 +191,7 @@ const SUMMARY = [
   },
   {
     title: 'Anchor',
-    body: 'Its receipt is written to a public ledger, ahead of the copy existing.',
+    body: 'Its receipt is written to an immutable private DLT ledger, ahead of the copy existing.',
     dot: 'bg-chromia-green-500',
   },
   {
@@ -265,7 +265,7 @@ function BrandPanel() {
         </h2>
         <p className="mt-4 max-w-[40ch] text-sm leading-relaxed text-white/85">
           Every protected file that leaves this system is marked for the person who opened it and
-          receipted on a public ledger — so a copy that surfaces somewhere it should not can be
+          receipted on an immutable private DLT ledger — so a copy that surfaces somewhere it should not can be
           traced back to a single release.
         </p>
       </div>

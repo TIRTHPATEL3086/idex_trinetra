@@ -16,6 +16,20 @@ import '@fontsource/jetbrains-mono/400.css';
 import '@fontsource/jetbrains-mono/500.css';
 import './index.css';
 
+// Register Air-Gapped Offline PWA Service Worker
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/sw.js')
+      .then((reg) => {
+        console.log('[WESEE PWA] Offline Service Worker registered, scope:', reg.scope);
+      })
+      .catch((err) => {
+        console.warn('[WESEE PWA] Service Worker registration failed:', err);
+      });
+  });
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>

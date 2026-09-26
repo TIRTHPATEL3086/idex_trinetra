@@ -105,6 +105,39 @@ export const ROLE_UI = {
     tint: 'bg-attributed-bright',
     demo: { email: 'a004@example.gov', password: 'analyst123' },
   },
+  // Indian Navy Defense Roles
+  CRYPTO_CUSTODIAN: {
+    label: 'Cryptographic Custodian',
+    short: 'Custodian',
+    blurb: 'WESEE Signals HQ: Originates dispatches, multi-recipient ML-KEM-768 broadcast encryption.',
+    badge: 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/30',
+    tint: 'bg-emerald-500',
+    demo: { email: 'custodian@navy.gov.in', password: 'custodian123' },
+  },
+  TACTICAL_OFFICER: {
+    label: 'Tactical Recipient Officer',
+    short: 'CO Vikrant',
+    blurb: 'Naval Operations: Decrypts authorized dispatches with personal ML-KEM private key, signs with ML-DSA.',
+    badge: 'bg-cyan-950/80 text-cyan-300 border border-cyan-500/30',
+    tint: 'bg-cyan-500',
+    demo: { email: 'co.vikrant@navy.gov.in', password: 'officer123' },
+  },
+  FORENSIC_ANALYST: {
+    label: 'Naval Cyber Forensic Analyst',
+    short: 'Provost',
+    blurb: 'Naval Cyber Cell: Traces leaked media, DWT extraction, issues Sec 65B/63 BSA Court Dossier.',
+    badge: 'bg-amber-950/80 text-amber-300 border border-amber-500/30',
+    tint: 'bg-amber-500',
+    demo: { email: 'provost@navy.gov.in', password: 'analyst123' },
+  },
+  NAVAL_AUDITOR: {
+    label: 'Naval Audit & Oversight Authority',
+    short: 'JAG Auditor',
+    blurb: 'Judge Advocate General: Zero-knowledge verification of immutable DLT ledger.',
+    badge: 'bg-purple-950/80 text-purple-300 border border-purple-500/30',
+    tint: 'bg-purple-500',
+    demo: { email: 'jag@navy.gov.in', password: 'audit123' },
+  },
 };
 
 export const ROLE_ORDER = ['ADMIN', 'OFFICER', 'INVESTIGATOR'];

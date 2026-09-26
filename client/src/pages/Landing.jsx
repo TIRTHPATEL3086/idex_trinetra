@@ -50,19 +50,27 @@ const RELEASE_STEPS = [
 
 const ROLE_CHIPS = [
   {
+    label: 'Cryptographic Custodian (WESEE HQ)',
+    body: 'Originates dispatches with multi-recipient NIST ML-KEM-768 broadcast encryption. Manages officer key roster.',
+    fill: 'bg-chromia-pink-500',
+  },
+  {
+    label: 'Tactical Recipient Officer (Fleet)',
+    body: 'Decrypts operational dispatches with personal ML-KEM key; signs release receipt with ML-DSA-65. Cannot investigate.',
+    fill: 'bg-chromia-yellow-500',
     label: 'Clearance Holder',
     body: 'Releases a marked copy to themselves and nothing more. Cannot investigate.',
     fill: 'bg-accent-bright',
   },
   {
-    label: 'Forensic Analyst',
-    body: 'Traces leaked files back to their receipt. Cannot decrypt, so cannot manufacture evidence.',
+    label: 'Naval Cyber Forensic Analyst (Provost)',
+    body: 'Traces leaked media back to its release receipt; generates Section 65B/63 BSA Court Dossier. Zero decrypt capability.',
     fill: 'bg-chromia-green-500',
   },
   {
-    label: 'Registry Administrator',
-    body: 'Full custody — uploads, releases, investigations and the audit trail.',
-    fill: 'bg-chromia-pink-500',
+    label: 'Naval Audit Authority (JAG)',
+    body: 'Zero-knowledge verification of immutable DLT ledger and cryptographic hash-chain integrity.',
+    fill: 'bg-chromia-blue-500',
   },
 ];
 
@@ -255,6 +263,11 @@ function Hero() {
       </Sticker>
 
       <div className="mx-auto max-w-5xl" style={textStyle}>
+        <div className="hero-fade-up mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-600/40 bg-emerald-950/10 px-4 py-1.5 text-xs font-bold tracking-wider text-emerald-900 shadow-sm backdrop-blur-sm">
+          <span className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse" />
+          <span>MINISTRY OF DEFENCE · INDIAN NAVY (WESEE) · SIH 26237</span>
+        </div>
+
         <h1 className="hero-fade-up font-display text-[clamp(2.75rem,7vw,6rem)] leading-[0.98]">
           <span className="block text-ink">Every copy knows</span>
           <span className="tone-accent block">who opened it.</span>

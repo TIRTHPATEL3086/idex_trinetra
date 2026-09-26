@@ -19,60 +19,128 @@
  *   AUDITOR holds neither, and sees everything after the fact.
  */
 
-export const ROLES = ['ADMIN', 'OFFICER', 'INVESTIGATOR'];
+/**
+ * Who may do what — the single source of truth for Indian Navy (WESEE) Decryption Provenance.
+ *
+ * Strict Military Separation of Duties:
+ *   - FORENSIC_ANALYST (Provost/Cyber Cell) cannot decrypt — cannot manufacture or mint evidence.
+ *   - TACTICAL_OFFICER (CO/Recipient) cannot trace, and only releases/decrypts to THEMSELVES.
+ *   - CRYPTO_CUSTODIAN (Signals HQ) originates dispatches, manages keys and roster, but cannot investigate.
+ *   - NAVAL_AUDITOR (JAG/Oversight) holds zero-knowledge audit privileges: verifies immutable DLT ledger
+ *     integrity without decrypting classified plaintext.
+ */
+
+export const DEFENSE_ROLES = {
+  CRYPTO_CUSTODIAN: 'CRYPTO_CUSTODIAN',
+  TACTICAL_OFFICER: 'TACTICAL_OFFICER',
+  FORENSIC_ANALYST: 'FORENSIC_ANALYST',
+  NAVAL_AUDITOR: 'NAVAL_AUDITOR',
+};
+
+export const ROLES = [
+  'CRYPTO_CUSTODIAN',
+  'TACTICAL_OFFICER',
+  'FORENSIC_ANALYST',
+  'NAVAL_AUDITOR',
+  // Backward-compatible legacy aliases
+  'ADMIN',
+  'OFFICER',
+  'INVESTIGATOR',
+];
+
+/** Normalize role to canonical defense role */
+export function normalizeRole(role) {
+  if (!role) return 'TACTICAL_OFFICER';
+  const r = String(role).toUpperCase();
+  if (r === 'ADMIN') return 'CRYPTO_CUSTODIAN';
+  if (r === 'OFFICER') return 'TACTICAL_OFFICER';
+  if (r === 'INVESTIGATOR') return 'FORENSIC_ANALYST';
+  if (r === 'AUDITOR') return 'NAVAL_AUDITOR';
+  return r;
+}
 
 /** Capability -> the roles that hold it. */
 export const CAPABILITIES = {
-  'assets:read': ['ADMIN', 'OFFICER', 'INVESTIGATOR'],
-  'assets:upload': ['ADMIN'],
-  'decrypt:any': ['ADMIN'], //  release a copy in anyone's name
-  'decrypt:self': ['ADMIN', 'OFFICER'], //  release a copy in your own name
-  'trace:run': ['ADMIN', 'INVESTIGATOR'],
-  'trace:history': ['ADMIN', 'INVESTIGATOR'],
-  'audit:read': ['ADMIN', 'INVESTIGATOR'],
-  'audit:own': ['ADMIN', 'OFFICER', 'INVESTIGATOR'],
-  'metrics:read': ['ADMIN', 'OFFICER', 'INVESTIGATOR'],
-  'users:read': ['ADMIN', 'INVESTIGATOR'],
-  // Added alongside the roster work; only the registry administrator writes users.
-  'users:write': ['ADMIN'],
+  'assets:read': ['CRYPTO_CUSTODIAN', 'TACTICAL_OFFICER', 'FORENSIC_ANALYST', 'NAVAL_AUDITOR', 'ADMIN', 'OFFICER', 'INVESTIGATOR'],
+  'assets:upload': ['CRYPTO_CUSTODIAN', 'ADMIN'],
+  'decrypt:any': ['CRYPTO_CUSTODIAN', 'ADMIN'], // Originator dispatch testing
+  'decrypt:self': ['TACTICAL_OFFICER', 'OFFICER', 'CRYPTO_CUSTODIAN', 'ADMIN'], // Tactical recipient release
+  'trace:run': ['FORENSIC_ANALYST', 'INVESTIGATOR', 'CRYPTO_CUSTODIAN', 'ADMIN'],
+  'trace:history': ['FORENSIC_ANALYST', 'INVESTIGATOR', 'NAVAL_AUDITOR', 'CRYPTO_CUSTODIAN', 'ADMIN'],
+  'audit:read': ['NAVAL_AUDITOR', 'CRYPTO_CUSTODIAN', 'FORENSIC_ANALYST', 'ADMIN', 'INVESTIGATOR'],
+  'audit:own': ['TACTICAL_OFFICER', 'OFFICER', 'CRYPTO_CUSTODIAN', 'ADMIN', 'FORENSIC_ANALYST', 'INVESTIGATOR', 'NAVAL_AUDITOR'],
+  'ledger:verify': ['NAVAL_AUDITOR', 'CRYPTO_CUSTODIAN', 'FORENSIC_ANALYST', 'ADMIN'],
+  'metrics:read': ['CRYPTO_CUSTODIAN', 'TACTICAL_OFFICER', 'FORENSIC_ANALYST', 'NAVAL_AUDITOR', 'ADMIN', 'OFFICER', 'INVESTIGATOR'],
+  'users:read': ['CRYPTO_CUSTODIAN', 'ADMIN', 'FORENSIC_ANALYST', 'INVESTIGATOR', 'NAVAL_AUDITOR'],
+  'users:write': ['CRYPTO_CUSTODIAN', 'ADMIN'],
+  'keys:manage': ['CRYPTO_CUSTODIAN', 'ADMIN'],
 };
 
 /** Human labels, reused by the login screen and the role badge. */
 export const ROLE_META = {
+  CRYPTO_CUSTODIAN: {
+    label: 'Cryptographic Custodian',
+    blurb: 'WESEE Signals HQ: Originates dispatches, multi-recipient ML-KEM broadcast encryption, manages key roster.',
+    rank: 'Commander / Signals Officer (WESEE)',
+  },
+  TACTICAL_OFFICER: {
+    label: 'Tactical Recipient Officer',
+    blurb: 'Naval Operations: Decrypts authorized dispatches with personal ML-KEM private key, signs with ML-DSA.',
+    rank: 'Commanding Officer / Watchkeeper (Fleet)',
+  },
+  FORENSIC_ANALYST: {
+    label: 'Naval Cyber Forensic Analyst',
+    blurb: 'Naval Provost & Cyber Command: Traces leaked media, DWT extraction, issues Sec 65B/63 BSA Court Dossier.',
+    rank: 'Provost Marshal / Cyber Forensic Examiner',
+  },
+  NAVAL_AUDITOR: {
+    label: 'Naval Audit & Oversight Authority',
+    blurb: 'Judge Advocate General (JAG): Zero-knowledge verification of immutable DLT ledger and hash-chains.',
+    rank: 'Judge Advocate General / Naval Oversight Inspector',
+  },
+  // Legacy aliases
   ADMIN: {
-    label: 'Registry Administrator',
-    blurb: 'Full custody: uploads, releases, investigations and the audit trail.',
+    label: 'Cryptographic Custodian (Admin)',
+    blurb: 'WESEE Signals HQ: Originates dispatches and manages key roster.',
+    rank: 'Signals Custodian',
   },
   OFFICER: {
-    label: 'Clearance Holder',
+    label: 'Tactical Recipient Officer',
     blurb: 'Releases a watermarked copy to themselves. Cannot investigate.',
+    rank: 'Tactical Officer',
   },
   INVESTIGATOR: {
-    label: 'Forensic Analyst',
+    label: 'Naval Cyber Forensic Analyst',
     blurb: 'Traces a leaked file back to the copy it came from. Holds no decrypt capability.',
+    rank: 'Forensic Analyst',
   },
 };
 
 /** @returns {boolean} */
 export function can(role, capability) {
+  const norm = normalizeRole(role);
   const holders = CAPABILITIES[capability];
-  return Array.isArray(holders) && holders.includes(role);
+  if (!Array.isArray(holders)) return false;
+  return holders.includes(norm) || holders.includes(role);
 }
 
 /** Every capability a role holds — sent to the client on login. */
 export function capabilitiesOf(role) {
-  return Object.keys(CAPABILITIES).filter((c) => can(role, c));
+  const norm = normalizeRole(role);
+  return Object.keys(CAPABILITIES).filter((c) => can(norm, c));
 }
 
 /**
- * The first screen a role should land on after signing in. An officer has no
- * business on /trace, so sending them there and then refusing would be a poor
- * welcome.
+ * The first screen a role should land on after signing in.
  */
 export const LANDING = {
+  CRYPTO_CUSTODIAN: '/assets',
   ADMIN: '/assets',
+  TACTICAL_OFFICER: '/decrypt',
   OFFICER: '/decrypt',
-  // An analyst has no decrypt capability at all, so /decrypt would be an empty
-  // screen; tracing is the whole of the job, so that is where they open.
+  FORENSIC_ANALYST: '/trace',
   INVESTIGATOR: '/trace',
+  NAVAL_AUDITOR: '/history',
+  AUDITOR: '/history',
 };
+

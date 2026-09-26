@@ -189,11 +189,12 @@ export const revealAllotment = (assetId, password, userId) =>
  * screen; `corners` (TL, TR, BR, BL in the photo's pixels) override its own
  * corner detection.
  */
-export function traceFile(file, { lens = false, corners = null } = {}) {
+export function traceFile(file, { lens = false, corners = null, lensMode = null } = {}) {
   const form = new FormData();
   form.append('file', file);
   if (lens) form.append('lens', '1');
   if (lens && corners) form.append('corners', JSON.stringify(corners));
+  if (lensMode) form.append('lensMode', lensMode);
   return request('/api/trace', { method: 'POST', body: form });
 }
 

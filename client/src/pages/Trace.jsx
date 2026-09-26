@@ -15,6 +15,7 @@ export default function Trace() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [fileName, setFileName] = useState('');
+  const [currentFile, setCurrentFile] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [opticalLensMode, setOpticalLensMode] = useState(true);
   const [investigations, setInvestigations] = useState([]);
@@ -84,6 +85,7 @@ export default function Trace() {
 
   function pick(file) {
     if (!file) return;
+    setCurrentFile(file);
     if (lensOn && file.type.startsWith('image/')) {
       setFileName(file.name);
       setResult(null);
@@ -97,12 +99,17 @@ export default function Trace() {
 
   async function run(file, lens = null) {
     if (!file) return;
+    setCurrentFile(file);
     setFileName(file.name);
     setStatus('working');
     setError(null);
     setResult(null);
     try {
-      const r = await traceFile(file, lens ? { lens: true, corners: lens.corners } : {});
+      const r = await traceFile(file, {
+        lens: Boolean(lens) || opticalLensMode,
+        corners: lens?.corners || null,
+        lensMode: opticalLensMode ? 'screen' : 'standard',
+      });
       setLensFile(null);
       setResult(r);
       setStatus('done');
@@ -121,30 +128,45 @@ export default function Trace() {
       <div className="rounded-2xl border border-line bg-gradient-to-r from-surface to-white p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-500 animate-ping" />
+            <span className={`flex h-2.5 w-2.5 rounded-full ${opticalLensMode ? 'bg-emerald-500 animate-ping' : 'bg-ink-muted'}`} />
             <span className="text-xs font-extrabold uppercase tracking-wide text-ink">
-              Optical Forensic Lens (Camera Screen-Photo & WhatsApp Leak Mode)
+              {opticalLensMode ? 'Optical Forensic Lens (Camera Screen-Photo Mode)' : 'Standard Digital File Mode'}
             </span>
             <span className="rounded bg-accent/20 px-2 py-0.5 text-[10px] font-bold text-accent">
-              MoD Vector #1
+              {opticalLensMode ? 'MoD Vector #1' : 'Direct File'}
             </span>
           </div>
           <p className="text-xs text-ink-muted">
-            Auto-rectifies smartphone photos of computer screens: 4-point homography dewarping, Moiré frequency suppression & adaptive CLAHE normalization.
+            {opticalLensMode
+              ? 'Auto-rectifies smartphone photos of computer screens: 4-point homography dewarping, Moiré frequency suppression & adaptive CLAHE.'
+              : 'Direct watermark extraction for original PDFs, downloaded PNGs, or clean OS screenshots without camera/screen distortion.'}
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setOpticalLensMode((m) => !m)}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 self-start sm:self-auto ${
-            opticalLensMode
-              ? 'bg-accent text-noir shadow-sm'
-              : 'bg-muted text-ink-muted hover:text-ink'
-          }`}
-        >
-          <span>{opticalLensMode ? '📷 Optical Lens Active (Auto-Dewarp ON)' : '📷 Standard Extraction'}</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-1.5 self-start sm:self-auto bg-noir/5 p-1 rounded-xl">
+          <button
+            type="button"
+            onClick={() => setOpticalLensMode(true)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+              opticalLensMode
+                ? 'bg-accent text-noir shadow-sm'
+                : 'text-ink-muted hover:text-ink'
+            }`}
+          >
+            <span>📱 Optical Lens (Camera/Screen)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setOpticalLensMode(false)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+              !opticalLensMode
+                ? 'bg-ink text-white shadow-sm'
+                : 'text-ink-muted hover:text-ink'
+            }`}
+          >
+            <span>📄 Standard Extraction</span>
+          </button>
+        </div>
       </div>
 
       {/* dropzone with smooth drag & drop feedback */}
@@ -212,8 +234,13 @@ export default function Trace() {
           type="checkbox"
           checked={lensOn}
           onChange={(e) => {
-            setLensOn(e.target.checked);
-            if (!e.target.checked) setLensFile(null);
+            const on = e.target.checked;
+            setLensOn(on);
+            if (on && currentFile && currentFile.type.startsWith('image/')) {
+              setLensFile(currentFile);
+            } else if (!on) {
+              setLensFile(null);
+            }
           }}
           className="mt-0.5 h-4 w-4 shrink-0 rounded text-accent focus:ring-accent"
         />

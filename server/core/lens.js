@@ -51,7 +51,8 @@ export async function detectQuad(buffer) {
     const v = border.map((i) => Math.abs(data[i * 3 + c] - med[c])).sort((a, b) => a - b);
     return v[Math.floor(v.length * 0.9)];
   });
-  const thresh = Math.max(28, 2.5 * Math.max(...spread));
+  // Clamp thresh so monitor/laptop photos with mixed borders don't blow up to 200+
+  const thresh = Math.max(26, Math.min(68, 2.5 * Math.max(...spread)));
 
   const fg = new Uint8Array(W * H);
   for (let i = 0; i < W * H; i++) {
@@ -90,7 +91,20 @@ export async function detectQuad(buffer) {
     if (n > bestSize) ((bestSize = n), (best = s));
   }
   const coverage = bestSize / (W * H);
-  if (best < 0 || coverage < 0.08 || coverage > 0.985) return null;
+  if (best < 0 || coverage < 0.05) return null;
+  if (coverage > 0.96) {
+    const insetX = Math.round(meta.width * 0.005);
+    const insetY = Math.round(meta.height * 0.005);
+    return {
+      corners: [
+        { x: insetX, y: insetY },
+        { x: meta.width - 1 - insetX, y: insetY },
+        { x: meta.width - 1 - insetX, y: meta.height - 1 - insetY },
+        { x: insetX, y: meta.height - 1 - insetY },
+      ],
+      coverage: Math.round(coverage * 1000) / 1000,
+    };
+  }
 
   // Extreme points of the component: min/max of x+y and x-y.
   const ext = { tl: [Infinity], br: [-Infinity], tr: [-Infinity], bl: [Infinity] };

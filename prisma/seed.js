@@ -43,6 +43,36 @@ function encrypt(buffer, key) {
  * is the fastest way to lose ninety seconds in front of a judge.
  */
 const USERS = [
+  // Official Indian Navy WESEE Roles (SIH26237)
+  {
+    name: 'Cdr. S. Sharma',
+    dept: 'WESEE Signals HQ',
+    email: 'custodian@navy.gov.in',
+    role: 'CRYPTO_CUSTODIAN',
+    password: 'custodian123',
+  },
+  {
+    name: 'Capt. R. Mehta',
+    dept: 'INS Vikrant Strike Group',
+    email: 'co.vikrant@navy.gov.in',
+    role: 'TACTICAL_OFFICER',
+    password: 'officer123',
+  },
+  {
+    name: 'Lt. Cdr. V. Nair',
+    dept: 'Naval Provost / Cyber Cell',
+    email: 'provost@navy.gov.in',
+    role: 'FORENSIC_ANALYST',
+    password: 'analyst123',
+  },
+  {
+    name: 'Cmde. A. Verma',
+    dept: 'Judge Advocate General Dept',
+    email: 'jag@navy.gov.in',
+    role: 'NAVAL_AUDITOR',
+    password: 'audit123',
+  },
+  // Legacy Aliases for existing evaluation scripts
   {
     name: 'Officer U-017',
     dept: 'Ops Wing',
@@ -81,6 +111,9 @@ const USERS = [
 ];
 
 const ASSETS = [
+  { title: 'IN-OPORD-26237: Western Fleet Strike Plan', classification: 'TOP SECRET // NOFORN', seed: 17 },
+  { title: 'INS Vikrant Tactical Radar Grid B', classification: 'SECRET', seed: 41 },
+  { title: 'WESEE Cryptographic Key Allocation Annexure', classification: 'CONFIDENTIAL', seed: 93 },
   { title: 'Ops Order 44', classification: 'CONFIDENTIAL', seed: 17 },
   { title: 'Border Survey Sheet 7', classification: 'SECRET', seed: 41 },
   { title: 'Logistics Annexure B', classification: 'RESTRICTED', seed: 93 },
