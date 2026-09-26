@@ -18,22 +18,6 @@ import * as chain from '../core/chain.js';
  *
  * GET /api/audit/:assetId   — Per-asset trail. Officers see only their own releases.
  */
-/** The office's time zone, for deciding what counts as out of hours. */
-const OFFICE_TZ = process.env.OFFICE_TZ || 'Asia/Kolkata';
-const OFFICE_TZ_LABEL = OFFICE_TZ === 'Asia/Kolkata' ? 'IST' : OFFICE_TZ;
-const officeFormat = new Intl.DateTimeFormat('en-GB', {
-  timeZone: OFFICE_TZ,
-  hour: '2-digit',
-  minute: '2-digit',
-  weekday: 'short',
-  hourCycle: 'h23',
-});
-
-function officeClock(date) {
-  const parts = Object.fromEntries(officeFormat.formatToParts(date).map((p) => [p.type, p.value]));
-  return { hour: Number(parts.hour), minute: Number(parts.minute), weekday: parts.weekday };
-}
-
 const router = Router();
 
 // ─────────────────────────────── GET /api/audit/global ─────────────────────
@@ -152,30 +136,15 @@ router.get(
 
       const timeline = events.map((e) => {
         const txHash = bufferToHex(e.txHash);
-        // Office hours are judged on the office's clock, not the server's —
-        // a hosted server runs on UTC, which would flag a 14:00 IST release.
-        const { hour, minute, weekday } = officeClock(e.createdAt);
-
-        // 1. Off-hours: outside 08:00 - 19:00 or weekend
-        const isOffHours = hour < 8 || hour >= 19 || weekday === 'Sat' || weekday === 'Sun';
-
-        // 2. Device anomaly: unverified/unknown hardware or un-enrolled endpoint
+        // Device anomaly: unverified/unknown hardware or un-enrolled endpoint
         const dev = (e.deviceLabel || '').toUpperCase();
         const isDeviceAnomaly =
           !dev || dev.includes('UNKNOWN') || dev.includes('EXTERNAL') || dev.includes('MOBILE');
 
         // Anomaly warnings list
         const anomalies = [];
-        if (isOffHours)
-          anomalies.push(
-            `Off-hours access (${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} ${OFFICE_TZ_LABEL})`
-          );
         if (isDeviceAnomaly)
           anomalies.push(`Unverified endpoint hardware (${e.deviceLabel || 'UNKNOWN'})`);
-
-        let riskLevel = 'LOW';
-        if (anomalies.length >= 2) riskLevel = 'CRITICAL';
-        else if (anomalies.length === 1) riskLevel = 'ELEVATED';
 
         return {
           id: e.id,
@@ -193,9 +162,7 @@ router.get(
           deltaUsed: e.deltaUsed,
           signatureAlgorithm: e.signatureAlgorithm,
           userRef: bufferToHex(e.user.userRef),
-          isOffHours,
           isDeviceAnomaly,
-          riskLevel,
           anomalies,
         };
       });
