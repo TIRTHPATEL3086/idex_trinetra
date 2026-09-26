@@ -129,6 +129,32 @@ export default function Trace() {
           straightened and cleaned before the mark is read. */}
       <ModePicker value={opticalLensMode} onChange={setOpticalLensMode} />
 
+      {/* The lens switch: for a photo taken of a screen with a phone. */}
+      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-line bg-white px-4 py-3">
+        <input
+          type="checkbox"
+          checked={lensOn}
+          onChange={(e) => {
+            const on = e.target.checked;
+            setLensOn(on);
+            if (on && currentFile && currentFile.type.startsWith('image/')) {
+              setLensFile(currentFile);
+            } else if (!on) {
+              setLensFile(null);
+            }
+          }}
+          className="mt-0.5 h-4 w-4 shrink-0 rounded text-accent focus:ring-accent"
+        />
+        <span className="min-w-0">
+          <span className="block text-sm font-bold text-ink">Place the corners by hand</span>
+          <span className="block text-xs leading-relaxed text-ink-muted">
+            Phone photos and screenshots are recognised automatically &mdash; the page is found,
+            straightened and read without this. Turn it on only if a photo is not traced, to mark
+            the document&rsquo;s four corners yourself.
+          </span>
+        </span>
+      </label>
+
       {/* dropzone with smooth drag & drop feedback */}
       <div
         onDragOver={(e) => {
@@ -187,32 +213,6 @@ export default function Trace() {
           It will be hashed, matched, and the watermark extracted — nothing is stored as plaintext.
         </div>
       </div>
-
-      {/* The lens switch: for a photo taken of a screen with a phone. */}
-      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-line bg-white px-4 py-3">
-        <input
-          type="checkbox"
-          checked={lensOn}
-          onChange={(e) => {
-            const on = e.target.checked;
-            setLensOn(on);
-            if (on && currentFile && currentFile.type.startsWith('image/')) {
-              setLensFile(currentFile);
-            } else if (!on) {
-              setLensFile(null);
-            }
-          }}
-          className="mt-0.5 h-4 w-4 shrink-0 rounded text-accent focus:ring-accent"
-        />
-        <span className="min-w-0">
-          <span className="block text-sm font-bold text-ink">Place the corners by hand</span>
-          <span className="block text-xs leading-relaxed text-ink-muted">
-            Phone photos and screenshots are recognised automatically &mdash; the page is found,
-            straightened and read without this. Turn it on only if a photo is not traced, to mark
-            the document&rsquo;s four corners yourself.
-          </span>
-        </span>
-      </label>
 
       {lensFile && (
         <LensEditor
