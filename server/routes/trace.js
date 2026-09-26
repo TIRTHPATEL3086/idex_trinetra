@@ -10,7 +10,13 @@ import { requireCap } from '../middleware/auth.js';
 import * as chain from '../core/chain.js';
 import * as bktree from '../core/bktree.js';
 import { hashes, extract, score, sha256, hamming, isPdf, extractPdf } from '../core/index.js';
-import { parsePayload, bitAgreement, bitsMatching, PAYLOAD_BITS, isDegeneratePayload } from '../core/payload.js';
+import {
+  parsePayload,
+  bitAgreement,
+  bitsMatching,
+  PAYLOAD_BITS,
+  isDegeneratePayload,
+} from '../core/payload.js';
 import { signDecryptionReceipt, verifyDecryptionSignature } from '../core/pqc.js';
 import { userKeys } from '../lib/keyring.js';
 import { generateDossier } from '../core/dossier.js';
@@ -120,142 +126,105 @@ async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {
     where: { id: { in: matchedIds } },
     orderBy: { createdAt: 'desc' },
     take: 25,
-    select: { id: true, markedPath: true, payloadBits: true },
-    where: { id: { in: visualMatches(candidates).map((c) => c.id) } },
     select: { id: true, markedPath: true, payloadBits: true, deltaUsed: true },
   });
-  const readings = new Map();
+  const bufMeta = await sharp(buffer).metadata();
+  const readings = new Map(); // key -> reading, so each variant is decoded once
   let best = null;
 
+  // Keeps a reading that names a release outright, or the one that agrees
+  // best with this copy's own payload beyond chance.
+  const consider = async (reading, ev) => {
+    if (!reading || isDegeneratePayload(reading.payloadBits)) return false;
+    if (await namesARelease(reading.payloadBits)) return true;
+    const matches = bitsMatching(reading.payloadBits, ev.payloadBits);
+    if (matches >= MIN_BITS_WITHOUT_CRC && (!best || matches > best.matches)) {
+      best = { reading, matches };
+    }
+    return false;
+  };
+  const readOnce = async (key, make) => {
+    if (!readings.has(key)) {
+      try {
+        readings.set(key, await make());
+      } catch {
+        readings.set(key, null);
+      }
+    }
+    return readings.get(key);
+  };
+
   for (const ev of events) {
-    let size;
-    try {
-      size = await sharp(ev.markedPath).metadata();
-    } catch {
-      continue;
-    }
+    const copy = await readMarked(ev);
+    if (!copy) continue; // the released copy is gone; nothing to align to
+    const size = await sharp(copy).metadata();
     const dims = `${size.width}x${size.height}`;
+    const deltas = [...new Set([ev.deltaUsed, 12, 14].filter(Boolean))];
 
-    // Pass 0: direct reading at dewarped/cropped size across deltas (avoids blur from 4x upscale)
-    for (const d of [12, 14]) {
-      const readKey = `direct@${d}`;
-      if (!readings.has(readKey)) {
-        try {
-          const reading = await extract(buffer, d, { multiOrientation: false });
-          readings.set(readKey, { ...reading, rescaledTo: `direct (${d} delta)` });
-        } catch {}
-      }
-
-      const reading = readings.get(readKey);
-      if (reading && !isDegeneratePayload(reading.payloadBits)) {
-        if (await namesARelease(reading.payloadBits)) {
-          return reading;
-        }
-        const matches = bitsMatching(reading.payloadBits, ev.payloadBits);
-        if (matches >= MIN_BITS_WITHOUT_CRC && (!best || matches > best.matches)) {
-          best = { reading, matches };
-        }
-      }
+    // Pass 0: read at the upload's own size (no blur from upscaling).
+    for (const d of deltas) {
+      const reading = await readOnce(`direct@${d}`, async () => ({
+        ...(await extract(buffer, d, { multiOrientation: false })),
+        rescaledTo: `direct (${d} delta)`,
+      }));
+      if (await consider(reading, ev)) return reading;
     }
 
-    // Pass 1: standard alignment to candidate dimensions (fast non-rotating)
-    for (const d of [12, 14, 16]) {
-      const readKey = `${dims}@${d}`;
-      if (!readings.has(readKey)) {
-        try {
+    // Pass 1: scaled back to the released copy's size.
+    for (const d of [...new Set([...deltas, 16])]) {
+      const reading = await readOnce(`${dims}@${d}`, async () => {
+        const aligned = await sharp(buffer)
+          .resize(size.width, size.height, { fit: 'fill' })
+          .png()
+          .toBuffer();
+        return {
+          ...(await extract(aligned, d, { multiOrientation: false })),
+          rescaledTo: `${dims} px`,
+        };
+      });
+      if (await consider(reading, ev)) return reading;
+    }
+
+    // Pass 2: tone curve matched to this copy — undoes a camera's exposure and
+    // white balance. Tone matching is against one copy, so it is per copy.
+    if (tones) {
+      for (const d of deltas) {
+        const reading = await readOnce(`${dims}#${ev.id}@${d}`, async () => {
           const aligned = await sharp(buffer)
             .resize(size.width, size.height, { fit: 'fill' })
             .png()
             .toBuffer();
-          const reading = await extract(aligned, d, { multiOrientation: false });
-          readings.set(readKey, { ...reading, rescaledTo: `${dims} px` });
-        } catch {}
-      }
-
-      const reading = readings.get(readKey);
-      if (reading && !isDegeneratePayload(reading.payloadBits)) {
-        if (await namesARelease(reading.payloadBits)) {
-          return reading;
-        }
-        const matches = bitsMatching(reading.payloadBits, ev.payloadBits);
-        if (matches >= MIN_BITS_WITHOUT_CRC && (!best || matches > best.matches)) {
-          best = { reading, matches };
-        }
-      }
-    const copy = await readMarked(ev);
-    if (!copy) continue; // the released copy is gone; nothing to align to
-    const size = await sharp(copy).metadata();
-    if (!tones && size.width === leak.width && size.height === leak.height) continue;
-    const dims = `${size.width}x${size.height}`;
-    // Tone matching is against one particular copy, so it is decoded per copy.
-    const key = tones ? `${dims}#${ev.id}` : `${dims}@${ev.deltaUsed}`;
-    if (!readings.has(key)) {
-      let aligned = await sharp(buffer)
-        .resize(size.width, size.height, { fit: 'fill' })
-        .png()
-        .toBuffer();
-      if (tones) aligned = await matchTones(aligned, copy);
-      readings.set(key, { ...(await extract(aligned, ev.deltaUsed)), rescaledTo: `${dims} px` });
-    }
-
-    // Pass 2: tone-matched alignment (only when optical lens or tones explicitly active)
-    if (tones) {
-      for (const d of [12, 14]) {
-        const toneKey = `${dims}#tones@${d}`;
-        if (!readings.has(toneKey)) {
-          try {
-            const rawAligned = await sharp(buffer)
-              .resize(size.width, size.height, { fit: 'fill' })
-              .png()
-              .toBuffer();
-            const refBytes = await fs.readFile(ev.markedPath);
-            const toneAligned = await matchTones(rawAligned, refBytes);
-            const toneReading = await extract(toneAligned, d, { multiOrientation: false });
-            readings.set(toneKey, { ...toneReading, rescaledTo: `${dims} px (tones matched)` });
-          } catch {}
-        }
-
-        const toneReading = readings.get(toneKey);
-        if (toneReading && !isDegeneratePayload(toneReading.payloadBits)) {
-          if (await namesARelease(toneReading.payloadBits)) {
-            return toneReading;
-          }
-          const matches = bitsMatching(toneReading.payloadBits, ev.payloadBits);
-          if (matches >= MIN_BITS_WITHOUT_CRC && (!best || matches > best.matches)) {
-            best = { reading: toneReading, matches };
-          }
-        }
+          const toned = await matchTones(aligned, copy);
+          return {
+            ...(await extract(toned, d, { multiOrientation: false })),
+            rescaledTo: `${dims} px (tones matched)`,
+          };
+        });
+        if (await consider(reading, ev)) return reading;
       }
     }
 
-    // Pass 3 (Auto Keyboard Clipper): If uploaded frame is tall/portrait but candidate is landscape,
-    // test the upper 55% screen region (automatically slices off the laptop keyboard/touchpad).
-    const bufMeta = await sharp(buffer).metadata();
+    // Pass 3: a tall photo of a landscape page is often a laptop shot — read
+    // the upper 55% only, leaving the keyboard out.
     const isTall = (bufMeta.height || 0) > (bufMeta.width || 0) * 0.85;
     if (isTall && size.width > size.height) {
-      const screenH = Math.round(bufMeta.height * 0.55);
-      const topScreenKey = `${dims}#topScreen`;
-      if (!readings.has(topScreenKey)) {
-        try {
-          const topCrop = await sharp(buffer)
-            .extract({ left: 0, top: 0, width: bufMeta.width, height: screenH })
-            .resize(size.width, size.height, { fit: 'fill' })
-            .png()
-            .toBuffer();
-          const topReading = await extract(topCrop, 12, { multiOrientation: false });
-          readings.set(topScreenKey, { ...topReading, rescaledTo: `${dims} px (keyboard clipped)` });
-        } catch {}
-      }
-      const topReading = readings.get(topScreenKey);
-      if (topReading && !isDegeneratePayload(topReading.payloadBits)) {
-        if (await namesARelease(topReading.payloadBits)) {
-          return topReading;
-        }
-        const matches = bitsMatching(topReading.payloadBits, ev.payloadBits);
-        if (matches >= MIN_BITS_WITHOUT_CRC && (!best || matches > best.matches)) {
-          best = { reading: topReading, matches };
-        }
-      }
+      const reading = await readOnce(`${dims}#topScreen`, async () => {
+        const top = await sharp(buffer)
+          .extract({
+            left: 0,
+            top: 0,
+            width: bufMeta.width,
+            height: Math.round(bufMeta.height * 0.55),
+          })
+          .resize(size.width, size.height, { fit: 'fill' })
+          .png()
+          .toBuffer();
+        return {
+          ...(await extract(top, ev.deltaUsed || 12, { multiOrientation: false })),
+          rescaledTo: `${dims} px (keyboard clipped)`,
+        };
+      });
+      if (await consider(reading, ev)) return reading;
     }
   }
   return best?.reading ?? null;
@@ -454,15 +423,12 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
         eccCorrected: false,
       };
     } else {
-      marked = await extract(leak);
-      // If direct extract did not yield a verified release, attempt candidate-size
-      // alignment using BK-tree candidates OR recent releases.
-      if (!(await namesARelease(marked.payloadBits))) {
       marked = await extract(leak, env.watermarkDelta);
       // A leak that was scaled and left at the new size no longer lines up with
       // the grid the mark was embedded on. The hashes still find the document,
       // so scale the leak back to each candidate's released size and read again.
-      if (visualMatches(candidates).length && !(await namesARelease(marked.payloadBits))) {
+      // With no hash match, recent releases are tried instead (see above).
+      if (!(await namesARelease(marked.payloadBits))) {
         const rescaled = await extractAtCandidateSizes(leak, candidates, {
           tones: Boolean(lens?.applied),
         });
@@ -494,17 +460,23 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
                   if (alt.bitConfidence > lensExtract.bitConfidence) {
                     lensExtract = alt;
                   }
-                } catch {}
+                } catch {
+                  // this delta did not read; try the next
+                }
               }
               if (await namesARelease(lensExtract.payloadBits)) {
                 marked = lensExtract;
               } else {
-                const lensRescaled = await extractAtCandidateSizes(leak, candidates, { tones: true });
+                const lensRescaled = await extractAtCandidateSizes(leak, candidates, {
+                  tones: true,
+                });
                 if (lensRescaled) marked = lensRescaled;
                 else if (lensExtract) marked = lensExtract;
               }
             }
-          } catch {}
+          } catch {
+            // auto-lens found no screen; keep the reading already made
+          }
         }
       }
       // Still nothing: the page may be only part of the upload — a phone
