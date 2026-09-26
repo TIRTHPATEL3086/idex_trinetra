@@ -422,12 +422,12 @@ export default function Decrypt() {
                         .map((u) => (
                           <div
                             key={u.userId}
-                            className="flex items-center gap-2 rounded-xl bg-white border border-line p-2 text-xs"
+                            className="flex flex-col gap-1.5 rounded-xl border border-line bg-white p-2 text-xs sm:flex-row sm:items-center sm:gap-2"
                           >
-                            <span className="font-bold text-ink w-32 truncate">{u.name}</span>
+                            <span className="truncate font-bold text-ink sm:w-32 sm:shrink-0">{u.name}</span>
                             <input
                               type="text"
-                              className="input h-8 text-xs font-mono flex-1"
+                              className="input h-8 w-full min-w-0 flex-1 font-mono text-xs"
                               placeholder={`Custom secret for ${u.name}`}
                               value={individualPassphrases[u.userId] || ''}
                               onChange={(e) => setOfficerIndivPass(u.userId, e.target.value)}

@@ -71,10 +71,10 @@ export default function Inspect() {
       {error && <Notice tone="error">{error}</Notice>}
 
       <div className="flex flex-wrap items-end gap-3">
-        <label className="block">
+        <label className="block w-full sm:w-auto">
           <span className="eyebrow mb-2 block">Document</span>
           <Select
-            className="w-72"
+            className="w-full sm:w-72"
             ariaLabel="Document"
             value={assetId}
             onChange={setAssetId}

@@ -314,7 +314,7 @@ function UploadModal({ initialFile, onClose, onDone }) {
       <form
         onClick={(e) => e.stopPropagation()}
         onSubmit={submit}
-        className="w-full max-w-md space-y-4 rounded-3xl bg-white p-6 shadow-panel"
+        className="max-h-[calc(100dvh-2rem)] w-full max-w-md space-y-4 overflow-y-auto rounded-3xl bg-white p-5 shadow-panel sm:p-6"
       >
         <div className="flex items-center justify-between">
           <h3 className="font-display text-xl font-extrabold text-ink">Upload a document</h3>
@@ -369,7 +369,7 @@ function UploadModal({ initialFile, onClose, onDone }) {
         {/* Authorized Recipients Picker */}
         {availableUsers.length > 0 && (
           <div>
-            <div className="flex items-center justify-between mb-1.5">
+            <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
               <span className="text-xs font-bold uppercase tracking-wide text-ink-faint">
                 Authorized Recipients (ML-KEM-768)
               </span>
@@ -385,7 +385,7 @@ function UploadModal({ initialFile, onClose, onDone }) {
                     key={u.userId}
                     className="flex items-center justify-between gap-2 text-xs text-ink cursor-pointer hover:bg-white/60 p-1 rounded-lg"
                   >
-                    <span className="flex items-center gap-2">
+                    <span className="flex min-w-0 items-start gap-2">
                       <input
                         type="checkbox"
                         checked={checked}
@@ -394,12 +394,19 @@ function UploadModal({ initialFile, onClose, onDone }) {
                             checked ? prev.filter((id) => id !== u.userId) : [...prev, u.userId]
                           );
                         }}
-                        className="rounded text-accent-deep focus:ring-accent"
+                        className="mt-0.5 shrink-0 rounded text-accent-deep focus:ring-accent"
                       />
-                      <span className="font-semibold">{u.name}</span>
-                      <span className="text-ink-muted">· {u.dept}</span>
+                      <span className="min-w-0">
+                        <span className="font-semibold">{u.name}</span>
+                        <span className="block text-ink-muted sm:ml-1 sm:inline">
+                          <span className="hidden sm:inline">· </span>
+                          {u.dept}
+                        </span>
+                      </span>
                     </span>
-                    <span className="pill !text-[10px] !py-0.5">{u.role}</span>
+                    <span className="pill hidden shrink-0 !py-0.5 !text-[10px] min-[400px]:inline-flex">
+                      {u.role}
+                    </span>
                   </label>
                 );
               })}
@@ -524,8 +531,10 @@ function DocumentList({ assets, user, classificationFilter, setClassificationFil
       <ul className={`space-y-3 ${showPassphrase ? 'xl:hidden' : 'md:hidden'}`}>
         {assets.map((a) => (
           <li key={a.assetId} className="card p-4 space-y-2">
-            <div className="flex items-start justify-between gap-2">
-              <div className="font-bold text-ink text-sm">{a.title}</div>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="min-w-[8rem] flex-1 break-words text-sm font-bold text-ink">
+                {a.title}
+              </div>
               <ClassificationBadge value={a.classification} />
             </div>
             <div className="text-xs text-ink-muted">
