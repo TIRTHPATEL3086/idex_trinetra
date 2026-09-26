@@ -68,9 +68,6 @@ const DecryptBody = z.object({
   passphrase: z.string().optional(),
   clientSignature: z.string().optional(),
   challengeId: z.string().optional(),
-  securityAnswer: z.string().optional(),
-  newSecurityQuestion: z.string().optional(),
-  newSecurityAnswer: z.string().optional(),
 });
 
 /**
@@ -130,9 +127,6 @@ export async function executeDecryption({
   passphrase,
   clientSignature,
   challengeId,
-  securityAnswer,
-  newSecurityQuestion,
-  newSecurityAnswer,
   callerRole = 'OFFICER',
 }) {
   const startedAt = Date.now();
@@ -175,50 +169,10 @@ export async function executeDecryption({
     if (!cleared) {
       throw forbidden(
         allotted
-          ? 'Decryption failed: the passphrase does not match your allotted document secret, account password, or Smart Card PIN.'
-          : 'Decryption failed: incorrect account password or Smart Card PIN.',
+          ? 'Decryption failed: the passphrase does not match your allotted document secret or account password.'
+          : 'Decryption failed: incorrect account password.',
         { reason: 'INVALID_PASSPHRASE' }
       );
-    }
-
-    // --- 2b. Zero-Trust Anti-Impersonation Challenge (Officer 1 vs Officer 2) ---
-    // If an unauthorized colleague (e.g. Officer 2) accesses Officer 1's laptop,
-    // they cannot decrypt without knowing the officer's exact case & space sensitive answer.
-    const answerToSet = newSecurityAnswer || (newSecurityQuestion ? securityAnswer : null);
-    const questionToSet = newSecurityQuestion?.trim();
-
-    if (!user.securityQuestion) {
-      if (questionToSet && answerToSet) {
-        await prisma.user.update({
-          where: { id: user.id },
-          data: {
-            securityQuestion: questionToSet,
-            securityAnswer: answerToSet, // Preserves exact case, spacing, and characters verbatim
-          },
-        });
-        user.securityQuestion = questionToSet;
-        user.securityAnswer = answerToSet;
-      } else {
-        throw forbidden(
-          'First-time terminal setup required: Please configure your secret security question before decrypting classified documents.',
-          { reason: 'NEED_SECURITY_SETUP' }
-        );
-      }
-    } else {
-      if (securityAnswer === undefined || securityAnswer === null || securityAnswer === '') {
-        throw forbidden(
-          `Security Challenge Required: Please provide the exact answer to your secret question: "${user.securityQuestion}"`,
-          { reason: 'NEED_SECURITY_ANSWER', question: user.securityQuestion }
-        );
-      }
-
-      // Exact case-sensitive and spacing verification
-      if (securityAnswer !== user.securityAnswer) {
-        throw forbidden(
-          'Security Challenge Failed: Incorrect answer. Must match exact capitalization and spaces as originally set.',
-          { reason: 'INVALID_SECURITY_ANSWER' }
-        );
-      }
     }
   }
 
@@ -415,9 +369,6 @@ router.post('/', guard, validate(DecryptBody), async (req, res, next) => {
       passphrase,
       clientSignature,
       challengeId,
-      securityAnswer,
-      newSecurityQuestion,
-      newSecurityAnswer,
     } = req.valid;
     const targetUserId = req.valid.userId ?? req.user.id;
 
@@ -436,9 +387,6 @@ router.post('/', guard, validate(DecryptBody), async (req, res, next) => {
       passphrase,
       clientSignature,
       challengeId,
-      securityAnswer,
-      newSecurityQuestion,
-      newSecurityAnswer,
       callerRole: req.user.role,
     });
 

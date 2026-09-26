@@ -3,10 +3,11 @@ import { getAssets, getAudit, toggleUserActive, shortHash } from '../lib/api.js'
 import { Header, Notice } from './Assets.jsx';
 import { BanIcon, ExternalLinkIcon, UnlockIcon, WarningIcon } from '../components/icons.jsx';
 import Select from '../components/Select.jsx';
+import { useAuth } from '../lib/auth.jsx';
 
 /**
  * Per-asset audit trail: who opened a document, when, from which device,
- * automated forensic anomaly detection (burst, off-hours, device anomaly),
+ * automated anomaly flags (off-hours in office time, unverified device),
  * and zero-trust revocation controls.
  */
 export default function Timeline() {
@@ -15,6 +16,9 @@ export default function Timeline() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [actionNotice, setActionNotice] = useState(null);
+  // Only an administrator may freeze an account; the server refuses anyone else.
+  const { can, user } = useAuth();
+  const canFreeze = can('users:write');
 
   const reloadTimeline = useCallback(() => {
     if (!assetId) return;
@@ -114,14 +118,14 @@ export default function Timeline() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    <div className="text-right text-xs text-ink-muted font-mono">
+                  <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:justify-end sm:gap-3">
+                    <div className="font-mono text-xs text-ink-muted sm:text-right">
                       {new Date(e.at).toLocaleString()}
                     </div>
-                    {e.userId && (
+                    {canFreeze && e.userId && e.userId !== user?.userId && (
                       <button
                         onClick={() => handleToggle(e.userId)}
-                        className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                        className={`whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
                           e.userActive === false
                             ? 'bg-line text-ink hover:bg-line'
                             : 'bg-danger-tint border border-danger-bright text-danger-deep hover:bg-danger-tint'
