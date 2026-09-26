@@ -1,6 +1,5 @@
 {
   "source": "attack-suite",
-  "generatedAt": "2026-09-25T20:40:23.504Z",
   "generatedAt": "2026-09-25T09:33:01.947Z",
   "attacks": [
     {
@@ -63,8 +62,6 @@
   "psnrCurve": [
     {
       "delta": 4,
-      "psnrDb": 57.60798333279559,
-      "bitsRecovered": 43
       "psnrDb": 54.21979776726178,
       "bitsRecovered": 48
     },

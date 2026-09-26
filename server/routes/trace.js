@@ -381,7 +381,15 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
 
     let leak = buffer;
     let lens = null;
-    if (wantsLens) {
+    // Corners placed by hand are always used. Without them the lens is a guess,
+    // and a clean digital copy it crops can lose its mark — so a file whose
+    // mark already reads as uploaded is taken as it is.
+    const handCorners = Boolean(String(req.body?.corners ?? '').trim());
+    const readsAsIs =
+      wantsLens &&
+      !handCorners &&
+      (await namesARelease((await extract(buffer, env.watermarkDelta)).payloadBits));
+    if (wantsLens && !readsAsIs) {
       lens = await applyLens(buffer, req.body?.corners);
       if (lens.applied) leak = lens.buffer;
     }
