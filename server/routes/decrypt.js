@@ -279,9 +279,12 @@ export async function executeDecryption({
     marked.buffer = await embedFragile(marked.buffer, receiptIdHex);
     marked.psnrDb = await computePsnr(plaintext, marked.buffer);
   } else {
-    // A PDF is measured by drawing its pages, original against marked. A
-    // measurement that fails leaves the release unmeasured, never blocked.
-    marked.psnrDb = await pdfPsnr(plaintext, marked.buffer).catch(() => null);
+    // A PDF whose pages were marked comes back measured, page image against
+    // page as drawn. Otherwise its pages are drawn, original against marked.
+    // A measurement that fails leaves the release unmeasured, never blocked.
+    if (!Number.isFinite(marked.psnrDb)) {
+      marked.psnrDb = await pdfPsnr(plaintext, marked.buffer).catch(() => null);
+    }
   }
 
   // --- 9. Perceptual hashes ------------------------------------------------

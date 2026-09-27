@@ -99,6 +99,45 @@ export async function pdfPsnr(originalPdf, markedPdf) {
 }
 
 /**
+ * The first pages of a PDF as pictures, the document opened once. Drawn
+ * upright, whatever /Rotate a page carries, so each picture lines up with the
+ * page's own coordinates — the frame a watermarked page image is laid in.
+ *
+ * @param {Buffer} pdfBuffer
+ * @param {{ maxPages?: number, dpi?: number }} [opts]
+ * @returns {Promise<Array<{ png:Buffer, page:number, width:number, height:number }>>}
+ */
+export async function renderPdfPages(pdfBuffer, { maxPages = Infinity, dpi = DPI } = {}) {
+  const lib = await loadPdfjs();
+  const { createCanvas } = require('@napi-rs/canvas');
+  const task = lib.getDocument({
+    data: new Uint8Array(pdfBuffer),
+    standardFontDataUrl: FONT_DIR,
+    verbosity: 0,
+    isEvalSupported: false,
+  });
+  try {
+    const doc = await task.promise;
+    const pages = [];
+    for (let n = 1; n <= Math.min(doc.numPages, maxPages); n++) {
+      await breathe();
+      const page = await doc.getPage(n);
+      const vp = page.getViewport({ scale: dpi / 72, rotation: 0 });
+      const canvas = createCanvas(Math.round(vp.width), Math.round(vp.height));
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff'; // paper, not transparency
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({ canvasContext: ctx, viewport: vp, canvas }).promise;
+      const png = await sharp(canvas.toBuffer('image/png')).removeAlpha().png().toBuffer();
+      pages.push({ png, page: n, width: canvas.width, height: canvas.height });
+    }
+    return pages;
+  } finally {
+    await task.destroy();
+  }
+}
+
+/**
  * @param {Buffer} pdfBuffer
  * @param {number} pageNo  1-based; clamped to the document
  * @returns {Promise<{ png:Buffer, page:number, pageCount:number }>}

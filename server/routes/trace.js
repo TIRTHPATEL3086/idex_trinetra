@@ -10,6 +10,9 @@ import { requireCap } from '../middleware/auth.js';
 import * as chain from '../core/chain.js';
 import * as bktree from '../core/bktree.js';
 import { hashes, extract, score, sha256, hamming, isPdf, extractPdf } from '../core/index.js';
+import { hasPageMark } from '../core/pdf.js';
+import { renderPdfPages } from '../core/pdfpreview.js';
+import { PAGE_MARK, pageMarkView } from '../core/pagemark.js';
 import {
   parsePayload,
   bitAgreement,
@@ -43,11 +46,22 @@ const router = Router();
 /**
  * Bits that must agree before a reading without a valid CRC may name a release.
  * Chance agreement is 24/48; the watermark attack suite's genuine survivals
- * land at 43-48. At 30, comparing a blank or unrelated image against the ~50
- * recent releases routinely found one at 31 by luck and named its recipient.
- * 40/48 happens by chance about once in a million comparisons.
+ * land at 43-48, and simulated phone photos of a released image at 37-40. At
+ * 30, a photo of a document nobody here released was read at 30-32 against
+ * a recent release and its recipient named — a trace compares one upload
+ * with many copies many ways, so the best of those comparisons is well above
+ * 24 by chance alone. 36/48 happens by chance about 3 times in 10,000
+ * comparisons; the lead over other officers (MIN_LEAD_BITS) does the rest.
  */
-const MIN_BITS_WITHOUT_CRC = 30;
+const MIN_BITS_WITHOUT_CRC = 36;
+
+/**
+ * How far a reading without a valid CRC must agree better with the named
+ * officer's copy than with any other officer's. A genuine mark leads by far
+ * (a photo read at 37 agrees with other officers' copies at about 24); a
+ * lucky reading barely leads at all.
+ */
+const MIN_LEAD_BITS = 4;
 
 /**
  * Whether bits name a real release: a valid CRC alone is not enough, because
@@ -101,37 +115,67 @@ function evidenceDigest(evidence) {
 /** Candidates the pHash search itself matched — a genuine visual resemblance. */
 const visualMatches = (candidates) => candidates.filter((c) => c.pHashDist != null);
 
-/** Only image releases can be aligned to a photo or screenshot. */
-const IMAGE_RELEASE = { asset: { mimeType: { startsWith: 'image/' } } };
+/**
+ * Releases a photo or screenshot can be aligned to: images, and PDFs — whose
+ * pages carry the mark in their pixels (older PDF releases, marked in their
+ * metadata only, are passed over when their copy is read).
+ */
+const TRACEABLE_RELEASE = {
+  OR: [
+    { asset: { mimeType: { startsWith: 'image/' } } },
+    { asset: { mimeType: 'application/pdf' } },
+  ],
+};
+
+/** Pages of a released PDF a photo is compared with; a photo is nearly always of an early page. */
+const TRACE_PDF_PAGES = 3;
 
 /**
- * A released copy as a picture the upload can be aligned to, with its size —
- * or null when it is gone or is not one: a PDF, or a file sharp cannot decode
- * (cut short, or stale on the server's disk). Such a copy is skipped, the same
- * as a missing one, instead of failing the whole trace.
+ * A released copy as the pictures an upload can be aligned to, each with its
+ * size: the image itself, or the first pages of a PDF whose pages are marked.
+ * Empty when there is none — the copy is gone, a PDF marked in its metadata
+ * only, or a file sharp cannot decode (cut short, or stale on the server's
+ * disk). Such a copy is skipped, the same as a missing one, instead of failing
+ * the whole trace.
  */
-async function readImageCopy(ev) {
+async function readReleaseViews(ev) {
   const copy = await readMarked(ev).catch(() => null);
-  if (!copy || isPdf(copy)) return null;
+  if (!copy) return [];
   try {
+    if (isPdf(copy)) {
+      if (!(await hasPageMark(copy))) return [];
+      // Each page drawn as it was marked, then shrunk to the scale the mark
+      // lives at: a photo of the page is aligned to that and read there.
+      const pages = await renderPdfPages(copy, {
+        maxPages: TRACE_PDF_PAGES,
+        dpi: PAGE_MARK.dpi,
+      });
+      const views = [];
+      for (const p of pages) {
+        const buffer = await pageMarkView(p.png);
+        const { width, height } = await sharp(buffer).metadata();
+        views.push({ buffer, width, height, page: p.page });
+      }
+      return views;
+    }
     const { width, height } = await sharp(copy).metadata();
-    return width && height ? { buffer: copy, width, height } : null;
+    return width && height ? [{ buffer: copy, width, height, page: null }] : [];
   } catch (err) {
-    console.warn(`[trace] released copy of event ${ev.id} is not a readable image:`, err.message);
-    return null;
+    console.warn(`[trace] released copy of event ${ev.id} could not be read:`, err.message);
+    return [];
   }
 }
 
 /**
  * One trace looks at the same released copies several times (rescaled reads,
  * with and without the lens, capture recovery). Each copy is fetched from
- * storage and checked once per trace and shared.
+ * storage, checked and (for a PDF) drawn once per trace and shared.
  */
 function traceCache() {
   const copies = new Map();
   return {
-    copy: (ev) => {
-      if (!copies.has(ev.id)) copies.set(ev.id, readImageCopy(ev));
+    views: (ev) => {
+      if (!copies.has(ev.id)) copies.set(ev.id, readReleaseViews(ev));
       return copies.get(ev.id);
     },
   };
@@ -169,7 +213,7 @@ async function extractAtCandidateSizes(
   let matchedIds = visualMatches(candidates).map((c) => c.id);
   if (!matchedIds.length) {
     const recent = await prisma.decryptionEvent.findMany({
-      where: IMAGE_RELEASE,
+      where: TRACEABLE_RELEASE,
       orderBy: { createdAt: 'desc' },
       take: 25,
       select: { id: true },
@@ -178,7 +222,7 @@ async function extractAtCandidateSizes(
   }
 
   const events = await prisma.decryptionEvent.findMany({
-    where: { id: { in: matchedIds }, ...IMAGE_RELEASE },
+    where: { id: { in: matchedIds }, ...TRACEABLE_RELEASE },
     orderBy: { createdAt: 'desc' },
     take: 25,
     select: { id: true, markedPath: true, payloadBits: true, deltaUsed: true },
@@ -206,13 +250,13 @@ async function extractAtCandidateSizes(
     return scaled.get(key);
   };
   const toned = new Map();
-  const tonedTo = (ev, copy, w, h) => {
-    if (!toned.has(ev.id))
+  const tonedTo = (key, copy, w, h) => {
+    if (!toned.has(key))
       toned.set(
-        ev.id,
+        key,
         scaledTo(w, h).then((img) => matchTones(img, copy))
       );
-    return toned.get(ev.id);
+    return toned.get(key);
   };
 
   const consider = async (reading, ev) => {
@@ -235,10 +279,12 @@ async function extractAtCandidateSizes(
     return readings.get(key);
   };
 
-  for (const ev of events) {
-    const copy = await cache.copy(ev);
-    // Gone, a PDF, or unreadable: not a picture the upload could be aligned to.
-    if (!copy) continue;
+  // Each picture of each copy: the image, or a page of a PDF. None when the
+  // copy is gone or unreadable — nothing the upload could be aligned to.
+  const views = [];
+  for (const ev of events) for (const view of await cache.views(ev)) views.push({ ev, view });
+
+  for (const { ev, view: copy } of views) {
     const size = { width: copy.width, height: copy.height };
     const dims = `${size.width}x${size.height}`;
     const deltas = [...new Set([ev.deltaUsed, 12, 14].filter(Boolean))];
@@ -268,8 +314,13 @@ async function extractAtCandidateSizes(
     // white balance. Tone matching is against one copy, so it is per copy.
     if (tones) {
       for (const d of deltas) {
-        const reading = await readOnce(`${dims}#${ev.id}@${d}`, async () => {
-          const tonedImg = await tonedTo(ev, copy.buffer, size.width, size.height);
+        const reading = await readOnce(`${dims}#${ev.id}.${copy.page}@${d}`, async () => {
+          const tonedImg = await tonedTo(
+            `${ev.id}.${copy.page}`,
+            copy.buffer,
+            size.width,
+            size.height
+          );
           return {
             ...(await extract(tonedImg, d, { multiOrientation: false })),
             rescaledTo: `${dims} px (tones matched)`,
@@ -314,7 +365,7 @@ const CAPTURE_CANDIDATES = 12;
 
 async function recoverCapture(buffer, candidates, cache = traceCache()) {
   const recent = await prisma.decryptionEvent.findMany({
-    where: IMAGE_RELEASE,
+    where: TRACEABLE_RELEASE,
     orderBy: { createdAt: 'desc' },
     take: CAPTURE_CANDIDATES,
     select: { id: true },
@@ -322,30 +373,34 @@ async function recoverCapture(buffer, candidates, cache = traceCache()) {
   const ids = [
     ...new Set([...visualMatches(candidates).map((c) => c.id), ...recent.map((e) => e.id)]),
   ];
-  // Image releases only, so a matched PDF never takes one of the places.
   const events = await prisma.decryptionEvent.findMany({
-    where: { id: { in: ids }, ...IMAGE_RELEASE },
+    where: { id: { in: ids }, ...TRACEABLE_RELEASE },
     select: { id: true, markedPath: true, payloadBits: true, deltaUsed: true },
   });
+  // One place per picture — an image, or a page of a PDF — keyed by its
+  // position, since the pages of one PDF share a release.
   const releases = [];
   for (const id of ids) {
-    if (releases.length >= CAPTURE_CANDIDATES) break;
     const ev = events.find((e) => e.id === id);
-    const copy = ev && (await cache.copy(ev));
-    if (copy)
+    for (const view of ev ? await cache.views(ev) : []) {
+      if (releases.length >= CAPTURE_CANDIDATES) break;
       releases.push({
-        id: ev.id,
+        id: releases.length,
+        eventId: ev.id,
+        page: view.page,
         payloadBits: ev.payloadBits,
         deltaUsed: ev.deltaUsed,
-        buffer: copy.buffer,
+        buffer: view.buffer,
       });
+    }
+    if (releases.length >= CAPTURE_CANDIDATES) break;
   }
   if (!releases.length) return null;
   const found = await recoverFromCapture(buffer, releases, { minBits: MIN_BITS_WITHOUT_CRC });
   if (!found) return null;
   // How alike the captured region and the same region of the release look —
   // the visual evidence, measured on the part of the page actually captured.
-  const rel = releases.find((r) => r.id === found.releaseId);
+  const rel = releases[found.releaseId];
   const v = found.visible;
   const region = { left: v.x0, top: v.y0, width: v.x1 - v.x0, height: v.y1 - v.y0 };
   const [seen, ref] = await Promise.all([
@@ -354,6 +409,8 @@ async function recoverCapture(buffer, candidates, cache = traceCache()) {
   ]);
   return {
     ...found,
+    releaseId: rel.eventId,
+    page: rel.page,
     dists: {
       pHashDist: hamming(seen.pHash, ref.pHash),
       dHashDist: hamming(seen.dHash, ref.dHash),
@@ -632,11 +689,10 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
       const isDegenerate = isDegeneratePayload(marked.payloadBits);
 
       // Distinguishing BETWEEN recipients of the SAME broadcast document requires
-      // statistical watermark significance (at least MIN_BITS_WITHOUT_CRC = 30 bits,
-      // i.e. > 62% bit agreement) and a clear lead over runner-up suspects.
-      // Margin >= 2 (or margin >= 1 if matches >= 32) prevents arbitrary accusations or ties.
-      const minThreshold = margin >= 2 ? MIN_BITS_WITHOUT_CRC : 32;
-      if (!isDegenerate && top.matches >= minThreshold && margin >= 1) {
+      // statistical watermark significance (MIN_BITS_WITHOUT_CRC) and a clear
+      // lead over every other officer (MIN_LEAD_BITS) — a wrong name is the
+      // expensive failure.
+      if (!isDegenerate && top.matches >= MIN_BITS_WITHOUT_CRC && margin >= MIN_LEAD_BITS) {
         event = top.event;
       }
     }
@@ -771,7 +827,7 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
             'This release predates the fragile layer, so its contents cannot be checked for edits.',
         };
       } else {
-        const copy = await cache.copy(event);
+        const [copy] = await cache.views(event);
         const released = copy ? { width: copy.width, height: copy.height } : null;
         tamper = await verifyFragile(buffer, bufferToHex(event.receiptId), released);
       }
@@ -785,7 +841,7 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
     }
     if (capture && event?.id === capture.releaseId) {
       reasons.push(
-        `${capture.method === 'quad' ? 'Photo of a screen' : 'Screenshot or crop'} recognised: the released page was found inside the upload at ${Math.round(capture.fit.scale * 100)}% scale, ${Math.round(capture.visibleShare * 100)}% of it in view, and the mark read from that part alone.`
+        `${capture.method === 'quad' ? 'Photo of a screen' : 'Screenshot or crop'} recognised: ${capture.page ? `page ${capture.page} of the released PDF` : 'the released page'} was found inside the upload at ${Math.round(capture.fit.scale * 100)}% scale, ${Math.round(capture.visibleShare * 100)}% of it in view, and the mark read from that part alone.`
       );
     }
     if (lens?.applied) {
