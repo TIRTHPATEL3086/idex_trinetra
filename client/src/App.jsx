@@ -148,7 +148,6 @@ function Shell() {
 
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             <NetworkStatus network={health?.network} />
-            <WalletButton />
             <AccountMenu user={user} />
           </div>
         </header>
@@ -476,68 +475,6 @@ function AccountMenu({ user }) {
   );
 }
 
-/* ------------------------------------------------------------- wallet ----- */
-
-const short = (a) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '');
-
-/**
- * MetaMask connect via window.ethereum. Once connected it shows only the
- * account, as a status — no details panel. With no wallet installed it
- * points to MetaMask's download page.
- */
-function WalletButton() {
-  const [account, setAccount] = useState(null);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    const eth = window.ethereum;
-    if (!eth) return;
-    eth
-      .request({ method: 'eth_accounts' })
-      .then((a) => a?.[0] && setAccount(a[0]))
-      .catch(() => {});
-    const onAccountsChange = (a) => setAccount(a?.[0] ?? null);
-    eth.on?.('accountsChanged', onAccountsChange);
-    return () => eth.removeListener?.('accountsChanged', onAccountsChange);
-  }, []);
-
-  async function connect() {
-    const eth = window.ethereum;
-    if (!eth) {
-      window.open('https://metamask.io/download/', '_blank', 'noopener');
-      return;
-    }
-    setBusy(true);
-    try {
-      const a = await eth.request({ method: 'eth_requestAccounts' });
-      setAccount(a?.[0] ?? null);
-    } catch {
-      /* the user declined — stay disconnected */
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (account) {
-    return (
-      <span
-        title="MetaMask connected"
-        className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-3 py-1.5 text-xs font-bold text-ink"
-      >
-        <span className="h-2 w-2 rounded-full bg-attributed" />
-        <span className="mono">{short(account)}</span>
-      </span>
-    );
-  }
-
-  return (
-    <button type="button" onClick={connect} className="btn-dark !px-4" disabled={busy}>
-      <WalletIcon />
-      <span className="hidden sm:inline">{busy ? 'Connecting…' : 'Connect'}</span>
-    </button>
-  );
-}
-
 /* ----------------------------------------------------- notifications ------ */
 
 /* ----------------------------------------------------------------- icons -- */
@@ -647,23 +584,6 @@ function ShieldIcon(p) {
       <path d="M12 3 4 7v5c0 4.4 3.3 8.5 8 9.5 4.7-1 8-5.1 8-9.5V7l-8-4Z" {...S} />
       <path d="m9 12 2 2 4-4" {...S} />
     </NavIcon>
-  );
-}
-function WalletIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M3 7h15a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      />
-      <path
-        d="M3 7V6a2 2 0 0 1 2-2h11M16 13h2"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-    </svg>
   );
 }
 function MenuIcon() {
