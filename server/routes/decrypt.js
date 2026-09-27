@@ -24,7 +24,7 @@ import { validate } from '../middleware/validate.js';
 import { verifyPassword } from '../lib/auth.js';
 import { encapsulateFor, recoverContentKey, userKeys } from '../lib/keyring.js';
 import { embedFragile } from '../core/fragile.js';
-import { renderPdfPage } from '../core/pdfpreview.js';
+import { renderPdfPage, pdfPsnr } from '../core/pdfpreview.js';
 import { psnr as computePsnr } from '../core/psnr.js';
 import { requireAuth, requireAnyCap, forbidden } from '../middleware/auth.js';
 import { can } from '../lib/permissions.js';
@@ -278,6 +278,10 @@ export async function executeDecryption({
   if (fragileLayer) {
     marked.buffer = await embedFragile(marked.buffer, receiptIdHex);
     marked.psnrDb = await computePsnr(plaintext, marked.buffer);
+  } else {
+    // A PDF is measured by drawing its pages, original against marked. A
+    // measurement that fails leaves the release unmeasured, never blocked.
+    marked.psnrDb = await pdfPsnr(plaintext, marked.buffer).catch(() => null);
   }
 
   // --- 9. Perceptual hashes ------------------------------------------------
@@ -362,14 +366,7 @@ export async function executeDecryption({
 // ──────────────────────────────── POST /api/decrypt ────────────────────────
 router.post('/', guard, validate(DecryptBody), async (req, res, next) => {
   try {
-    const {
-      assetId,
-      deviceLabel,
-      delta,
-      passphrase,
-      clientSignature,
-      challengeId,
-    } = req.valid;
+    const { assetId, deviceLabel, delta, passphrase, clientSignature, challengeId } = req.valid;
     const targetUserId = req.valid.userId ?? req.user.id;
 
     if (!can(req.user.role, 'decrypt:any') && targetUserId !== req.user.id) {
