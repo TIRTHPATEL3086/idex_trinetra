@@ -420,3 +420,72 @@ h3 {
     transition: none;
   }
 }
+
+/* -- landing: directional reveals ----------------------------------------- */
+
+.reveal.reveal--left {
+  transform: translateX(-28px);
+}
+.reveal.reveal--scale {
+  transform: translateY(18px) scale(0.94);
+}
+.reveal.reveal--left.is-visible,
+.reveal.reveal--scale.is-visible {
+  transform: none;
+}
+
+/* -- landing: one document fanning out into personal copies --------------- */
+
+.copy-fan {
+  transform: translate(-50%, -50%) rotate(0deg) scale(0.9);
+  transition: transform 1.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.is-visible .copy-fan--a {
+  transform: translate(-104%, -118%) rotate(-8deg);
+  transition-delay: 0.25s;
+}
+.is-visible .copy-fan--b {
+  transform: translate(26%, -106%) rotate(7deg);
+  transition-delay: 0.4s;
+}
+.is-visible .copy-fan--c {
+  transform: translate(-50%, 12%) rotate(-3deg);
+  transition-delay: 0.55s;
+}
+@keyframes copy-core-float {
+  0%,
+  100% {
+    transform: translate(-50%, -50%);
+  }
+  50% {
+    transform: translate(-50%, calc(-50% - 10px));
+  }
+}
+.copy-core {
+  animation: copy-core-float 7s ease-in-out infinite;
+}
+.copy-verdict {
+  opacity: 0;
+  transform: translateY(16px);
+  transition:
+    opacity 0.9s ease 1.3s,
+    transform 0.9s cubic-bezier(0.16, 1, 0.3, 1) 1.3s;
+}
+.is-visible .copy-verdict {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal.reveal--left,
+  .reveal.reveal--scale {
+    transform: none;
+  }
+  .copy-fan,
+  .copy-verdict {
+    transition: none;
+  }
+  .copy-core {
+    animation: none;
+  }
+}
