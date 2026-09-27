@@ -33,10 +33,6 @@ export default {
         // sticker chips, the accent cards, the multicolour rows.
         chromia,
 
-        // The IDEX Trinetra logo's own navy and blue — the tile behind the
-        // mark, and the X of the wordmark.
-        brand: { navy: '#070b16', blue: '#1f6bff', sky: '#5ab8ff' },
-
         // Accent — purple is the identity's lead colour.
         accent: {
           DEFAULT: chromia.purple[500],

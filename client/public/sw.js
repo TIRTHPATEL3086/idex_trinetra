@@ -3,7 +3,7 @@
  * Enables 100% air-gapped, zero-internet offline PWA capability on mobile and desktop.
  */
 
-const CACHE_NAME = 'idex-trinetra-v2';
+const CACHE_NAME = 'idex-trinetra-v3';
 
 const STATIC_PRECACHE = [
   '/',
@@ -11,7 +11,8 @@ const STATIC_PRECACHE = [
   '/manifest.json',
   '/favicon-32.png',
   '/apple-touch-icon.png',
-  '/logo-mark-transparent.png',
+  '/logo-mark.png',
+  '/logo-mark-dark.png',
   '/icon-512.png'
 ];
 

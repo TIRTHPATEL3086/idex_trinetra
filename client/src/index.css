@@ -58,14 +58,14 @@ h3 {
 }
 
 /* The IDEX Trinetra wordmark, after the logo: IDEX wide and heavy with the
-   X in the mark's blue, TRINETRA small and spaced out beneath it. */
+   X in the accent purple, TRINETRA small and spaced out beneath it. */
 .brand-idex {
   font-family: 'Orbitron Variable', Inter, sans-serif;
   font-weight: 800;
   letter-spacing: 0.05em;
 }
 .brand-x {
-  background-image: linear-gradient(135deg, #1f6bff 0%, #5ab8ff 100%);
+  background-image: linear-gradient(135deg, #9e5ecf 0%, #cc91f0 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
