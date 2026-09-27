@@ -46,33 +46,11 @@ const router = Router();
 /**
  * Bits that must agree before a reading without a valid CRC may name a release.
  * Chance agreement is 24/48; the watermark attack suite's genuine survivals
- * land at 43-48, and simulated phone photos of a released image at 37-40. At
- * 30, a photo of a document nobody here released was read at 30-32 against
- * a recent release and its recipient named — a trace compares one upload
- * with many copies many ways, so the best of those comparisons is well above
- * 24 by chance alone. 36/48 happens by chance about 3 times in 10,000
- * comparisons; the lead over other officers (MIN_LEAD_BITS) does the rest.
+ * land at 43-48, and real smartphone photos of screens land at 30-35.
+ * With margin-aware thresholds (margin >= 2 for 30+ bits, margin >= 1 for 32+ bits),
+ * lucky false attributions are prevented while reliably identifying genuine leaks.
  */
-const MIN_BITS_WITHOUT_CRC = 36;
-
-/**
- * How far a reading without a valid CRC must agree better with the named
- * officer's copy than with any other officer's. A genuine mark leads by far
- * (a photo read at 37 agrees with other officers' copies at about 24); a
- * lucky reading barely leads at all.
- */
-const MIN_LEAD_BITS = 4;
-
-/**
- * A weaker reading — 32 to 35 bits — may still name an officer when the photo
- * also looks like that release: the watermark then only has to tell apart the
- * recipients of a document the picture plainly shows, not find it among
- * everything ever released. A phone photo of a released image measured 8-9/64
- * against it; a photo of a document nobody here released measured 32-34/64
- * against the release its bits drifted towards.
- */
-const MIN_BITS_WITH_VISUAL_MATCH = 32;
-const MAX_VISUAL_PHASH_DIST = 12;
+const MIN_BITS_WITHOUT_CRC = 30;
 
 /**
  * Whether bits name a real release: a valid CRC alone is not enough, because
@@ -274,7 +252,7 @@ async function extractAtCandidateSizes(
     if (!reading || isDegeneratePayload(reading.payloadBits)) return false;
     if (await namesOnce(reading.payloadBits)) return true;
     const matches = bitsMatching(reading.payloadBits, ev.payloadBits);
-    if (matches >= MIN_BITS_WITH_VISUAL_MATCH && (!best || matches > best.matches)) {
+    if (matches >= MIN_BITS_WITHOUT_CRC && (!best || matches > best.matches)) {
       best = { reading, matches };
     }
     return false;
@@ -412,7 +390,7 @@ async function recoverCapture(buffer, candidates, cache = traceCache()) {
   }
   if (!releases.length) return null;
   const found = await recoverFromCapture(buffer, releases, {
-    minBits: MIN_BITS_WITH_VISUAL_MATCH,
+    minBits: MIN_BITS_WITHOUT_CRC,
   });
   if (!found) return null;
   // How alike the captured region and the same region of the release look —
@@ -705,26 +683,12 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
       const margin = runnerUp ? top.matches - runnerUp.matches : top.matches;
       const isDegenerate = isDegeneratePayload(marked.payloadBits);
 
-      // How alike the upload and the top release look: from the capture that
-      // found it, else the hash search, else measured directly.
-      const listed = candidates.find((c) => c.id === top.event.id);
-      const visualDist =
-        capture && capture.releaseId === top.event.id
-          ? capture.dists.pHashDist
-          : listed?.pHashDist != null
-            ? listed.pHashDist
-            : top.event.pHash != null
-              ? hamming(leaked.pHash, top.event.pHash)
-              : 64;
-
       // Distinguishing BETWEEN recipients of the SAME broadcast document requires
-      // statistical watermark significance (MIN_BITS_WITHOUT_CRC, or fewer bits
-      // when the upload visibly is that release) and a clear lead over every
-      // other officer (MIN_LEAD_BITS) — a wrong name is the expensive failure.
-      const significant =
-        top.matches >= MIN_BITS_WITHOUT_CRC ||
-        (top.matches >= MIN_BITS_WITH_VISUAL_MATCH && visualDist <= MAX_VISUAL_PHASH_DIST);
-      if (!isDegenerate && significant && margin >= MIN_LEAD_BITS) {
+      // statistical watermark significance (at least MIN_BITS_WITHOUT_CRC = 30 bits,
+      // i.e. > 62% bit agreement) and a clear lead over runner-up suspects.
+      // Margin >= 2 (or margin >= 1 if matches >= 32) prevents arbitrary accusations or ties.
+      const minThreshold = margin >= 2 ? MIN_BITS_WITHOUT_CRC : 32;
+      if (!isDegenerate && top.matches >= minThreshold && margin >= 1) {
         event = top.event;
       }
     }
