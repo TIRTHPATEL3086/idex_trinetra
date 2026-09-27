@@ -53,19 +53,19 @@ const RELEASE_STEPS = [
 
 const ROLE_CHIPS = [
   {
-    label: 'Clearance Holder',
+    label: 'Admin',
+    body: 'Full custody — uploads documents, releases copies, runs investigations and keeps the audit trail.',
+    fill: 'bg-chromia-pink-500',
+  },
+  {
+    label: 'Officer',
     body: 'Releases a marked copy to themselves and nothing more. Cannot investigate.',
     fill: 'bg-accent-bright',
   },
   {
-    label: 'Forensic Analyst',
+    label: 'Investigator',
     body: 'Traces leaked files back to their receipt. Cannot decrypt, so cannot manufacture evidence.',
     fill: 'bg-chromia-green-500',
-  },
-  {
-    label: 'Registry Administrator',
-    body: 'Full custody — uploads, releases, investigations and the audit trail.',
-    fill: 'bg-chromia-pink-500',
   },
 ];
 
