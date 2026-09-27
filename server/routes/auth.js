@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { bufferToHex } from '../lib/refs.js';
 import { validate } from '../middleware/validate.js';
-import { requireAuth, unauthorized } from '../middleware/auth.js';
+import { unauthorized } from '../middleware/auth.js';
 import {
   verifyPassword,
   issueToken,
@@ -53,7 +53,7 @@ function publicUser(user) {
 // ------------------------------------------------ POST /api/auth/login ------
 router.post('/login', validate(LoginBody), async (req, res, next) => {
   try {
-    const { email, password, securityAnswer, newSecurityQuestion, newSecurityAnswer } = req.valid;
+    const { email, password } = req.valid;
     const user = await prisma.user.findUnique({ where: { email } });
 
     // One message, one timing profile: hash against a dummy when the account
@@ -90,8 +90,11 @@ router.post('/logout', (_req, res) => {
 
 // --------------------------------------------------- GET /api/auth/me -------
 /** The client calls this on boot to find out whether it still has a session. */
-router.get('/me', requireAuth, (req, res) => {
-  res.json({ user: publicUser(req.user) });
+// "Who is signed in?" has a normal answer when nobody is: null, not a 401.
+// The app asks on every load, and a 401 there showed as an error in the
+// browser console for every visitor who had not signed in yet.
+router.get('/me', (req, res) => {
+  res.json({ user: req.user ? publicUser(req.user) : null });
 });
 
 /**

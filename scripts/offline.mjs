@@ -74,23 +74,33 @@ if (!/^(localhost|127(\.\d+){3}|::1|\[::1\])$/i.test(dbHost) && dbHost.includes(
 
 const children = [];
 const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+// npx is a .cmd script on Windows and needs a shell there; Node refuses to
+// pass an argument list through a shell, so it gets one command line. Every
+// argument here is a fixed word, so there is nothing to quote.
+const viaShell = (cmd) => process.platform === 'win32' && cmd.endsWith('.cmd');
+const launch = (fn, cmd, args, opts) =>
+  viaShell(cmd)
+    ? fn([cmd, ...args].join(' '), { ...opts, shell: true })
+    : fn(cmd === 'node' ? process.execPath : cmd, args, opts);
+
 function run(cmd, args, opts = {}) {
-  const r = spawnSync(cmd, args, {
-    cwd: ROOT,
-    env,
-    stdio: 'inherit',
-    shell: process.platform === 'win32',
-    ...opts,
-  });
+  const r = launch(spawnSync, cmd, args, { cwd: ROOT, env, stdio: 'inherit', ...opts });
   if (r.status !== 0) throw new Error(`${cmd} ${args.join(' ')} failed (${r.status})`);
 }
 function start(name, cmd, args) {
-  const c = spawn(cmd, args, { cwd: ROOT, env, shell: process.platform === 'win32' });
+  const c = launch(spawn, cmd, args, { cwd: ROOT, env });
   c.stdout.on(
     'data',
     (d) => process.env.FIELDKIT_VERBOSE && process.stdout.write(`  [${name}] ${d}`)
   );
-  c.stderr.on('data', (d) => process.stderr.write(`  [${name}] ${d}`));
+  // npm's own notices (e.g. about allow-scripts) are not errors of the kit.
+  c.stderr.on('data', (d) => {
+    const text = String(d)
+      .split('\n')
+      .filter((l) => l.trim() && !/^npm (warn|notice)/i.test(l.trim()))
+      .join('\n');
+    if (text) process.stderr.write(`  [${name}] ${text}\n`);
+  });
   children.push(c);
   return c;
 }
