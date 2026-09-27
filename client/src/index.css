@@ -489,3 +489,11 @@ h3 {
     animation: none;
   }
 }
+
+/* A row that scrolls sideways under its own control, with no bar showing. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

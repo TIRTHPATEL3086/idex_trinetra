@@ -445,7 +445,233 @@ function CopiesIllustration() {
   );
 }
 
-/* ---------------------------------- how it works (pinned timeline, dark) -- */
+/* --------------------------------------------------- draggable slider ---- */
+
+/**
+ * A row of tall cards that runs off the right edge, with a line beneath it
+ * and a pill handle that says how far along the row you are. The row moves by
+ * dragging the cards, dragging or clicking the line, a trackpad or touch
+ * swipe, or the arrow keys on the handle. `marks` puts a numbered stop on the
+ * line for each card, for a row that is a sequence.
+ */
+function DragSlider({ label, count, marks = false, onDark = false, children }) {
+  const viewRef = useRef(null);
+  const lineRef = useRef(null);
+  const drag = useRef(null);
+  const [progress, setProgress] = useState(0);
+  const [current, setCurrent] = useState(0);
+  const [grabbing, setGrabbing] = useState(false);
+
+  const maxScroll = () => {
+    const v = viewRef.current;
+    return v ? Math.max(0, v.scrollWidth - v.clientWidth) : 0;
+  };
+
+  useEffect(() => {
+    const v = viewRef.current;
+    if (!v) return undefined;
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      const max = maxScroll();
+      setProgress(max ? v.scrollLeft / max : 0);
+      // The stops sit evenly along the line, so the one being read is simply
+      // the nearest stop to the handle.
+      setCurrent(count > 1 ? Math.round((max ? v.scrollLeft / max : 0) * (count - 1)) : 0);
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(measure);
+    };
+    measure();
+    v.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll, { passive: true });
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      v.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [count]);
+
+  const goTo = (i, smooth = true) => {
+    const v = viewRef.current;
+    if (!v) return;
+    const left = count > 1 ? (i / (count - 1)) * maxScroll() : 0;
+    v.scrollTo({ left, behavior: smooth ? 'smooth' : 'auto' });
+  };
+
+  // Dragging the cards themselves, with a mouse. Touch keeps native swiping.
+  const onCardsDown = (e) => {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    drag.current = { kind: 'cards', x: e.clientX, left: viewRef.current.scrollLeft, moved: false };
+    setGrabbing(true);
+  };
+  // Dragging (or clicking) the line and its handle.
+  const lineTo = (clientX) => {
+    const line = lineRef.current;
+    const v = viewRef.current;
+    if (!line || !v) return;
+    const r = line.getBoundingClientRect();
+    const handle = 96;
+    const p = Math.min(1, Math.max(0, (clientX - r.left - handle / 2) / (r.width - handle)));
+    v.scrollLeft = p * maxScroll();
+  };
+  const onLineDown = (e) => {
+    drag.current = { kind: 'line' };
+    setGrabbing(true);
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    lineTo(e.clientX);
+  };
+
+  useEffect(() => {
+    const move = (e) => {
+      const d = drag.current;
+      if (!d) return;
+      if (d.kind === 'line') return lineTo(e.clientX);
+      const dx = e.clientX - d.x;
+      if (Math.abs(dx) > 4) d.moved = true;
+      viewRef.current.scrollLeft = d.left - dx;
+    };
+    const up = () => {
+      if (drag.current?.kind === 'cards' && drag.current.moved) {
+        // A drag that ends on a link is not a click on it.
+        const stop = (ev) => {
+          ev.stopPropagation();
+          ev.preventDefault();
+        };
+        window.addEventListener('click', stop, { capture: true, once: true });
+        setTimeout(() => window.removeEventListener('click', stop, { capture: true }), 0);
+      }
+      drag.current = null;
+      setGrabbing(false);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+    };
+  });
+
+  const onKey = (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      goTo(Math.min(count - 1, current + 1));
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      goTo(Math.max(0, current - 1));
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      goTo(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      goTo(count - 1);
+    }
+  };
+
+  const line = onDark ? 'bg-canvas/20' : 'bg-noir/15';
+  const fill = onDark ? 'bg-accent' : 'bg-noir';
+  // A short pill, as in a scrubber — its place on the line is what matters.
+  const handleW = '96px';
+
+  return (
+    <div>
+      {/* the row bleeds to the right edge of the window, but starts in line
+          with the heading above it */}
+      <div
+        ref={viewRef}
+        onPointerDown={onCardsDown}
+        className={`no-scrollbar mx-[calc(50%-50vw)] flex gap-4 overflow-x-auto px-[max(1.25rem,calc(50vw-36rem))] pb-3 pt-1 sm:gap-5 ${
+          grabbing ? 'cursor-grabbing select-none' : 'cursor-grab'
+        }`}
+        style={{ scrollPaddingInline: 'max(1.25rem, calc(50vw - 36rem))' }}
+      >
+        {children}
+      </div>
+
+      <div className="mt-8 flex items-center gap-5">
+        <div
+          ref={lineRef}
+          onPointerDown={onLineDown}
+          className="relative h-6 flex-1 cursor-pointer touch-none"
+        >
+          <span
+            className={`absolute inset-x-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full ${line}`}
+          />
+          <span
+            className={`absolute left-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full ${fill} ${marks ? '' : 'opacity-40'}`}
+            style={{
+              width: marks
+                ? `calc(12px + (100% - 24px) * ${progress})`
+                : `calc(${handleW} + (100% - ${handleW}) * ${progress})`,
+            }}
+          />
+          {marks &&
+            Array.from({ length: count }, (_, i) => (
+              <button
+                key={i}
+                type="button"
+                tabIndex={-1}
+                aria-label={`Step ${i + 1}`}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  goTo(i);
+                }}
+                className={`absolute top-1/2 grid h-6 w-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full text-[10px] font-bold transition ${
+                  i <= current
+                    ? onDark
+                      ? 'bg-accent text-noir'
+                      : 'bg-noir text-canvas'
+                    : onDark
+                      ? 'bg-noir-deep text-canvas/60 ring-2 ring-canvas/20'
+                      : 'bg-canvas text-ink-muted ring-2 ring-noir/15'
+                }`}
+                style={{ left: `calc(12px + (100% - 24px) * ${count > 1 ? i / (count - 1) : 0})` }}
+              >
+                {i + 1}
+              </button>
+            ))}
+          {!marks && (
+            <span
+              role="slider"
+              tabIndex={0}
+              aria-label={label}
+              aria-valuemin={1}
+              aria-valuemax={count}
+              aria-valuenow={current + 1}
+              onKeyDown={onKey}
+              className={`absolute top-1/2 h-4 -translate-y-1/2 rounded-full ${fill} shadow-[0_2px_8px_rgba(31,26,35,0.25)] transition-[width] focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/50 ${
+                grabbing ? 'cursor-grabbing' : 'cursor-grab'
+              }`}
+              style={{ width: handleW, left: `calc((100% - ${handleW}) * ${progress})` }}
+            />
+          )}
+          {marks && (
+            <span
+              role="slider"
+              tabIndex={0}
+              aria-label={label}
+              aria-valuemin={1}
+              aria-valuemax={count}
+              aria-valuenow={current + 1}
+              onKeyDown={onKey}
+              className="absolute inset-0 rounded-full focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/50"
+            />
+          )}
+        </div>
+        <span className={`mono shrink-0 text-sm ${onDark ? 'text-canvas/60' : 'text-ink-muted'}`}>
+          <span className={`font-bold ${onDark ? 'text-canvas' : 'text-noir'}`}>
+            {String(current + 1).padStart(2, '0')}
+          </span>{' '}
+          / {String(count).padStart(2, '0')}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/* --------------------------------------------- how it works (dark) ------- */
 
 /** The life of one document, from upload to the evidence a court receives. */
 const JOURNEY = [
@@ -493,316 +719,156 @@ const JOURNEY = [
   },
 ];
 
-/**
- * The timeline is pinned while it is read: scrolling down moves the six steps
- * sideways past the viewer, the rail fills, and the step in front lights up.
- * With reduced motion it is an ordinary horizontal row to swipe through.
- */
 function JourneySection() {
-  const sectionRef = useRef(null);
-  const viewRef = useRef(null);
-  const trackRef = useRef(null);
-  const reduced = usePrefersReducedMotion();
-  const [progress, setProgress] = useState(0);
-  const [shift, setShift] = useState(0);
-  const [stepPx, setStepPx] = useState(0);
-
-  useEffect(() => {
-    if (reduced) return undefined;
-    let frame = 0;
-    const measure = () => {
-      frame = 0;
-      const section = sectionRef.current;
-      const view = viewRef.current;
-      const track = trackRef.current;
-      if (!section || !view || !track) return;
-      const travel = section.offsetHeight - window.innerHeight;
-      const raw = travel > 0 ? -section.getBoundingClientRect().top / travel : 0;
-      // A short dwell at each end, so the first and last steps are read too.
-      setProgress(Math.min(1, Math.max(0, (raw - 0.06) / 0.86)));
-      setShift(Math.max(0, track.scrollWidth - view.clientWidth));
-      // One card and its gap, so the step being read sits at the left edge.
-      const items = track.querySelectorAll('li');
-      if (items.length > 1) setStepPx(items[1].offsetLeft - items[0].offsetLeft);
-    };
-    const onScroll = () => {
-      if (!frame) frame = requestAnimationFrame(measure);
-    };
-    measure();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll, { passive: true });
-    return () => {
-      if (frame) cancelAnimationFrame(frame);
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
-    };
-  }, [reduced]);
-
-  const last = JOURNEY.length - 1;
-  // Each step holds still for most of its share of the scroll, then glides
-  // to the next — so a card is read at rest, never caught half off-screen.
-  const pos = progress * last;
-  const base = Math.floor(pos);
-  const t = Math.min(1, Math.max(0, (pos - base - 0.55) / 0.45));
-  const glide = Math.min(last, base + t * t * (3 - 2 * t));
-  const active = reduced ? -1 : Math.round(glide);
-
   return (
-    <Section
-      bg="dark"
-      id="how-it-works"
-      className="relative"
-      style={reduced ? undefined : { height: `${JOURNEY.length * 62 + 60}vh` }}
-    >
-      {!reduced && <div ref={sectionRef} className="pointer-events-none absolute inset-0" />}
-      <div
-        className={`${reduced ? 'relative' : 'sticky top-0 flex h-[100dvh] flex-col justify-center'} overflow-hidden px-5 py-20 sm:py-24`}
-      >
-        <div className="dot-field pointer-events-none absolute inset-0" aria-hidden="true" />
-
-        <div className="relative mx-auto w-full max-w-6xl">
-          <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
-            <div>
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-canvas/50">
-                How it works
-              </span>
-              <h2 className="mt-3 font-display text-[clamp(2rem,4.6vw,3.5rem)] leading-[1.02]">
-                <span className="block text-canvas">From upload</span>
-                <span className="block text-accent">to evidence.</span>
-              </h2>
-            </div>
-            {!reduced && (
-              <div className="flex items-center gap-3 pb-1.5">
-                <span className="mono text-sm text-canvas/60">
-                  <span className="text-2xl font-bold text-canvas">
-                    {String(active + 1).padStart(2, '0')}
-                  </span>{' '}
-                  / {String(JOURNEY.length).padStart(2, '0')}
-                </span>
-                <span className="text-xs text-canvas/40">Scroll to follow the document</span>
-              </div>
-            )}
-          </div>
-
-          <div
-            ref={viewRef}
-            className={`relative mt-10 sm:mt-14 ${reduced ? 'scroll-slim overflow-x-auto pb-4' : ''}`}
-          >
-            <div
-              ref={trackRef}
-              className="relative w-max pt-2 will-change-transform"
-              style={
-                reduced
-                  ? undefined
-                  : {
-                      transform: `translate3d(${-Math.min(shift, glide * stepPx)}px,0,0)`,
-                    }
-              }
-            >
-              {/* the rail behind the dots, and how far along it the reader is */}
-              <span
-                aria-hidden="true"
-                className="absolute left-[26px] top-[32px] h-[3px] rounded-full bg-canvas/15"
-                style={{ right: 'calc(min(80vw, 340px) - 26px)' }}
-              >
-                <span
-                  className="absolute inset-y-0 left-0 w-full origin-left rounded-full bg-accent transition-transform duration-300"
-                  style={{ transform: `scaleX(${reduced ? 1 : glide / last})` }}
-                />
-              </span>
-
-              <ol className="relative flex gap-4 sm:gap-5">
-                {JOURNEY.map((step, i) => (
-                  <JourneyCard
-                    key={step.title}
-                    step={step}
-                    index={i}
-                    state={reduced ? 'on' : i === active ? 'on' : i < active ? 'done' : 'next'}
-                  />
-                ))}
-              </ol>
-            </div>
-          </div>
+    <Section bg="dark" id="how-it-works" className="relative px-5 py-24 sm:py-32">
+      <div className="dot-field pointer-events-none absolute inset-0" aria-hidden="true" />
+      <div className="relative mx-auto w-full max-w-6xl">
+        <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
+          <Reveal>
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-canvas/50">
+              How it works
+            </span>
+            <h2 className="mt-3 font-display text-[clamp(2.25rem,5.4vw,4.25rem)] leading-[0.98]">
+              <span className="block text-canvas">From upload</span>
+              <span className="block text-accent">to evidence.</span>
+            </h2>
+          </Reveal>
+          <Reveal delay={120}>
+            <p className="max-w-[36ch] text-sm leading-relaxed text-canvas/60 sm:text-base">
+              Six steps, every one of them recorded. Drag the cards or the line to follow a document
+              from the moment it is uploaded.
+            </p>
+          </Reveal>
         </div>
+
+        <Reveal delay={200} className="mt-12">
+          <DragSlider label="Steps from upload to evidence" count={JOURNEY.length} marks onDark>
+            {JOURNEY.map((step, i) => (
+              <article
+                key={step.title}
+                data-slide
+                className="w-[min(78vw,330px)] shrink-0 select-none"
+              >
+                <div
+                  className={`relative flex aspect-[5/4] flex-col justify-between overflow-hidden rounded-[1.75rem] border-[3px] border-noir ${step.fill} p-5 text-noir`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="rounded-full bg-noir px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-canvas">
+                      {step.who}
+                    </span>
+                    <span className="grid h-11 w-11 place-items-center rounded-2xl bg-noir text-canvas">
+                      <LandingIcon name={step.icon} className="h-5 w-5" />
+                    </span>
+                  </div>
+                  <span className="font-display text-[6.5rem] leading-[0.8] text-noir/85">
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
+                </div>
+                <h3 className="font-display-sm mt-5 text-[26px] leading-tight text-canvas">
+                  {step.title}
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-canvas/60">{step.body}</p>
+              </article>
+            ))}
+          </DragSlider>
+        </Reveal>
       </div>
     </Section>
   );
 }
 
-function JourneyCard({ step, index, state }) {
-  const on = state === 'on';
-  const done = state === 'done';
-  return (
-    <li className="w-[min(80vw,340px)] shrink-0">
-      <span
-        className={`relative z-10 grid h-[52px] w-[52px] place-items-center rounded-full border-[3px] transition-all duration-500 ${
-          on
-            ? `${step.fill} scale-110 border-noir text-noir shadow-[0_0_0_6px_rgba(204,145,240,0.25)]`
-            : done
-              ? 'border-accent bg-accent text-noir'
-              : 'border-canvas/25 bg-noir-deep text-canvas/60'
-        }`}
-      >
-        {done ? (
-          <LandingIcon name="check" className="h-5 w-5" />
-        ) : (
-          <LandingIcon name={step.icon} className="h-5 w-5" />
-        )}
-      </span>
-
-      <article
-        className={`mt-6 rounded-[1.75rem] border-[3px] p-5 transition-all duration-500 ${
-          on
-            ? `${step.fill} -translate-y-1.5 border-noir text-noir shadow-[6px_7px_0_0_rgba(255,248,248,0.9)]`
-            : 'border-canvas/15 bg-canvas/[0.04] text-canvas'
-        }`}
-      >
-        <div className="flex items-center justify-between gap-3">
-          <span
-            className={`mono text-[11px] font-bold uppercase tracking-wider ${on ? 'text-noir/70' : 'text-accent'}`}
-          >
-            {step.who}
-          </span>
-          <span className={`mono text-xs font-bold ${on ? 'text-noir/50' : 'text-canvas/30'}`}>
-            {String(index + 1).padStart(2, '0')}
-          </span>
-        </div>
-        <h3 className="font-display-sm mt-2 text-[24px] leading-tight">{step.title}</h3>
-        <p className={`mt-2.5 text-sm leading-relaxed ${on ? 'text-noir/75' : 'text-canvas/60'}`}>
-          {step.body}
-        </p>
-      </article>
-    </li>
-  );
-}
-
-/* ------------------------------------------------ features (bento, light) - */
+/* ------------------------------------------------ features (light) ------ */
 
 const FEATURES = [
   {
     title: 'Invisible watermark',
     body: 'The mark lives in the image’s fine frequency detail, not in anything you can see. A marked copy looks exactly like the original.',
     icon: 'fingerprint',
-    tone: 'dark',
-    span: 'lg:col-span-4',
+    fill: 'bg-noir text-accent',
   },
   {
     title: 'Survives real leaks',
-    body: 'JPEG, resizing, cropping, screenshots and phone photos of a screen.',
+    body: 'Still read after JPEG compression, resizing and cropping — and from screenshots and phone photos of a screen.',
     icon: 'camera',
-    tone: 'green',
-    span: 'lg:col-span-2',
+    fill: 'bg-chromia-green-500 text-noir',
   },
   {
     title: 'Shows what was edited',
-    body: 'A fragile second layer breaks wherever the copy is changed — and shows where.',
+    body: 'A fragile second layer breaks wherever the copy is changed, so a doctored leak shows exactly which parts were altered.',
     icon: 'edit',
-    tone: 'pink',
-    span: 'lg:col-span-2',
+    fill: 'bg-chromia-pink-500 text-noir',
   },
   {
     title: 'Receipts on a blockchain',
     body: 'Every release is recorded on chain before the copy exists. No copy without a receipt, and no receipt that can be rewritten later.',
     icon: 'chain',
-    tone: 'light',
-    span: 'lg:col-span-4',
+    fill: 'bg-accent-bright text-noir',
   },
   {
     title: 'Post-quantum cryptography',
     body: 'Keys sealed with ML-KEM-768 and receipts signed with ML-DSA-65 — the NIST standards built to outlast quantum computers.',
     icon: 'shield',
-    tone: 'accent',
-    span: 'lg:col-span-3',
+    fill: 'bg-chromia-purple-800 text-canvas',
   },
   {
     title: 'Works fully offline',
-    body: 'Runs air-gapped with its own local chain and database. No cloud key service, no public network.',
+    body: 'Runs air-gapped with its own local chain and database. No cloud key service and no public network is needed.',
     icon: 'offline',
-    tone: 'light',
-    span: 'lg:col-span-3',
+    fill: 'bg-chromia-green-800 text-noir',
   },
 ];
-
-const TONES = {
-  dark: {
-    card: 'bg-noir text-canvas border-noir',
-    body: 'text-canvas/65',
-    chip: 'bg-accent text-noir',
-  },
-  green: {
-    card: 'bg-chromia-green-500 text-noir border-noir',
-    body: 'text-noir/70',
-    chip: 'bg-noir text-canvas',
-  },
-  pink: {
-    card: 'bg-chromia-pink-500 text-noir border-noir',
-    body: 'text-noir/70',
-    chip: 'bg-noir text-canvas',
-  },
-  accent: {
-    card: 'bg-accent-bright text-noir border-noir',
-    body: 'text-noir/70',
-    chip: 'bg-noir text-canvas',
-  },
-  light: {
-    card: 'bg-white text-noir border-noir',
-    body: 'text-ink-muted',
-    chip: 'bg-accent/30 text-noir',
-  },
-};
 
 function FeaturesSection() {
   return (
     <Section bg="base" id="features" className="px-5 py-24 sm:py-32">
       <div className="mx-auto w-full max-w-6xl">
-        <div className="flex flex-wrap items-end justify-between gap-6">
+        <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
           <Reveal>
             <span className="eyebrow">What it is built on</span>
-            <h2 className="mt-3 font-display text-[clamp(2rem,4.6vw,3.5rem)] leading-[1.02]">
+            <h2 className="mt-3 font-display text-[clamp(2.25rem,5.4vw,4.25rem)] leading-[0.98]">
               <span className="block text-noir">Built for the way</span>
               <span className="tone-accent block">leaks really happen.</span>
             </h2>
           </Reveal>
           <Reveal delay={120}>
-            <p className="max-w-[40ch] text-sm leading-relaxed text-ink-muted sm:text-base">
+            <p className="max-w-[36ch] text-sm leading-relaxed text-ink-muted sm:text-base">
               Six parts working together, so a leak can be traced even after someone has tried to
               hide where it came from.
             </p>
           </Reveal>
         </div>
 
-        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-6 lg:gap-5">
-          {FEATURES.map((f, i) => {
-            const t = TONES[f.tone];
-            return (
-              <Reveal
+        <Reveal delay={200} className="mt-12">
+          <DragSlider label="What Provenance is built on" count={FEATURES.length}>
+            {FEATURES.map((f, i) => (
+              <article
                 key={f.title}
-                delay={(i % 3) * 110}
-                className={`reveal--scale h-full ${f.span}`}
+                data-slide
+                className="group w-[min(78vw,330px)] shrink-0 select-none"
               >
-                <article
-                  className={`group relative h-full overflow-hidden rounded-[1.75rem] border-[3px] p-6 shadow-[6px_7px_0_0_rgba(31,26,35,1)] transition duration-300 hover:-translate-y-1 hover:shadow-[8px_10px_0_0_rgba(31,26,35,1)] ${t.card}`}
+                <div
+                  className={`relative grid aspect-[5/4] place-items-center overflow-hidden rounded-[1.75rem] ${f.fill}`}
                 >
                   <span
                     aria-hidden="true"
-                    className="pointer-events-none absolute -right-3 -top-6 font-display text-[7rem] leading-none opacity-[0.07]"
+                    className="absolute bottom-3 right-5 font-display text-[4.5rem] leading-none opacity-15"
                   >
                     {String(i + 1).padStart(2, '0')}
                   </span>
-                  <span
-                    className={`relative grid h-11 w-11 place-items-center rounded-2xl transition duration-300 group-hover:-rotate-6 group-hover:scale-110 ${t.chip}`}
-                  >
-                    <LandingIcon name={f.icon} className="h-5 w-5" />
-                  </span>
-                  <h3 className="font-display-sm relative mt-5 text-[22px] leading-tight">
-                    {f.title}
-                  </h3>
-                  <p className={`relative mt-2 text-sm leading-relaxed ${t.body}`}>{f.body}</p>
-                </article>
-              </Reveal>
-            );
-          })}
-        </div>
+                  <LandingIcon
+                    name={f.icon}
+                    className="h-20 w-20 transition duration-500 group-hover:-rotate-6 group-hover:scale-110"
+                  />
+                </div>
+                <h3 className="font-display-sm mt-5 text-[24px] leading-tight text-noir">
+                  {f.title}
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-ink-muted">{f.body}</p>
+              </article>
+            ))}
+          </DragSlider>
+        </Reveal>
       </div>
     </Section>
   );
