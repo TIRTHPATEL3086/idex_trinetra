@@ -1037,7 +1037,7 @@ function ClosingSection() {
     <Section
       bg="dark"
       id="roles"
-      className="relative flex min-h-[100dvh] items-center justify-center px-5 py-28 text-center"
+      className="relative flex items-center justify-center px-5 pb-8 pt-28 text-center sm:pb-10"
     >
       <div className="dot-field absolute inset-0" aria-hidden="true" />
 
@@ -1074,7 +1074,7 @@ function ClosingSection() {
           </Link>
         </div>
 
-        <p className="mt-16 text-xs text-canvas/35">Provenance · Decryption provenance register</p>
+        <p className="mt-8 text-xs text-canvas/35">Provenance · Decryption provenance register</p>
       </div>
     </Section>
   );
