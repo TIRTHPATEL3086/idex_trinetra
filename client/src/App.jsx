@@ -50,21 +50,11 @@ const NAV = [
   { to: '/officers', label: 'Officers', icon: UsersIcon, cap: 'users:write' },
 ];
 
-const INTRO_SEEN = 'provenance:intro-seen';
-
 export default function App() {
-  // The intro plays on a fresh load of the landing page, not on in-app
-  // navigation back to it.
+  // The intro plays on every fresh load of the landing page — a first visit,
+  // a refresh, a return — but not on in-app navigation back to it.
   const [booting, setBooting] = useState(() => {
-    // Once per browser session: a refresh or a second visit goes straight in.
-    let seen = false;
-    try {
-      seen = sessionStorage.getItem(INTRO_SEEN) === '1';
-      sessionStorage.setItem(INTRO_SEEN, '1');
-    } catch {
-      // Storage blocked (private mode): play it, as before.
-    }
-    const show = window.location.pathname === '/' && !seen;
+    const show = window.location.pathname === '/';
     // Mark the page as covered before anything renders, so no entrance on the
     // landing page can start ahead of the loader's own effect.
     if (show) document.documentElement.classList.add('is-preloading');
