@@ -103,11 +103,17 @@ export async function pdfPsnr(originalPdf, markedPdf) {
  * upright, whatever /Rotate a page carries, so each picture lines up with the
  * page's own coordinates — the frame a watermarked page image is laid in.
  *
+ * With `onPage`, each page is handed over as soon as it is drawn and not
+ * kept, so a long document is never held in memory all at once.
+ *
  * @param {Buffer} pdfBuffer
- * @param {{ maxPages?: number, dpi?: number }} [opts]
+ * @param {{ maxPages?: number, dpi?: number, onPage?: (p: object) => Promise<void> }} [opts]
  * @returns {Promise<Array<{ png:Buffer, page:number, width:number, height:number }>>}
  */
-export async function renderPdfPages(pdfBuffer, { maxPages = Infinity, dpi = DPI } = {}) {
+export async function renderPdfPages(
+  pdfBuffer,
+  { maxPages = Infinity, dpi = DPI, onPage = null } = {}
+) {
   const lib = await loadPdfjs();
   const { createCanvas } = require('@napi-rs/canvas');
   const task = lib.getDocument({
@@ -129,7 +135,10 @@ export async function renderPdfPages(pdfBuffer, { maxPages = Infinity, dpi = DPI
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       await page.render({ canvasContext: ctx, viewport: vp, canvas }).promise;
       const png = await sharp(canvas.toBuffer('image/png')).removeAlpha().png().toBuffer();
-      pages.push({ png, page: n, width: canvas.width, height: canvas.height });
+      const drawn = { png, page: n, width: canvas.width, height: canvas.height };
+      if (onPage) await onPage(drawn);
+      else pages.push(drawn);
+      page.cleanup();
     }
     return pages;
   } finally {

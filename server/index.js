@@ -1,11 +1,28 @@
 import path from 'node:path';
 import express from 'express';
+import sharp from 'sharp';
 import cors from 'cors';
 
 // Enable clean JSON serialization for BigInt values across all Express routes
 BigInt.prototype.toJSON = function () {
   return this.toString();
 };
+
+// The live server has 512 MB. libvips' default of one thread per core and a
+// 50 MB operation cache, with glibc's per-thread arenas on Linux, let memory
+// balloon while pages are drawn and marked; one thread and a small cache
+// keep a release or a trace well inside it.
+sharp.concurrency(1);
+sharp.cache({ memory: 16, files: 0, items: 20 });
+
+// A crash should say why in the host's logs before the host restarts us.
+process.on('unhandledRejection', (reason) => {
+  console.error('[fatal] unhandled rejection:', reason?.stack || reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[fatal] uncaught exception:', err?.stack || err);
+  process.exit(1);
+});
 
 import { env, ROOT, warnAboutConfig } from './lib/env.js';
 import { prisma, dbStatus } from './lib/prisma.js';

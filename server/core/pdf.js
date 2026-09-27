@@ -128,29 +128,31 @@ export async function embedPdf(pdfBuffer, payloadBits, receiptIdHex) {
   // text can still be selected and searched; what is seen — and what a photo
   // of the screen captures — is the marked page.
   try {
-    const drawn = await renderPdfPages(pdfBuffer, {
-      maxPages: MAX_MARKED_PAGES,
-      dpi: PAGE_MARK.dpi,
-    });
     // Every page is marked before any is drawn on, so a failure part-way
-    // leaves the document untouched for the fallback below.
+    // leaves the document untouched for the fallback below. Pages are taken
+    // one at a time as they are drawn; only the marked JPEGs are kept.
     // The PSNR is of what a reader sees — each page as drawn against the
     // marked image laid over it — pooled over the marked pages.
     const marks = [];
     let sse = 0;
     let count = 0;
-    for (const d of drawn) {
-      const marked = await markPage(d.png, payloadBits);
-      const jpeg = await sharp(marked).jpeg({ quality: 92, chromaSubsampling: '4:4:4' }).toBuffer();
-      marks.push({ page: d.page, jpeg });
-      const [a, b] = await Promise.all(
-        [d.png, jpeg].map((buf) =>
-          sharp(buf).removeAlpha().resize(d.width, d.height, { fit: 'fill' }).raw().toBuffer()
-        )
-      );
-      for (let i = 0; i < a.length; i++) sse += (a[i] - b[i]) ** 2;
-      count += a.length;
-    }
+    const pixels = (buf, d) =>
+      sharp(buf).removeAlpha().resize(d.width, d.height, { fit: 'fill' }).raw().toBuffer();
+    await renderPdfPages(pdfBuffer, {
+      maxPages: MAX_MARKED_PAGES,
+      dpi: PAGE_MARK.dpi,
+      onPage: async (d) => {
+        const marked = await markPage(d.png, payloadBits);
+        const jpeg = await sharp(marked)
+          .jpeg({ quality: 92, chromaSubsampling: '4:4:4' })
+          .toBuffer();
+        marks.push({ page: d.page, jpeg });
+        const a = await pixels(d.png, d);
+        const b = await pixels(jpeg, d);
+        for (let i = 0; i < a.length; i++) sse += (a[i] - b[i]) ** 2;
+        count += a.length;
+      },
+    });
     const psnrDb = count && sse ? 10 * Math.log10((255 * 255 * count) / sse) : null;
     const pages = doc.getPages();
     for (const { page: n, jpeg } of marks) {
