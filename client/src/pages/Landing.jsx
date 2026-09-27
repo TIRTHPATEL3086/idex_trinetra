@@ -14,12 +14,15 @@ import { useIntroDone } from '../lib/intro.js';
  * corners on a slight rotation, which is what keeps the whole thing from
  * reading as a corporate template.
  *
- * The three sections are the ones asked for, and the hero deliberately names
- * no technology: someone arriving here wants to know what it does for them.
+ * The hero deliberately names no technology: someone arriving here wants to
+ * know what it does for them. The sections below it explain what it is, walk
+ * through how a document moves from upload to evidence, then name the parts.
  */
 
 const NAV_LINKS = [
-  { label: 'How it works', href: '#release' },
+  { label: 'About', href: '#about' },
+  { label: 'How it works', href: '#how-it-works' },
+  { label: 'Features', href: '#features' },
   { label: 'Roles', href: '#roles' },
 ];
 
@@ -80,7 +83,10 @@ export default function Landing() {
 
       <NavBar />
       <Hero />
+      <AboutSection />
+      <JourneySection />
       <ReleaseSection />
+      <FeaturesSection />
       <ClosingSection />
     </div>
   );
@@ -275,7 +281,7 @@ function Hero() {
             <ArrowUpRight />
           </Link>
           <a
-            href="#release"
+            href="#how-it-works"
             className="inline-flex items-center gap-2 rounded-full border-2 border-noir bg-white px-6 py-3.5 text-base font-semibold text-ink transition hover:bg-muted"
           >
             How it works
@@ -309,6 +315,232 @@ function ReleaseSection() {
                 <span className="mono text-xs font-bold">{step.n}</span>
                 <h3 className="font-display-sm mt-2 text-[26px] leading-tight">{step.title}</h3>
                 <p className="mt-3 text-sm font-medium leading-relaxed text-noir/75">{step.body}</p>
+              </article>
+            </Reveal>
+          ))}
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+/* ------------------------------------------------------- about (light) --- */
+
+const PROMISES = [
+  {
+    title: 'Every copy is personal',
+    body: 'No two people ever hold the same file. Each release carries a mark that names the one person it was made for.',
+    fill: 'bg-accent-bright',
+  },
+  {
+    title: 'The mark survives the leak',
+    body: 'Invisible to the eye, and still readable after the copy is compressed, resized, cropped, screenshotted or photographed off a screen.',
+    fill: 'bg-chromia-green-500',
+  },
+  {
+    title: 'Evidence that holds up',
+    body: 'A signed receipt is written to a blockchain before the copy exists, so the record of who opened what cannot be changed or backdated.',
+    fill: 'bg-chromia-pink-500',
+  },
+];
+
+function AboutSection() {
+  return (
+    <Section bg="base" id="about" className="px-5 py-24 sm:py-28">
+      <div className="mx-auto w-full max-w-6xl">
+        <div className="mx-auto max-w-3xl text-center">
+          <Reveal>
+            <span className="eyebrow">What Provenance is</span>
+            <div className="mt-3">
+              <TwoToneHeading first="A leak used to be" second="a dead end." />
+            </div>
+          </Reveal>
+          <Reveal delay={120}>
+            <p className="mx-auto mt-6 max-w-[62ch] text-base leading-relaxed text-ink-muted sm:text-lg">
+              When a protected document turns up where it should not, the first question is who let
+              it out — and when everyone received the same file, there is no answer. Provenance is a
+              register for sensitive documents that gives every person their own copy, records each
+              release before it happens, and can read a leaked copy back to the one person it was
+              issued to.
+            </p>
+          </Reveal>
+        </div>
+
+        <div className="mt-14 grid gap-5 md:grid-cols-3">
+          {PROMISES.map((p, i) => (
+            <Reveal key={p.title} delay={i * 140}>
+              <article
+                className={`chip-card h-full border-[3px] border-noir ${p.fill} shadow-[6px_7px_0_0_rgba(31,26,35,1)]`}
+              >
+                <h3 className="font-display-sm text-[22px] leading-tight">{p.title}</h3>
+                <p className="mt-2.5 text-sm font-medium leading-relaxed text-noir/75">{p.body}</p>
+              </article>
+            </Reveal>
+          ))}
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+/* ------------------------------------------- how it works (timeline) ----- */
+
+/** The life of one document, from upload to the evidence a court receives. */
+const JOURNEY = [
+  {
+    who: 'Administrator',
+    title: 'Upload and lock',
+    body: 'The document is encrypted the moment it arrives, and its key is sealed separately for each person cleared to receive it.',
+    dot: 'bg-accent-bright',
+  },
+  {
+    who: 'Officer',
+    title: 'Ask for a copy',
+    body: 'A cleared officer unlocks their copy with their own passphrase. Nobody can ask for a copy in someone else’s name.',
+    dot: 'bg-chromia-pink-500',
+  },
+  {
+    who: 'Automatic',
+    title: 'Receipt first',
+    body: 'Before the copy is made, a signed receipt — who, what, when, which device — is written to the blockchain.',
+    dot: 'bg-chromia-green-500',
+  },
+  {
+    who: 'Automatic',
+    title: 'Invisible mark',
+    body: 'The copy is marked with a code that points to that receipt, plus a fragile layer that breaks wherever the file is edited.',
+    dot: 'bg-chromia-pink-800',
+  },
+  {
+    who: 'Forensic analyst',
+    title: 'Trace the leak',
+    body: 'When a copy surfaces — a file, a screenshot, a phone photo — the analyst uploads it and the mark is read back to one release.',
+    dot: 'bg-chromia-purple-500',
+  },
+  {
+    who: 'Forensic analyst',
+    title: 'Court-ready evidence',
+    body: 'One click produces a dossier: the person named, the receipt on chain, the signature, and whether the copy was altered.',
+    dot: 'bg-chromia-green-800',
+  },
+];
+
+function JourneySection() {
+  return (
+    <Section bg="base" id="how-it-works" className="px-5 py-24 sm:py-28">
+      <div className="mx-auto w-full max-w-6xl">
+        <div className="mx-auto max-w-3xl text-center">
+          <Reveal>
+            <span className="eyebrow">How it works</span>
+            <div className="mt-3">
+              <TwoToneHeading first="From upload" second="to evidence." />
+            </div>
+          </Reveal>
+          <Reveal delay={120}>
+            <p className="mx-auto mt-5 max-w-[56ch] text-base leading-relaxed text-ink-muted">
+              Six steps, and every one of them is recorded. Each card says who carries out that
+              step.
+            </p>
+          </Reveal>
+        </div>
+
+        {/* A horizontal track: all six in a row on a wide screen, swiped
+            through one card at a time on a phone. */}
+        <div className="scroll-slim -mx-5 mt-14 overflow-x-auto px-5 pb-4 lg:mx-0 lg:overflow-visible lg:px-0 lg:pb-0">
+          <ol className="grid snap-x snap-mandatory auto-cols-[78%] grid-flow-col gap-4 min-[480px]:auto-cols-[46%] md:auto-cols-[31%] lg:auto-cols-fr lg:gap-5">
+            {JOURNEY.map((step, i) => (
+              <li key={step.title} className="relative flex snap-start">
+                <Reveal delay={i * 110} className="flex w-full flex-col">
+                  {/* the rail: a dot per step, joined to the next */}
+                  <div className="relative flex items-center">
+                    <span
+                      className={`relative z-10 grid h-11 w-11 shrink-0 place-items-center rounded-full border-[3px] border-noir ${step.dot} font-display-sm text-base text-noir shadow-[3px_4px_0_0_rgba(31,26,35,1)]`}
+                    >
+                      {i + 1}
+                    </span>
+                    {i < JOURNEY.length - 1 && (
+                      <span
+                        aria-hidden="true"
+                        className="absolute left-11 right-[-1.25rem] top-1/2 h-[3px] -translate-y-1/2 bg-noir lg:right-[-1.25rem]"
+                      />
+                    )}
+                  </div>
+
+                  <div className="mt-5 flex flex-1 flex-col rounded-[1.5rem] border-[3px] border-noir bg-white p-4 shadow-[5px_6px_0_0_rgba(31,26,35,1)]">
+                    <span className="mono text-[11px] font-bold uppercase tracking-wider text-accent-deep">
+                      {step.who}
+                    </span>
+                    <h3 className="font-display-sm mt-1.5 text-[19px] leading-tight text-noir">
+                      {step.title}
+                    </h3>
+                    <p className="mt-2 text-[13px] leading-relaxed text-ink-muted">{step.body}</p>
+                  </div>
+                </Reveal>
+              </li>
+            ))}
+          </ol>
+        </div>
+        <p className="mt-3 text-center text-xs text-ink-faint lg:hidden">
+          Swipe to follow the steps →
+        </p>
+      </div>
+    </Section>
+  );
+}
+
+/* --------------------------------------------------- features (light) ---- */
+
+const FEATURES = [
+  {
+    title: 'Invisible watermark',
+    body: 'The mark sits in the image’s frequency detail, not its pixels you can see. A marked copy looks the same as the original.',
+  },
+  {
+    title: 'Survives real leaks',
+    body: 'Read back after JPEG compression, resizing and cropping — and from screenshots and phone photos of a screen, which are straightened first.',
+  },
+  {
+    title: 'Shows what was edited',
+    body: 'A second, fragile layer breaks wherever the copy is changed, so a doctored leak shows exactly which parts were altered.',
+  },
+  {
+    title: 'Receipts on a blockchain',
+    body: 'Every release is recorded on chain before the copy exists. No copy without a receipt, and no receipt that can be rewritten later.',
+  },
+  {
+    title: 'Post-quantum cryptography',
+    body: 'Keys are sealed with ML-KEM-768 and receipts signed with ML-DSA-65 — the NIST standards built to withstand future quantum computers.',
+  },
+  {
+    title: 'Works fully offline',
+    body: 'Runs on an air-gapped machine with its own local chain and database. No cloud key service and no public network is needed.',
+  },
+];
+
+function FeaturesSection() {
+  return (
+    <Section bg="base" id="features" className="px-5 py-24 sm:py-28">
+      <div className="mx-auto w-full max-w-6xl">
+        <div className="mx-auto max-w-3xl text-center">
+          <Reveal>
+            <span className="eyebrow">What it is built on</span>
+            <div className="mt-3">
+              <TwoToneHeading first="Built for the way" second="leaks really happen." />
+            </div>
+          </Reveal>
+        </div>
+
+        <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {FEATURES.map((f, i) => (
+            <Reveal key={f.title} delay={(i % 3) * 120}>
+              <article className="h-full rounded-[1.5rem] border border-line bg-white p-5 shadow-[0_1px_2px_rgba(31,26,35,0.05),0_12px_30px_-18px_rgba(31,26,35,0.35)]">
+                <span className="grid h-9 w-9 place-items-center rounded-full bg-accent/25 font-display-sm text-sm text-accent-deep">
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+                <h3 className="font-display-sm mt-4 text-[20px] leading-tight text-noir">
+                  {f.title}
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-ink-muted">{f.body}</p>
               </article>
             </Reveal>
           ))}
@@ -482,7 +714,7 @@ function Section({ bg, children, className = '', id }) {
 }
 
 /** Fades its children up the first time they are scrolled into view. */
-function Reveal({ children, delay = 0 }) {
+function Reveal({ children, delay = 0, className = '' }) {
   const ref = useRef(null);
   const [shown, setShown] = useState(false);
 
@@ -505,7 +737,7 @@ function Reveal({ children, delay = 0 }) {
   return (
     <div
       ref={ref}
-      className={`reveal ${shown ? 'is-visible' : ''}`}
+      className={`reveal ${shown ? 'is-visible' : ''} ${className}`}
       style={{ transitionDelay: `${delay}ms` }}
     >
       {children}
