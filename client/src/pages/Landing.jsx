@@ -104,7 +104,7 @@ function NavBar() {
           <Logo size="sm" iconOnly />
         </span>
         <span className="hidden min-[360px]:block">
-          <Logo size="sm" />
+          <Logo size="md" />
         </span>
 
         <div className="hidden items-center gap-9 md:flex">
