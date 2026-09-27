@@ -64,6 +64,17 @@ const MIN_BITS_WITHOUT_CRC = 36;
 const MIN_LEAD_BITS = 4;
 
 /**
+ * A weaker reading — 32 to 35 bits — may still name an officer when the photo
+ * also looks like that release: the watermark then only has to tell apart the
+ * recipients of a document the picture plainly shows, not find it among
+ * everything ever released. A phone photo of a released image measured 8-9/64
+ * against it; a photo of a document nobody here released measured 32-34/64
+ * against the release its bits drifted towards.
+ */
+const MIN_BITS_WITH_VISUAL_MATCH = 32;
+const MAX_VISUAL_PHASH_DIST = 12;
+
+/**
  * Whether bits name a real release: a valid CRC alone is not enough, because
  * degenerate readings (all zeros, all ones) from a mark that did not survive
  * can satisfy an 8-bit CRC by construction.
@@ -263,7 +274,7 @@ async function extractAtCandidateSizes(
     if (!reading || isDegeneratePayload(reading.payloadBits)) return false;
     if (await namesOnce(reading.payloadBits)) return true;
     const matches = bitsMatching(reading.payloadBits, ev.payloadBits);
-    if (matches >= MIN_BITS_WITHOUT_CRC && (!best || matches > best.matches)) {
+    if (matches >= MIN_BITS_WITH_VISUAL_MATCH && (!best || matches > best.matches)) {
       best = { reading, matches };
     }
     return false;
@@ -396,7 +407,9 @@ async function recoverCapture(buffer, candidates, cache = traceCache()) {
     if (releases.length >= CAPTURE_CANDIDATES) break;
   }
   if (!releases.length) return null;
-  const found = await recoverFromCapture(buffer, releases, { minBits: MIN_BITS_WITHOUT_CRC });
+  const found = await recoverFromCapture(buffer, releases, {
+    minBits: MIN_BITS_WITH_VISUAL_MATCH,
+  });
   if (!found) return null;
   // How alike the captured region and the same region of the release look —
   // the visual evidence, measured on the part of the page actually captured.
@@ -688,11 +701,26 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
       const margin = runnerUp ? top.matches - runnerUp.matches : top.matches;
       const isDegenerate = isDegeneratePayload(marked.payloadBits);
 
+      // How alike the upload and the top release look: from the capture that
+      // found it, else the hash search, else measured directly.
+      const listed = candidates.find((c) => c.id === top.event.id);
+      const visualDist =
+        capture && capture.releaseId === top.event.id
+          ? capture.dists.pHashDist
+          : listed?.pHashDist != null
+            ? listed.pHashDist
+            : top.event.pHash != null
+              ? hamming(leaked.pHash, top.event.pHash)
+              : 64;
+
       // Distinguishing BETWEEN recipients of the SAME broadcast document requires
-      // statistical watermark significance (MIN_BITS_WITHOUT_CRC) and a clear
-      // lead over every other officer (MIN_LEAD_BITS) — a wrong name is the
-      // expensive failure.
-      if (!isDegenerate && top.matches >= MIN_BITS_WITHOUT_CRC && margin >= MIN_LEAD_BITS) {
+      // statistical watermark significance (MIN_BITS_WITHOUT_CRC, or fewer bits
+      // when the upload visibly is that release) and a clear lead over every
+      // other officer (MIN_LEAD_BITS) — a wrong name is the expensive failure.
+      const significant =
+        top.matches >= MIN_BITS_WITHOUT_CRC ||
+        (top.matches >= MIN_BITS_WITH_VISUAL_MATCH && visualDist <= MAX_VISUAL_PHASH_DIST);
+      if (!isDegenerate && significant && margin >= MIN_LEAD_BITS) {
         event = top.event;
       }
     }
