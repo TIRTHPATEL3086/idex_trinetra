@@ -274,19 +274,6 @@ function Hero() {
           that copy ever turns up somewhere it should not be, you can follow it back — even from a
           photograph of a screen.
         </p>
-
-        <div className="hero-fade-up hero-fade-up--d3 mt-11 flex flex-wrap items-center justify-center gap-3">
-          <Link to="/login" className="cta-pill px-7 py-3.5 text-base">
-            Open the register
-            <ArrowUpRight />
-          </Link>
-          <a
-            href="#how-it-works"
-            className="inline-flex items-center gap-2 rounded-full border-2 border-noir bg-white px-6 py-3.5 text-base font-semibold text-ink transition hover:bg-muted"
-          >
-            How it works
-          </a>
-        </div>
       </div>
     </Section>
   );
