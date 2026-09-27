@@ -154,3 +154,121 @@ export function LensPanel({ lens }) {
     </div>
   );
 }
+
+/**
+ * The reads a trace makes, in the order it makes them, and which one
+ * recovered the mark. Passes 0-3 are the rescaled reads — each a different way
+ * of lining a photo's pixels back up with the released copy's.
+ */
+const READS = [
+  {
+    key: 'as-uploaded',
+    title: 'Read as uploaded',
+    body: 'The file itself — or the page straightened by the lens — read at its own size.',
+  },
+  {
+    key: 'direct',
+    title: 'Pass 0 · Direct read',
+    body: "At the photo's own size, so no upscaling blur, at the release's own strength and 12 and 14.",
+  },
+  {
+    key: 'scaled',
+    title: 'Pass 1 · Scaled read',
+    body: "Scaled back to the released copy's exact size, at strengths up to 16.",
+  },
+  {
+    key: 'tones',
+    title: 'Pass 2 · Tone-matched read',
+    body: "The camera's exposure and white balance matched to the released copy first.",
+    lensOnly: true,
+  },
+  {
+    key: 'topcrop',
+    title: 'Pass 3 · Top-crop read',
+    body: 'The upper 55% only — for a laptop photographed with its keyboard in the frame.',
+  },
+  {
+    key: 'capture',
+    title: 'Capture recovery',
+    body: 'The released page located inside a larger photo or screenshot, and read from the part in view.',
+  },
+];
+
+export function ReadPassesPanel({ extraction }) {
+  if (!extraction) return null;
+  const pass = extraction.pass === 'straightened' ? 'as-uploaded' : extraction.pass;
+
+  if (pass === 'document') {
+    return (
+      <div className="rounded-2xl border border-line bg-surface px-4 py-3 text-sm text-ink-muted">
+        How the mark was read: from the PDF&apos;s own document layers — no rescaled read needed.
+      </div>
+    );
+  }
+
+  const foundAt = extraction.found ? READS.findIndex((r) => r.key === pass) : -1;
+  const status = (r, i) => {
+    if (r.lensOnly && !extraction.tones) return { text: 'Lens photos only', tone: 'muted' };
+    if (i === foundAt) return { text: 'Found the mark', tone: 'found' };
+    if (foundAt >= 0 && i > foundAt) return { text: 'Not needed', tone: 'muted' };
+    return { text: foundAt >= 0 ? 'Tried' : 'Tried — no mark', tone: 'tried' };
+  };
+
+  return (
+    <div className="card overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-surface px-5 py-3.5">
+        <span className="text-xs font-bold uppercase tracking-wider text-ink-muted">
+          How the mark was read
+        </span>
+        <span className="text-xs text-ink-faint">
+          {foundAt >= 0
+            ? `Recovered by: ${READS[foundAt].title}`
+            : 'No read recovered a mark that names a recipient'}
+        </span>
+      </div>
+      <ol className="divide-y divide-line">
+        {READS.map((r, i) => {
+          const s = status(r, i);
+          return (
+            <li
+              key={r.key}
+              className={`flex items-start gap-3 px-5 py-3 ${s.tone === 'found' ? 'bg-accent/10' : ''}`}
+            >
+              <span
+                aria-hidden="true"
+                className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
+                  s.tone === 'found'
+                    ? 'bg-accent-deep'
+                    : s.tone === 'tried'
+                      ? 'bg-ink-muted'
+                      : 'bg-line'
+                }`}
+              />
+              <span className="min-w-0 flex-1">
+                <span
+                  className={`block text-sm font-bold ${s.tone === 'muted' ? 'text-ink-muted' : 'text-ink'}`}
+                >
+                  {r.title}
+                </span>
+                <span className="mt-0.5 block text-xs leading-relaxed text-ink-muted">
+                  {r.body}
+                </span>
+              </span>
+              <span
+                className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                  s.tone === 'found'
+                    ? 'bg-accent-deep text-white'
+                    : s.tone === 'tried'
+                      ? 'bg-surface text-ink'
+                      : 'bg-surface text-ink-faint'
+                }`}
+              >
+                {s.text}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}

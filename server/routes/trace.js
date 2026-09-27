@@ -305,6 +305,7 @@ async function extractAtCandidateSizes(
       const reading = await readOnce(`direct@${d}`, async () => ({
         ...(await extract(buffer, d, { multiOrientation: false })),
         rescaledTo: `direct (${d} delta)`,
+        pass: 'direct',
       }));
       if (await consider(reading, ev)) return reading;
     }
@@ -316,6 +317,7 @@ async function extractAtCandidateSizes(
         return {
           ...(await extract(aligned, d, { multiOrientation: false })),
           rescaledTo: `${dims} px`,
+          pass: 'scaled',
         };
       });
       if (await consider(reading, ev)) return reading;
@@ -335,6 +337,7 @@ async function extractAtCandidateSizes(
           return {
             ...(await extract(tonedImg, d, { multiOrientation: false })),
             rescaledTo: `${dims} px (tones matched)`,
+            pass: 'tones',
           };
         });
         if (await consider(reading, ev)) return reading;
@@ -359,6 +362,7 @@ async function extractAtCandidateSizes(
         return {
           ...(await extract(top, ev.deltaUsed || 12, { multiOrientation: false })),
           rescaledTo: `${dims} px (keyboard clipped)`,
+          pass: 'topcrop',
         };
       });
       if (await consider(reading, ev)) return reading;
@@ -942,6 +946,18 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
         : null,
       suspects: suspects,
       traitor,
+      // Which read found the mark: the file as uploaded (or straightened by
+      // the lens), one of the four rescaled passes, capture recovery, or the
+      // PDF's own document layers.
+      extraction: {
+        pass: isDocPdf
+          ? 'document'
+          : capture && marked === capture.reading
+            ? 'capture'
+            : marked.pass || (lens?.applied ? 'straightened' : 'as-uploaded'),
+        tones: Boolean(lens?.applied),
+        found: Boolean(event),
+      },
       reasons,
       tamper,
       lens: lens ? { ...lens, buffer: undefined } : null,

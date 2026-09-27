@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { traceFile, getInvestigations, shortHash } from '../lib/api.js';
 import LensEditor from '../components/LensEditor.jsx';
-import { CapturePanel, LensPanel, TamperPanel } from '../components/ForensicPanels.jsx';
+import {
+  CapturePanel,
+  LensPanel,
+  ReadPassesPanel,
+  TamperPanel,
+} from '../components/ForensicPanels.jsx';
 import { Header, Notice } from './Assets.jsx';
 import Select from '../components/Select.jsx';
 import { CameraIcon, CheckIcon, FileIcon } from '../components/icons.jsx';
@@ -619,6 +624,36 @@ function ModePicker({ value, onChange }) {
           );
         })}
       </div>
+
+      {/* What the chosen mode will do to the upload, before the mark is read. */}
+      <div
+        aria-live="polite"
+        className="mt-3 flex items-start gap-2.5 rounded-xl border border-line bg-surface px-3.5 py-2.5"
+      >
+        <span className="relative mt-1 flex h-2.5 w-2.5 shrink-0" aria-hidden="true">
+          {value && (
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60" />
+          )}
+          <span
+            className={`relative inline-flex h-2.5 w-2.5 rounded-full ${value ? 'bg-accent-deep' : 'bg-ink-muted'}`}
+          />
+        </span>
+        <p className="text-xs leading-relaxed text-ink-muted">
+          {value ? (
+            <>
+              <span className="font-bold text-ink">Optical forensic lens on.</span> The page is
+              straightened from its four corners, the screen&apos;s moiré is notched out and the
+              camera&apos;s tones are matched to the release — then read four ways: direct, scaled
+              back to the released size, tone-matched and top-cropped.
+            </>
+          ) : (
+            <>
+              <span className="font-bold text-ink">Standard extraction.</span> The file is read
+              exactly as uploaded — nothing straightened, cleaned or re-toned.
+            </>
+          )}
+        </p>
+      </div>
     </fieldset>
   );
 }
@@ -1027,6 +1062,7 @@ function Verdict({ result }) {
       </div>
 
       <LensPanel lens={result.lens} />
+      <ReadPassesPanel extraction={result.extraction} />
       <CapturePanel capture={result.capture} />
       <TamperPanel tamper={result.tamper} />
     </div>
