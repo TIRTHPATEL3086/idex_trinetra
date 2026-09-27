@@ -28,10 +28,13 @@ const FONT_DIR =
     .split(path.sep)
     .join('/') + '/';
 
-/** Pages compared when measuring a PDF's PSNR; enough to cover a mark on
- *  every page without making a long document slow to release. */
-const PSNR_PAGES = 5;
-const PSNR_DPI = 100;
+/** Pages compared when measuring a PDF's PSNR, and the resolution. Kept
+ *  small: the live server has a fraction of one CPU, and this work must not
+ *  hold up the requests queued behind it. */
+const PSNR_PAGES = 3;
+const PSNR_DPI = 72;
+/** Hand the event loop back between pages so other requests are served. */
+const breathe = () => new Promise((resolve) => setImmediate(resolve));
 
 /**
  * PSNR of a marked PDF against its original, measured the same way as for an
@@ -69,7 +72,10 @@ export async function pdfPsnr(originalPdf, markedPdf) {
     let sse = 0;
     let count = 0;
     for (let n = 1; n <= Math.min(da.numPages, PSNR_PAGES); n++) {
-      const [pa, pb] = await Promise.all([draw(da, n), draw(db, n)]);
+      await breathe();
+      const pa = await draw(da, n);
+      await breathe();
+      const pb = await draw(db, n);
       if (pa.length !== pb.length) return null;
       for (let i = 0; i < pa.length; i += 4) {
         // RGB only; the alpha channel is always opaque paper here.
