@@ -354,7 +354,7 @@ function AboutSection() {
       <div className="mx-auto grid w-full max-w-6xl items-center gap-14 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
         <div>
           <Reveal>
-            <span className="eyebrow">What Provenance is</span>
+            <span className="eyebrow">What IDEX Trinetra is</span>
             <h2 className="mt-3 font-display text-[clamp(2rem,4.6vw,3.5rem)] leading-[1.02]">
               <span className="block text-noir">A leak used to be</span>
               <span className="tone-accent block">a dead end.</span>
@@ -363,7 +363,7 @@ function AboutSection() {
           <Reveal delay={120}>
             <p className="mt-6 max-w-[54ch] text-base leading-relaxed text-ink-muted sm:text-lg">
               When a protected document turns up where it should not, the first question is who let
-              it out — and when everyone received the same file, there is no answer. Provenance
+              it out — and when everyone received the same file, there is no answer. IDEX Trinetra
               gives every person their own copy, records each release before it happens, and reads a
               leaked copy back to the one person it was issued to.
             </p>
@@ -889,7 +889,7 @@ function FeaturesSection() {
     <PinnedRow
       id="features"
       bg="base"
-      label="What Provenance is built on"
+      label="What IDEX Trinetra is built on"
       count={FEATURES.length}
       header={
         <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
@@ -1074,7 +1074,9 @@ function ClosingSection() {
           </Link>
         </div>
 
-        <p className="mt-8 text-xs text-canvas/35">Provenance · Decryption provenance register</p>
+        <p className="mt-8 text-xs text-canvas/35">
+          IDEX Trinetra · Decryption provenance register
+        </p>
       </div>
     </Section>
   );

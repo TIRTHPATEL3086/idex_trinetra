@@ -358,10 +358,11 @@
 
 .pl-word {
   display: flex;
-  font-family: Comfortaa, Sniglet, ui-rounded, sans-serif;
-  font-weight: 700;
-  font-size: clamp(34px, 7vw, 58px);
-  letter-spacing: 0.01em;
+  /* the IDEX Trinetra wordmark's face (see .brand-idex in index.css) */
+  font-family: 'Orbitron Variable', Inter, sans-serif;
+  font-weight: 800;
+  font-size: clamp(22px, 5vw, 42px);
+  letter-spacing: 0.06em;
   line-height: 1.1;
   perspective: 400px;
 }
