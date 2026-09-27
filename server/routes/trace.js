@@ -101,6 +101,56 @@ function evidenceDigest(evidence) {
 /** Candidates the pHash search itself matched — a genuine visual resemblance. */
 const visualMatches = (candidates) => candidates.filter((c) => c.pHashDist != null);
 
+/** Only image releases can be aligned to a photo or screenshot. */
+const IMAGE_RELEASE = { asset: { mimeType: { startsWith: 'image/' } } };
+
+/**
+ * A released copy as a picture the upload can be aligned to, with its size —
+ * or null when it is gone or is not one: a PDF, or a file sharp cannot decode
+ * (cut short, or stale on the server's disk). Such a copy is skipped, the same
+ * as a missing one, instead of failing the whole trace.
+ */
+async function readImageCopy(ev) {
+  const copy = await readMarked(ev).catch(() => null);
+  if (!copy || isPdf(copy)) return null;
+  try {
+    const { width, height } = await sharp(copy).metadata();
+    return width && height ? { buffer: copy, width, height } : null;
+  } catch (err) {
+    console.warn(`[trace] released copy of event ${ev.id} is not a readable image:`, err.message);
+    return null;
+  }
+}
+
+/**
+ * One trace looks at the same released copies several times (rescaled reads,
+ * with and without the lens, capture recovery). Each copy is fetched from
+ * storage and checked once per trace and shared.
+ */
+function traceCache() {
+  const copies = new Map();
+  return {
+    copy: (ev) => {
+      if (!copies.has(ev.id)) copies.set(ev.id, readImageCopy(ev));
+      return copies.get(ev.id);
+    },
+  };
+}
+
+/**
+ * A step that only tries to recover more of the mark. Should it fail, the
+ * trace goes on with the reading it already has rather than failing outright;
+ * the stage is logged so the cause can be found.
+ */
+async function optionalStep(stage, fn) {
+  try {
+    return await fn();
+  } catch (err) {
+    console.warn(`[trace] ${stage} skipped:`, err?.stack || err);
+    return null;
+  }
+}
+
 /**
  * Re-read the mark after scaling the leak back to the size of each copy the
  * hash search matched. A rescaled reading is rarely bit-perfect, so it is kept
@@ -111,10 +161,15 @@ const visualMatches = (candidates) => candidates.filter((c) => c.pHashDist != nu
  *
  * @returns the best such reading, or null
  */
-async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {}) {
+async function extractAtCandidateSizes(
+  buffer,
+  candidates,
+  { tones = false, cache = traceCache() } = {}
+) {
   let matchedIds = visualMatches(candidates).map((c) => c.id);
   if (!matchedIds.length) {
     const recent = await prisma.decryptionEvent.findMany({
+      where: IMAGE_RELEASE,
       orderBy: { createdAt: 'desc' },
       take: 25,
       select: { id: true },
@@ -123,7 +178,7 @@ async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {
   }
 
   const events = await prisma.decryptionEvent.findMany({
-    where: { id: { in: matchedIds } },
+    where: { id: { in: matchedIds }, ...IMAGE_RELEASE },
     orderBy: { createdAt: 'desc' },
     take: 25,
     select: { id: true, markedPath: true, payloadBits: true, deltaUsed: true },
@@ -134,9 +189,35 @@ async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {
 
   // Keeps a reading that names a release outright, or the one that agrees
   // best with this copy's own payload beyond chance.
+  // The same bits come up again and again; look each up once.
+  const named = new Map();
+  const namesOnce = (bits) => {
+    if (!named.has(bits)) named.set(bits, namesARelease(bits));
+    return named.get(bits);
+  };
+  // The upload scaled to a size, and tone-matched to a copy, made once each
+  // rather than once per strength tried.
+  const scaled = new Map();
+  const scaledTo = (w, h) => {
+    const key = `${w}x${h}`;
+    if (!scaled.has(key)) {
+      scaled.set(key, sharp(buffer).resize(w, h, { fit: 'fill' }).png().toBuffer());
+    }
+    return scaled.get(key);
+  };
+  const toned = new Map();
+  const tonedTo = (ev, copy, w, h) => {
+    if (!toned.has(ev.id))
+      toned.set(
+        ev.id,
+        scaledTo(w, h).then((img) => matchTones(img, copy))
+      );
+    return toned.get(ev.id);
+  };
+
   const consider = async (reading, ev) => {
     if (!reading || isDegeneratePayload(reading.payloadBits)) return false;
-    if (await namesARelease(reading.payloadBits)) return true;
+    if (await namesOnce(reading.payloadBits)) return true;
     const matches = bitsMatching(reading.payloadBits, ev.payloadBits);
     if (matches >= MIN_BITS_WITHOUT_CRC && (!best || matches > best.matches)) {
       best = { reading, matches };
@@ -155,10 +236,10 @@ async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {
   };
 
   for (const ev of events) {
-    const copy = await readMarked(ev);
-    // Gone, or a PDF: neither is a picture the upload could be aligned to.
-    if (!copy || isPdf(copy)) continue;
-    const size = await sharp(copy).metadata();
+    const copy = await cache.copy(ev);
+    // Gone, a PDF, or unreadable: not a picture the upload could be aligned to.
+    if (!copy) continue;
+    const size = { width: copy.width, height: copy.height };
     const dims = `${size.width}x${size.height}`;
     const deltas = [...new Set([ev.deltaUsed, 12, 14].filter(Boolean))];
 
@@ -174,10 +255,7 @@ async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {
     // Pass 1: scaled back to the released copy's size.
     for (const d of [...new Set([...deltas, 16])]) {
       const reading = await readOnce(`${dims}@${d}`, async () => {
-        const aligned = await sharp(buffer)
-          .resize(size.width, size.height, { fit: 'fill' })
-          .png()
-          .toBuffer();
+        const aligned = await scaledTo(size.width, size.height);
         return {
           ...(await extract(aligned, d, { multiOrientation: false })),
           rescaledTo: `${dims} px`,
@@ -191,13 +269,9 @@ async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {
     if (tones) {
       for (const d of deltas) {
         const reading = await readOnce(`${dims}#${ev.id}@${d}`, async () => {
-          const aligned = await sharp(buffer)
-            .resize(size.width, size.height, { fit: 'fill' })
-            .png()
-            .toBuffer();
-          const toned = await matchTones(aligned, copy);
+          const tonedImg = await tonedTo(ev, copy.buffer, size.width, size.height);
           return {
-            ...(await extract(toned, d, { multiOrientation: false })),
+            ...(await extract(tonedImg, d, { multiOrientation: false })),
             rescaledTo: `${dims} px (tones matched)`,
           };
         });
@@ -238,36 +312,32 @@ async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {
  */
 const CAPTURE_CANDIDATES = 12;
 
-async function recoverCapture(buffer, candidates) {
+async function recoverCapture(buffer, candidates, cache = traceCache()) {
   const recent = await prisma.decryptionEvent.findMany({
+    where: IMAGE_RELEASE,
     orderBy: { createdAt: 'desc' },
     take: CAPTURE_CANDIDATES,
     select: { id: true },
   });
   const ids = [
     ...new Set([...visualMatches(candidates).map((c) => c.id), ...recent.map((e) => e.id)]),
-  ].slice(0, CAPTURE_CANDIDATES);
+  ];
+  // Image releases only, so a matched PDF never takes one of the places.
   const events = await prisma.decryptionEvent.findMany({
-    where: { id: { in: ids } },
-    select: {
-      id: true,
-      markedPath: true,
-      payloadBits: true,
-      deltaUsed: true,
-      asset: { select: { mimeType: true } },
-    },
+    where: { id: { in: ids }, ...IMAGE_RELEASE },
+    select: { id: true, markedPath: true, payloadBits: true, deltaUsed: true },
   });
   const releases = [];
   for (const id of ids) {
+    if (releases.length >= CAPTURE_CANDIDATES) break;
     const ev = events.find((e) => e.id === id);
-    if (!ev || !(ev.asset?.mimeType || '').startsWith('image/')) continue;
-    const copy = await readMarked(ev);
+    const copy = ev && (await cache.copy(ev));
     if (copy)
       releases.push({
         id: ev.id,
         payloadBits: ev.payloadBits,
         deltaUsed: ev.deltaUsed,
-        buffer: copy,
+        buffer: copy.buffer,
       });
   }
   if (!releases.length) return null;
@@ -362,6 +432,7 @@ router.post('/lens/detect', requireCap('trace:run'), singleFile, async (req, res
 
 router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => {
   const startedAt = Date.now();
+  const cache = traceCache();
   try {
     if (!req.file) throw badInput('No file uploaded. Send multipart field "file".');
 
@@ -438,9 +509,12 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
       // so scale the leak back to each candidate's released size and read again.
       // With no hash match, recent releases are tried instead (see above).
       if (!(await namesARelease(marked.payloadBits))) {
-        const rescaled = await extractAtCandidateSizes(leak, candidates, {
-          tones: Boolean(lens?.applied),
-        });
+        const rescaled = await optionalStep('rescaled read', () =>
+          extractAtCandidateSizes(leak, candidates, {
+            cache,
+            tones: Boolean(lens?.applied),
+          })
+        );
         if (rescaled) marked = rescaled;
 
         // Auto-Lens fallback: if user uploaded a phone camera capture directly
@@ -477,21 +551,25 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
                 marked = lensExtract;
               } else {
                 const lensRescaled = await extractAtCandidateSizes(leak, candidates, {
+                  cache,
                   tones: true,
                 });
                 if (lensRescaled) marked = lensRescaled;
                 else if (lensExtract) marked = lensExtract;
               }
             }
-          } catch {
+          } catch (err) {
             // auto-lens found no screen; keep the reading already made
+            console.warn('[trace] auto-lens skipped:', err?.message || err);
           }
         }
       }
       // Still nothing: the page may be only part of the upload — a phone
       // photo of a screen, a screenshot with the viewer around it, a crop.
       if (!(await readingIdentifies(marked.payloadBits))) {
-        capture = await recoverCapture(leak, candidates);
+        capture = await optionalStep('capture recovery', () =>
+          recoverCapture(leak, candidates, cache)
+        );
         if (capture) marked = capture.reading;
       }
     }
@@ -693,12 +771,8 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
             'This release predates the fragile layer, so its contents cannot be checked for edits.',
         };
       } else {
-        let released = null;
-        const copy = await readMarked(event);
-        if (copy) {
-          const m = await sharp(copy).metadata();
-          released = { width: m.width, height: m.height };
-        }
+        const copy = await cache.copy(event);
+        const released = copy ? { width: copy.width, height: copy.height } : null;
         tamper = await verifyFragile(buffer, bufferToHex(event.receiptId), released);
       }
       reasons.push(

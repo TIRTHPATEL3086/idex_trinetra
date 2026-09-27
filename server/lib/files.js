@@ -37,17 +37,21 @@ export async function writeDurable(kind, filePath, bytes) {
 export async function readDurable(kind, filePath) {
   if (!filePath) return null;
   const local = await fs.readFile(filePath).catch(() => null);
-  if (local) return local;
+  if (local?.length) return local;
   const row = await prisma.storedFile.findUnique({
     where: { key: keyFor(kind, filePath) },
     select: { bytes: true },
   });
   if (!row) return null;
   const bytes = Buffer.from(row.bytes);
+  // Written aside and renamed into place, so a request reading the same file
+  // meanwhile never sees it half written.
+  const partial = `${filePath}.${process.pid}.${Date.now()}.part`;
   await fs
     .mkdir(path.dirname(filePath), { recursive: true })
-    .then(() => fs.writeFile(filePath, bytes))
-    .catch(() => {}); // a read-only disk still serves from the database
+    .then(() => fs.writeFile(partial, bytes))
+    .then(() => fs.rename(partial, filePath))
+    .catch(() => fs.rm(partial, { force: true }).catch(() => {})); // a read-only disk still serves from the database
   return bytes;
 }
 
