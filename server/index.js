@@ -1,11 +1,28 @@
 import path from 'node:path';
 import express from 'express';
+import sharp from 'sharp';
 import cors from 'cors';
 
 // Enable clean JSON serialization for BigInt values across all Express routes
 BigInt.prototype.toJSON = function () {
   return this.toString();
 };
+
+// The live server has 512 MB. libvips' default of one thread per core and a
+// 50 MB operation cache, with glibc's per-thread arenas on Linux, let memory
+// balloon while pages are drawn and marked; one thread and a small cache
+// keep a release or a trace well inside it.
+sharp.concurrency(1);
+sharp.cache({ memory: 16, files: 0, items: 20 });
+
+// A crash should say why in the host's logs before the host restarts us.
+process.on('unhandledRejection', (reason) => {
+  console.error('[fatal] unhandled rejection:', reason?.stack || reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[fatal] uncaught exception:', err?.stack || err);
+  process.exit(1);
+});
 
 import { env, ROOT, warnAboutConfig } from './lib/env.js';
 import { prisma, dbStatus } from './lib/prisma.js';
@@ -82,9 +99,25 @@ app.use('/api/files', filesRouter);
 // the internet. In development Vite serves the client instead.
 if (process.env.SERVE_CLIENT === '1') {
   const dist = path.join(ROOT, 'client', 'dist');
-  app.use(express.static(dist, { index: false }));
+  // Files under assets/ are named by their content, so a browser may keep
+  // them for a year: a new build produces new names. index.html and the
+  // service worker are always checked, so a deploy is picked up at once.
+  const noCache = (res) => res.setHeader('Cache-Control', 'no-cache');
+  app.use(
+    express.static(dist, {
+      index: false,
+      setHeaders(res, file) {
+        if (/[\\/]assets[\\/]/.test(file)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        } else if (/\.html$|[\\/]sw\.js$/.test(file)) {
+          noCache(res);
+        }
+      },
+    })
+  );
   app.get(/^(?!\/api\/).*/, (req, res, next) => {
     if (!req.accepts('html')) return next();
+    noCache(res);
     res.sendFile(path.join(dist, 'index.html'));
   });
 }

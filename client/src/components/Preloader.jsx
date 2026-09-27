@@ -28,7 +28,7 @@ const INTRO_MS = 3200; // length of the CSS timeline in Preloader.css
 const SPLIT_MS = 800; // seam draw + halves parting
 const REDUCED_MS = 600;
 const READY_CAP_MS = INTRO_MS; // never hold the intro past 4 s in total
-const WORD = 'provenance';
+const WORD = 'IDEX TRINETRA';
 
 export default function Preloader({ onDone }) {
   const [leaving, setLeaving] = useState(false);
@@ -91,7 +91,7 @@ export default function Preloader({ onDone }) {
       className={`pl ${leaving ? 'pl--leaving' : ''}`}
       role="status"
       aria-live="polite"
-      aria-label={leaving ? 'Loaded' : 'Loading Provenance'}
+      aria-label={leaving ? 'Loaded' : 'Loading IDEX Trinetra'}
     >
       <div className="pl-half pl-half--top">
         <Scene pct={pct} />
@@ -183,7 +183,7 @@ function Scene({ pct }) {
           <div className="pl-word" aria-label={WORD}>
             {WORD.split('').map((ch, i) => (
               <span key={i} style={{ '--i': i }}>
-                {ch}
+                {ch === ' ' ? ' ' : ch}
               </span>
             ))}
           </div>

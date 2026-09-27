@@ -4,7 +4,8 @@
  * compared with the stored released copy, exactly as a new release is — and
  * saves the figure, so the register shows a real number for every copy.
  *
- * Runs in the background after the server starts; anything it cannot measure
+ * Runs in the background after the server starts, one release at a time with
+ * pauses between, so it never holds up requests; anything it cannot measure
  * (a missing file, a key that no longer opens) is left as it was.
  */
 import { prisma } from './prisma.js';
@@ -28,6 +29,9 @@ export async function backfillPdfPsnr(log = () => {}) {
   let done = 0;
   const originals = new Map(); // assetId -> plaintext, decrypted once
   for (const event of events) {
+    // One release at a time, with a pause between, so a slow server keeps
+    // answering people while this catches up.
+    await new Promise((resolve) => setTimeout(resolve, 1500));
     try {
       let original = originals.get(event.assetId);
       if (original === undefined) {

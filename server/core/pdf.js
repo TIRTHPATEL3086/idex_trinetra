@@ -9,11 +9,13 @@
  *   readable by any forensic investigator, survives most document management
  *   systems, and is the ground truth used by extractPdf().
  *
- * Layer 2 — Rasterized DWT (Invisible Image XObject):
- *   Generates a 256×256 grayscale tile, applies the same Haar-DWT + QIM
- *   pipeline as embed() in watermark.js, and injects it as a transparent
- *   image XObject on every page. This survives print-scan cycles (the raster
- *   mark survives rasterization — metadata doesn't).
+ * Layer 2 — the pages' own pixels (core/pagemark.js):
+ *   Every page is drawn, marked coarsely enough to survive a phone photo of
+ *   the screen, and laid over itself as a page-sized image; the original
+ *   content stays underneath for text selection. The keywords carry
+ *   PAGE_MARK_TAG so a trace knows to align photos to these pages. Should
+ *   that fail, a 256×256 DWT tile is drawn faintly in each page's corner
+ *   instead (the earlier scheme — it does not survive a photo).
  *
  * Together, these two layers satisfy the "Rasterized DWT Watermarking for
  * Document PDFs" requirement from the Phase 4 spec.
@@ -29,6 +31,11 @@ import { PDFDocument, rgb } from 'pdf-lib';
 import sharp from 'sharp';
 
 import { env } from '../lib/env.js';
+import { markPage, pageMarkView, PAGE_MARK, PAGE_MARK_TAG } from './pagemark.js';
+import { renderPdfPages } from './pdfpreview.js';
+
+/** Pages marked in their pixels; any beyond keep the metadata layer only. */
+const MAX_MARKED_PAGES = 100;
 
 /**
  * Checks if a buffer is a PDF file by inspecting the magic header bytes.
@@ -38,6 +45,20 @@ import { env } from '../lib/env.js';
 export function isPdf(buffer) {
   if (!buffer || buffer.length < 4) return false;
   return buffer.slice(0, 4).toString('ascii') === '%PDF';
+}
+
+/**
+ * Whether a PDF's pages carry the mark in their pixels (released after the
+ * page mark was introduced). Earlier PDF releases are marked in their
+ * metadata only, and a photo of one cannot be traced.
+ */
+export async function hasPageMark(pdfBuffer) {
+  try {
+    const doc = await PDFDocument.load(pdfBuffer, { updateMetadata: false });
+    return String(doc.getKeywords() || '').includes(PAGE_MARK_TAG);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -101,7 +122,63 @@ export async function embedPdf(pdfBuffer, payloadBits, receiptIdHex) {
   doc.setCreator('SIH26237 Crypto Provenance System');
   doc.setProducer(`ML-KEM-768/ML-DSA-65 NIST PQC`);
 
-  // ── Layer 2: Rasterized DWT Tile ─────────────────────────────────────────
+  // ── Layer 2: the mark in the pages' own pixels ───────────────────────────
+  // Each page is drawn, marked (core/pagemark.js) and laid over itself as one
+  // image the size of the page. The original content stays underneath, so
+  // text can still be selected and searched; what is seen — and what a photo
+  // of the screen captures — is the marked page.
+  try {
+    // Every page is marked before any is drawn on, so a failure part-way
+    // leaves the document untouched for the fallback below. Pages are taken
+    // one at a time as they are drawn; only the marked JPEGs are kept.
+    // The PSNR is of what a reader sees — each page as drawn against the
+    // marked image laid over it — pooled over the marked pages.
+    const marks = [];
+    let sse = 0;
+    let count = 0;
+    const pixels = (buf, d) =>
+      sharp(buf).removeAlpha().resize(d.width, d.height, { fit: 'fill' }).raw().toBuffer();
+    await renderPdfPages(pdfBuffer, {
+      maxPages: MAX_MARKED_PAGES,
+      dpi: PAGE_MARK.dpi,
+      onPage: async (d) => {
+        const marked = await markPage(d.png, payloadBits);
+        const jpeg = await sharp(marked)
+          .jpeg({ quality: 92, chromaSubsampling: '4:4:4' })
+          .toBuffer();
+        marks.push({ page: d.page, jpeg });
+        const a = await pixels(d.png, d);
+        const b = await pixels(jpeg, d);
+        for (let i = 0; i < a.length; i++) sse += (a[i] - b[i]) ** 2;
+        count += a.length;
+      },
+    });
+    const psnrDb = count && sse ? 10 * Math.log10((255 * 255 * count) / sse) : null;
+    const pages = doc.getPages();
+    for (const { page: n, jpeg } of marks) {
+      const page = pages[n - 1];
+      const box = page.getCropBox();
+      page.drawImage(await doc.embedJpg(jpeg), {
+        x: box.x,
+        y: box.y,
+        width: box.width,
+        height: box.height,
+      });
+    }
+    doc.setKeywords([
+      `provenance:${receiptIdHex}`,
+      `payload:${payloadBits}`,
+      `algo:haar-dwt-qim`,
+      `version:v1`,
+      PAGE_MARK_TAG,
+    ]);
+    const modifiedBytes = await doc.save();
+    return { buffer: Buffer.from(modifiedBytes), psnrDb, deltaUsed: PAGE_MARK.delta };
+  } catch (err) {
+    console.warn('[pdf] marking the pages failed, falling back to the corner tile:', err.message);
+  }
+
+  // ── Fallback: Rasterized DWT Tile ────────────────────────────────────────
   try {
     const tileJpeg = await generateWatermarkTile(payloadBits);
     const embeddedImg = await doc.embedJpg(tileJpeg);
@@ -216,6 +293,26 @@ export async function extractPdf(pdfBuffer) {
       }
     } catch {
       // XObject walk failed — not a fatal error
+    }
+
+    // ── Method 4: the mark in the first page's pixels ───────────────────────
+    // Survives the metadata being stripped, as long as the page image stays.
+    try {
+      const { extract } = await import('./watermark.js');
+      const { parsePayload } = await import('./payload.js');
+      const [first] = await renderPdfPages(pdfBuffer, { maxPages: 1, dpi: PAGE_MARK.dpi });
+      if (first) {
+        const reading = await extract(await pageMarkView(first.png), PAGE_MARK.delta);
+        if (parsePayload(reading.payloadBits).crcOk) {
+          return {
+            payloadBits: reading.payloadBits,
+            bitConfidence: reading.bitConfidence,
+            eccCorrected: reading.eccCorrected,
+          };
+        }
+      }
+    } catch {
+      // no page mark to read
     }
 
     return null;

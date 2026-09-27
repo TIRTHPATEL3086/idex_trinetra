@@ -100,8 +100,7 @@ export default function LensEditor({ file, onTrace, onCancel, busy }) {
         )}
       </div>
 
-      <div className="rounded-xl border border-accent/30 bg-accent/10 px-3.5 py-2.5 text-xs text-ink flex items-start gap-2.5">
-        <span className="text-base select-none">🎯</span>
+      <div className="rounded-xl border border-accent/30 bg-accent/10 px-3.5 py-2.5 text-xs text-ink">
         <div className="leading-snug">
           <strong className="text-accent font-bold">Forensic Lens Alignment Tip:</strong> Drag the 4 corner handles onto the corners of the <strong>COMPUTER DISPLAY SCREEN ONLY</strong>. Exclude the laptop keyboard, bezels, and desk so the mathematical watermark grid lines up.
         </div>

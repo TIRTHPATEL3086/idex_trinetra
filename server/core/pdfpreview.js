@@ -28,10 +28,13 @@ const FONT_DIR =
     .split(path.sep)
     .join('/') + '/';
 
-/** Pages compared when measuring a PDF's PSNR; enough to cover a mark on
- *  every page without making a long document slow to release. */
-const PSNR_PAGES = 5;
-const PSNR_DPI = 100;
+/** Pages compared when measuring a PDF's PSNR, and the resolution. Kept
+ *  small: the live server has a fraction of one CPU, and this work must not
+ *  hold up the requests queued behind it. */
+const PSNR_PAGES = 3;
+const PSNR_DPI = 72;
+/** Hand the event loop back between pages so other requests are served. */
+const breathe = () => new Promise((resolve) => setImmediate(resolve));
 
 /**
  * PSNR of a marked PDF against its original, measured the same way as for an
@@ -69,7 +72,10 @@ export async function pdfPsnr(originalPdf, markedPdf) {
     let sse = 0;
     let count = 0;
     for (let n = 1; n <= Math.min(da.numPages, PSNR_PAGES); n++) {
-      const [pa, pb] = await Promise.all([draw(da, n), draw(db, n)]);
+      await breathe();
+      const pa = await draw(da, n);
+      await breathe();
+      const pb = await draw(db, n);
       if (pa.length !== pb.length) return null;
       for (let i = 0; i < pa.length; i += 4) {
         // RGB only; the alpha channel is always opaque paper here.
@@ -89,6 +95,54 @@ export async function pdfPsnr(originalPdf, markedPdf) {
       : 10 * Math.log10((255 * 255) / mse);
   } finally {
     await Promise.all([a.destroy(), b.destroy()]);
+  }
+}
+
+/**
+ * The first pages of a PDF as pictures, the document opened once. Drawn
+ * upright, whatever /Rotate a page carries, so each picture lines up with the
+ * page's own coordinates — the frame a watermarked page image is laid in.
+ *
+ * With `onPage`, each page is handed over as soon as it is drawn and not
+ * kept, so a long document is never held in memory all at once.
+ *
+ * @param {Buffer} pdfBuffer
+ * @param {{ maxPages?: number, dpi?: number, onPage?: (p: object) => Promise<void> }} [opts]
+ * @returns {Promise<Array<{ png:Buffer, page:number, width:number, height:number }>>}
+ */
+export async function renderPdfPages(
+  pdfBuffer,
+  { maxPages = Infinity, dpi = DPI, onPage = null } = {}
+) {
+  const lib = await loadPdfjs();
+  const { createCanvas } = require('@napi-rs/canvas');
+  const task = lib.getDocument({
+    data: new Uint8Array(pdfBuffer),
+    standardFontDataUrl: FONT_DIR,
+    verbosity: 0,
+    isEvalSupported: false,
+  });
+  try {
+    const doc = await task.promise;
+    const pages = [];
+    for (let n = 1; n <= Math.min(doc.numPages, maxPages); n++) {
+      await breathe();
+      const page = await doc.getPage(n);
+      const vp = page.getViewport({ scale: dpi / 72, rotation: 0 });
+      const canvas = createCanvas(Math.round(vp.width), Math.round(vp.height));
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff'; // paper, not transparency
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({ canvasContext: ctx, viewport: vp, canvas }).promise;
+      const png = await sharp(canvas.toBuffer('image/png')).removeAlpha().png().toBuffer();
+      const drawn = { png, page: n, width: canvas.width, height: canvas.height };
+      if (onPage) await onPage(drawn);
+      else pages.push(drawn);
+      page.cleanup();
+    }
+    return pages;
+  } finally {
+    await task.destroy();
   }
 }
 

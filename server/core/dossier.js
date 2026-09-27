@@ -520,7 +520,7 @@ async function renderOnePage(
   // ---- VI certificate ---------------------------------------------------------------------
   heading('VI', 'Certificate under Section 63, BSA, 2023 / Section 65B, IEA, 1872');
   paraAt(
-    `Part A: I certify that the electronic record in item 3 of Part III, and this report, were produced by the Indian Navy (WESEE) Decryption Provenance system in its regular use; that the system was operating properly under air-gapped security throughout; and that the SHA-256 digests and DLT blockchain commitments were computed by it at the stages stated.`,
+    `Part A: I certify that the electronic record in item 3 of Part III, and this report, were produced by the IDEX Trinetra decryption provenance system of the Indian Navy (WESEE) in its regular use; that the system was operating properly under air-gapped security throughout; and that the SHA-256 digests and DLT blockchain commitments were computed by it at the stages stated.`,
     L + 2,
     W - 4,
     s(7.4),

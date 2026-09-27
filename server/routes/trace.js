@@ -10,6 +10,9 @@ import { requireCap } from '../middleware/auth.js';
 import * as chain from '../core/chain.js';
 import * as bktree from '../core/bktree.js';
 import { hashes, extract, score, sha256, hamming, isPdf, extractPdf } from '../core/index.js';
+import { hasPageMark } from '../core/pdf.js';
+import { renderPdfPages } from '../core/pdfpreview.js';
+import { PAGE_MARK, pageMarkView } from '../core/pagemark.js';
 import {
   parsePayload,
   bitAgreement,
@@ -43,11 +46,22 @@ const router = Router();
 /**
  * Bits that must agree before a reading without a valid CRC may name a release.
  * Chance agreement is 24/48; the watermark attack suite's genuine survivals
- * land at 43-48. At 30, comparing a blank or unrelated image against the ~50
- * recent releases routinely found one at 31 by luck and named its recipient.
- * 40/48 happens by chance about once in a million comparisons.
+ * land at 43-48, and simulated phone photos of a released image at 37-40. At
+ * 30, a photo of a document nobody here released was read at 30-32 against
+ * a recent release and its recipient named — a trace compares one upload
+ * with many copies many ways, so the best of those comparisons is well above
+ * 24 by chance alone. 36/48 happens by chance about 3 times in 10,000
+ * comparisons; the lead over other officers (MIN_LEAD_BITS) does the rest.
  */
-const MIN_BITS_WITHOUT_CRC = 30;
+const MIN_BITS_WITHOUT_CRC = 36;
+
+/**
+ * How far a reading without a valid CRC must agree better with the named
+ * officer's copy than with any other officer's. A genuine mark leads by far
+ * (a photo read at 37 agrees with other officers' copies at about 24); a
+ * lucky reading barely leads at all.
+ */
+const MIN_LEAD_BITS = 4;
 
 /**
  * Whether bits name a real release: a valid CRC alone is not enough, because
@@ -102,6 +116,86 @@ function evidenceDigest(evidence) {
 const visualMatches = (candidates) => candidates.filter((c) => c.pHashDist != null);
 
 /**
+ * Releases a photo or screenshot can be aligned to: images, and PDFs — whose
+ * pages carry the mark in their pixels (older PDF releases, marked in their
+ * metadata only, are passed over when their copy is read).
+ */
+const TRACEABLE_RELEASE = {
+  OR: [
+    { asset: { mimeType: { startsWith: 'image/' } } },
+    { asset: { mimeType: 'application/pdf' } },
+  ],
+};
+
+/** Pages of a released PDF a photo is compared with; a photo is nearly always of an early page. */
+const TRACE_PDF_PAGES = 3;
+
+/**
+ * A released copy as the pictures an upload can be aligned to, each with its
+ * size: the image itself, or the first pages of a PDF whose pages are marked.
+ * Empty when there is none — the copy is gone, a PDF marked in its metadata
+ * only, or a file sharp cannot decode (cut short, or stale on the server's
+ * disk). Such a copy is skipped, the same as a missing one, instead of failing
+ * the whole trace.
+ */
+async function readReleaseViews(ev) {
+  const copy = await readMarked(ev).catch(() => null);
+  if (!copy) return [];
+  try {
+    if (isPdf(copy)) {
+      if (!(await hasPageMark(copy))) return [];
+      // Each page drawn as it was marked, then shrunk to the scale the mark
+      // lives at: a photo of the page is aligned to that and read there.
+      const pages = await renderPdfPages(copy, {
+        maxPages: TRACE_PDF_PAGES,
+        dpi: PAGE_MARK.dpi,
+      });
+      const views = [];
+      for (const p of pages) {
+        const buffer = await pageMarkView(p.png);
+        const { width, height } = await sharp(buffer).metadata();
+        views.push({ buffer, width, height, page: p.page });
+      }
+      return views;
+    }
+    const { width, height } = await sharp(copy).metadata();
+    return width && height ? [{ buffer: copy, width, height, page: null }] : [];
+  } catch (err) {
+    console.warn(`[trace] released copy of event ${ev.id} could not be read:`, err.message);
+    return [];
+  }
+}
+
+/**
+ * One trace looks at the same released copies several times (rescaled reads,
+ * with and without the lens, capture recovery). Each copy is fetched from
+ * storage, checked and (for a PDF) drawn once per trace and shared.
+ */
+function traceCache() {
+  const copies = new Map();
+  return {
+    views: (ev) => {
+      if (!copies.has(ev.id)) copies.set(ev.id, readReleaseViews(ev));
+      return copies.get(ev.id);
+    },
+  };
+}
+
+/**
+ * A step that only tries to recover more of the mark. Should it fail, the
+ * trace goes on with the reading it already has rather than failing outright;
+ * the stage is logged so the cause can be found.
+ */
+async function optionalStep(stage, fn) {
+  try {
+    return await fn();
+  } catch (err) {
+    console.warn(`[trace] ${stage} skipped:`, err?.stack || err);
+    return null;
+  }
+}
+
+/**
  * Re-read the mark after scaling the leak back to the size of each copy the
  * hash search matched. A rescaled reading is rarely bit-perfect, so it is kept
  * when it agrees with that copy's own payload well beyond chance.
@@ -111,10 +205,15 @@ const visualMatches = (candidates) => candidates.filter((c) => c.pHashDist != nu
  *
  * @returns the best such reading, or null
  */
-async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {}) {
+async function extractAtCandidateSizes(
+  buffer,
+  candidates,
+  { tones = false, cache = traceCache() } = {}
+) {
   let matchedIds = visualMatches(candidates).map((c) => c.id);
   if (!matchedIds.length) {
     const recent = await prisma.decryptionEvent.findMany({
+      where: TRACEABLE_RELEASE,
       orderBy: { createdAt: 'desc' },
       take: 25,
       select: { id: true },
@@ -123,7 +222,7 @@ async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {
   }
 
   const events = await prisma.decryptionEvent.findMany({
-    where: { id: { in: matchedIds } },
+    where: { id: { in: matchedIds }, ...TRACEABLE_RELEASE },
     orderBy: { createdAt: 'desc' },
     take: 25,
     select: { id: true, markedPath: true, payloadBits: true, deltaUsed: true },
@@ -134,9 +233,35 @@ async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {
 
   // Keeps a reading that names a release outright, or the one that agrees
   // best with this copy's own payload beyond chance.
+  // The same bits come up again and again; look each up once.
+  const named = new Map();
+  const namesOnce = (bits) => {
+    if (!named.has(bits)) named.set(bits, namesARelease(bits));
+    return named.get(bits);
+  };
+  // The upload scaled to a size, and tone-matched to a copy, made once each
+  // rather than once per strength tried.
+  const scaled = new Map();
+  const scaledTo = (w, h) => {
+    const key = `${w}x${h}`;
+    if (!scaled.has(key)) {
+      scaled.set(key, sharp(buffer).resize(w, h, { fit: 'fill' }).png().toBuffer());
+    }
+    return scaled.get(key);
+  };
+  const toned = new Map();
+  const tonedTo = (key, copy, w, h) => {
+    if (!toned.has(key))
+      toned.set(
+        key,
+        scaledTo(w, h).then((img) => matchTones(img, copy))
+      );
+    return toned.get(key);
+  };
+
   const consider = async (reading, ev) => {
     if (!reading || isDegeneratePayload(reading.payloadBits)) return false;
-    if (await namesARelease(reading.payloadBits)) return true;
+    if (await namesOnce(reading.payloadBits)) return true;
     const matches = bitsMatching(reading.payloadBits, ev.payloadBits);
     if (matches >= MIN_BITS_WITHOUT_CRC && (!best || matches > best.matches)) {
       best = { reading, matches };
@@ -154,10 +279,13 @@ async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {
     return readings.get(key);
   };
 
-  for (const ev of events) {
-    const copy = await readMarked(ev);
-    if (!copy) continue; // the released copy is gone; nothing to align to
-    const size = await sharp(copy).metadata();
+  // Each picture of each copy: the image, or a page of a PDF. None when the
+  // copy is gone or unreadable — nothing the upload could be aligned to.
+  const views = [];
+  for (const ev of events) for (const view of await cache.views(ev)) views.push({ ev, view });
+
+  for (const { ev, view: copy } of views) {
+    const size = { width: copy.width, height: copy.height };
     const dims = `${size.width}x${size.height}`;
     const deltas = [...new Set([ev.deltaUsed, 12, 14].filter(Boolean))];
 
@@ -173,10 +301,7 @@ async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {
     // Pass 1: scaled back to the released copy's size.
     for (const d of [...new Set([...deltas, 16])]) {
       const reading = await readOnce(`${dims}@${d}`, async () => {
-        const aligned = await sharp(buffer)
-          .resize(size.width, size.height, { fit: 'fill' })
-          .png()
-          .toBuffer();
+        const aligned = await scaledTo(size.width, size.height);
         return {
           ...(await extract(aligned, d, { multiOrientation: false })),
           rescaledTo: `${dims} px`,
@@ -189,14 +314,15 @@ async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {
     // white balance. Tone matching is against one copy, so it is per copy.
     if (tones) {
       for (const d of deltas) {
-        const reading = await readOnce(`${dims}#${ev.id}@${d}`, async () => {
-          const aligned = await sharp(buffer)
-            .resize(size.width, size.height, { fit: 'fill' })
-            .png()
-            .toBuffer();
-          const toned = await matchTones(aligned, copy);
+        const reading = await readOnce(`${dims}#${ev.id}.${copy.page}@${d}`, async () => {
+          const tonedImg = await tonedTo(
+            `${ev.id}.${copy.page}`,
+            copy.buffer,
+            size.width,
+            size.height
+          );
           return {
-            ...(await extract(toned, d, { multiOrientation: false })),
+            ...(await extract(tonedImg, d, { multiOrientation: false })),
             rescaledTo: `${dims} px (tones matched)`,
           };
         });
@@ -237,44 +363,44 @@ async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {
  */
 const CAPTURE_CANDIDATES = 12;
 
-async function recoverCapture(buffer, candidates) {
+async function recoverCapture(buffer, candidates, cache = traceCache()) {
   const recent = await prisma.decryptionEvent.findMany({
+    where: TRACEABLE_RELEASE,
     orderBy: { createdAt: 'desc' },
     take: CAPTURE_CANDIDATES,
     select: { id: true },
   });
   const ids = [
     ...new Set([...visualMatches(candidates).map((c) => c.id), ...recent.map((e) => e.id)]),
-  ].slice(0, CAPTURE_CANDIDATES);
+  ];
   const events = await prisma.decryptionEvent.findMany({
-    where: { id: { in: ids } },
-    select: {
-      id: true,
-      markedPath: true,
-      payloadBits: true,
-      deltaUsed: true,
-      asset: { select: { mimeType: true } },
-    },
+    where: { id: { in: ids }, ...TRACEABLE_RELEASE },
+    select: { id: true, markedPath: true, payloadBits: true, deltaUsed: true },
   });
+  // One place per picture — an image, or a page of a PDF — keyed by its
+  // position, since the pages of one PDF share a release.
   const releases = [];
   for (const id of ids) {
     const ev = events.find((e) => e.id === id);
-    if (!ev || !(ev.asset?.mimeType || '').startsWith('image/')) continue;
-    const copy = await readMarked(ev);
-    if (copy)
+    for (const view of ev ? await cache.views(ev) : []) {
+      if (releases.length >= CAPTURE_CANDIDATES) break;
       releases.push({
-        id: ev.id,
+        id: releases.length,
+        eventId: ev.id,
+        page: view.page,
         payloadBits: ev.payloadBits,
         deltaUsed: ev.deltaUsed,
-        buffer: copy,
+        buffer: view.buffer,
       });
+    }
+    if (releases.length >= CAPTURE_CANDIDATES) break;
   }
   if (!releases.length) return null;
   const found = await recoverFromCapture(buffer, releases, { minBits: MIN_BITS_WITHOUT_CRC });
   if (!found) return null;
   // How alike the captured region and the same region of the release look —
   // the visual evidence, measured on the part of the page actually captured.
-  const rel = releases.find((r) => r.id === found.releaseId);
+  const rel = releases[found.releaseId];
   const v = found.visible;
   const region = { left: v.x0, top: v.y0, width: v.x1 - v.x0, height: v.y1 - v.y0 };
   const [seen, ref] = await Promise.all([
@@ -283,6 +409,8 @@ async function recoverCapture(buffer, candidates) {
   ]);
   return {
     ...found,
+    releaseId: rel.eventId,
+    page: rel.page,
     dists: {
       pHashDist: hamming(seen.pHash, ref.pHash),
       dHashDist: hamming(seen.dHash, ref.dHash),
@@ -361,6 +489,7 @@ router.post('/lens/detect', requireCap('trace:run'), singleFile, async (req, res
 
 router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => {
   const startedAt = Date.now();
+  const cache = traceCache();
   try {
     if (!req.file) throw badInput('No file uploaded. Send multipart field "file".');
 
@@ -437,9 +566,12 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
       // so scale the leak back to each candidate's released size and read again.
       // With no hash match, recent releases are tried instead (see above).
       if (!(await namesARelease(marked.payloadBits))) {
-        const rescaled = await extractAtCandidateSizes(leak, candidates, {
-          tones: Boolean(lens?.applied),
-        });
+        const rescaled = await optionalStep('rescaled read', () =>
+          extractAtCandidateSizes(leak, candidates, {
+            cache,
+            tones: Boolean(lens?.applied),
+          })
+        );
         if (rescaled) marked = rescaled;
 
         // Auto-Lens fallback: if user uploaded a phone camera capture directly
@@ -476,21 +608,25 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
                 marked = lensExtract;
               } else {
                 const lensRescaled = await extractAtCandidateSizes(leak, candidates, {
+                  cache,
                   tones: true,
                 });
                 if (lensRescaled) marked = lensRescaled;
                 else if (lensExtract) marked = lensExtract;
               }
             }
-          } catch {
+          } catch (err) {
             // auto-lens found no screen; keep the reading already made
+            console.warn('[trace] auto-lens skipped:', err?.message || err);
           }
         }
       }
       // Still nothing: the page may be only part of the upload — a phone
       // photo of a screen, a screenshot with the viewer around it, a crop.
       if (!(await readingIdentifies(marked.payloadBits))) {
-        capture = await recoverCapture(leak, candidates);
+        capture = await optionalStep('capture recovery', () =>
+          recoverCapture(leak, candidates, cache)
+        );
         if (capture) marked = capture.reading;
       }
     }
@@ -553,11 +689,10 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
       const isDegenerate = isDegeneratePayload(marked.payloadBits);
 
       // Distinguishing BETWEEN recipients of the SAME broadcast document requires
-      // statistical watermark significance (at least MIN_BITS_WITHOUT_CRC = 30 bits,
-      // i.e. > 62% bit agreement) and a clear lead over runner-up suspects.
-      // Margin >= 2 (or margin >= 1 if matches >= 32) prevents arbitrary accusations or ties.
-      const minThreshold = margin >= 2 ? MIN_BITS_WITHOUT_CRC : 32;
-      if (!isDegenerate && top.matches >= minThreshold && margin >= 1) {
+      // statistical watermark significance (MIN_BITS_WITHOUT_CRC) and a clear
+      // lead over every other officer (MIN_LEAD_BITS) — a wrong name is the
+      // expensive failure.
+      if (!isDegenerate && top.matches >= MIN_BITS_WITHOUT_CRC && margin >= MIN_LEAD_BITS) {
         event = top.event;
       }
     }
@@ -692,12 +827,8 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
             'This release predates the fragile layer, so its contents cannot be checked for edits.',
         };
       } else {
-        let released = null;
-        const copy = await readMarked(event);
-        if (copy) {
-          const m = await sharp(copy).metadata();
-          released = { width: m.width, height: m.height };
-        }
+        const [copy] = await cache.views(event);
+        const released = copy ? { width: copy.width, height: copy.height } : null;
         tamper = await verifyFragile(buffer, bufferToHex(event.receiptId), released);
       }
       reasons.push(
@@ -710,7 +841,7 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
     }
     if (capture && event?.id === capture.releaseId) {
       reasons.push(
-        `${capture.method === 'quad' ? 'Photo of a screen' : 'Screenshot or crop'} recognised: the released page was found inside the upload at ${Math.round(capture.fit.scale * 100)}% scale, ${Math.round(capture.visibleShare * 100)}% of it in view, and the mark read from that part alone.`
+        `${capture.method === 'quad' ? 'Photo of a screen' : 'Screenshot or crop'} recognised: ${capture.page ? `page ${capture.page} of the released PDF` : 'the released page'} was found inside the upload at ${Math.round(capture.fit.scale * 100)}% scale, ${Math.round(capture.visibleShare * 100)}% of it in view, and the mark read from that part alone.`
       );
     }
     if (lens?.applied) {
