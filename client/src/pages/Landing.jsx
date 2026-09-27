@@ -346,7 +346,11 @@ const PROMISES = [
 
 function AboutSection() {
   return (
-    <Section bg="base" id="about" className="overflow-hidden px-5 py-24 sm:py-32">
+    <Section
+      bg="base"
+      id="about"
+      className="flex min-h-[100dvh] items-center overflow-hidden px-5 pb-16 pt-28 sm:pb-20 sm:pt-32"
+    >
       <div className="mx-auto grid w-full max-w-6xl items-center gap-14 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
         <div>
           <Reveal>
@@ -445,81 +449,75 @@ function CopiesIllustration() {
   );
 }
 
-/* --------------------------------------------------- draggable slider ---- */
+/* ------------------------------------------- pinned horizontal section --- */
 
 /**
- * A row of tall cards that runs off the right edge, with a line beneath it
- * and a pill handle that says how far along the row you are. The row moves by
- * dragging the cards, dragging or clicking the line, a trackpad or touch
- * swipe, or the arrow keys on the handle. `marks` puts a numbered stop on the
- * line for each card, for a row that is a sequence.
+ * A section exactly one screen tall that holds still while its row of cards
+ * travels sideways. The page's own vertical scroll drives the row — one pixel
+ * down moves it one pixel along — and only once the last card is in place
+ * does the page carry on downward. Dragging the cards, dragging or clicking
+ * the line, a sideways trackpad swipe and the arrow keys all move the page's
+ * scroll, so every input stays in step with every other.
  */
-function DragSlider({ label, count, marks = false, onDark = false, children }) {
-  const viewRef = useRef(null);
+function PinnedRow({ id, bg, onDark = false, header, label, count, marks = false, children }) {
+  const sectionRef = useRef(null);
+  const rowRef = useRef(null);
+  const trackRef = useRef(null);
   const lineRef = useRef(null);
   const drag = useRef(null);
+  const [travel, setTravel] = useState(0);
   const [progress, setProgress] = useState(0);
-  const [current, setCurrent] = useState(0);
   const [grabbing, setGrabbing] = useState(false);
 
-  const maxScroll = () => {
-    const v = viewRef.current;
-    return v ? Math.max(0, v.scrollWidth - v.clientWidth) : 0;
-  };
-
+  // How far the row has to move: its full width less what the window shows.
   useEffect(() => {
-    const v = viewRef.current;
-    if (!v) return undefined;
-    let frame = 0;
     const measure = () => {
-      frame = 0;
-      const max = maxScroll();
-      setProgress(max ? v.scrollLeft / max : 0);
-      // The stops sit evenly along the line, so the one being read is simply
-      // the nearest stop to the handle.
-      setCurrent(count > 1 ? Math.round((max ? v.scrollLeft / max : 0) * (count - 1)) : 0);
-    };
-    const onScroll = () => {
-      if (!frame) frame = requestAnimationFrame(measure);
+      const track = trackRef.current;
+      const row = rowRef.current;
+      if (track && row) setTravel(Math.max(0, Math.round(track.scrollWidth - row.clientWidth)));
     };
     measure();
-    v.addEventListener('scroll', onScroll, { passive: true });
+    const ro = new ResizeObserver(measure);
+    if (trackRef.current) ro.observe(trackRef.current);
+    if (rowRef.current) ro.observe(rowRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    let frame = 0;
+    const read = () => {
+      frame = 0;
+      const el = sectionRef.current;
+      if (!el || !travel) return setProgress(0);
+      setProgress(Math.min(1, Math.max(0, -el.getBoundingClientRect().top / travel)));
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(read);
+    };
+    read();
+    window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', onScroll, { passive: true });
     return () => {
       if (frame) cancelAnimationFrame(frame);
-      v.removeEventListener('scroll', onScroll);
+      window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onScroll);
     };
-  }, [count]);
+  }, [travel]);
 
-  const goTo = (i, smooth = true) => {
-    const v = viewRef.current;
-    if (!v) return;
-    const left = count > 1 ? (i / (count - 1)) * maxScroll() : 0;
-    v.scrollTo({ left, behavior: smooth ? 'smooth' : 'auto' });
-  };
+  const sectionTop = () => sectionRef.current.getBoundingClientRect().top + window.scrollY;
+  const scrollToProgress = (p, smooth = false) =>
+    window.scrollTo({
+      top: sectionTop() + Math.min(1, Math.max(0, p)) * travel,
+      behavior: smooth ? 'smooth' : 'auto',
+    });
+  const goTo = (i) => scrollToProgress(count > 1 ? i / (count - 1) : 0, true);
+  const current = count > 1 ? Math.round(progress * (count - 1)) : 0;
 
-  // Dragging the cards themselves, with a mouse. Touch keeps native swiping.
-  const onCardsDown = (e) => {
-    if (e.pointerType !== 'mouse' || e.button !== 0) return;
-    drag.current = { kind: 'cards', x: e.clientX, left: viewRef.current.scrollLeft, moved: false };
-    setGrabbing(true);
-  };
-  // Dragging (or clicking) the line and its handle.
   const lineTo = (clientX) => {
-    const line = lineRef.current;
-    const v = viewRef.current;
-    if (!line || !v) return;
-    const r = line.getBoundingClientRect();
-    const handle = 96;
-    const p = Math.min(1, Math.max(0, (clientX - r.left - handle / 2) / (r.width - handle)));
-    v.scrollLeft = p * maxScroll();
-  };
-  const onLineDown = (e) => {
-    drag.current = { kind: 'line' };
-    setGrabbing(true);
-    e.currentTarget.setPointerCapture?.(e.pointerId);
-    lineTo(e.clientX);
+    const r = lineRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const handle = marks ? 24 : 96;
+    scrollToProgress((clientX - r.left - handle / 2) / (r.width - handle));
   };
 
   useEffect(() => {
@@ -529,18 +527,9 @@ function DragSlider({ label, count, marks = false, onDark = false, children }) {
       if (d.kind === 'line') return lineTo(e.clientX);
       const dx = e.clientX - d.x;
       if (Math.abs(dx) > 4) d.moved = true;
-      viewRef.current.scrollLeft = d.left - dx;
+      window.scrollTo({ top: d.y - dx });
     };
     const up = () => {
-      if (drag.current?.kind === 'cards' && drag.current.moved) {
-        // A drag that ends on a link is not a click on it.
-        const stop = (ev) => {
-          ev.stopPropagation();
-          ev.preventDefault();
-        };
-        window.addEventListener('click', stop, { capture: true, once: true });
-        setTimeout(() => window.removeEventListener('click', stop, { capture: true }), 0);
-      }
       drag.current = null;
       setGrabbing(false);
     };
@@ -554,120 +543,166 @@ function DragSlider({ label, count, marks = false, onDark = false, children }) {
     };
   });
 
+  // A sideways trackpad swipe moves the row, by moving the page.
+  useEffect(() => {
+    const row = rowRef.current;
+    if (!row) return undefined;
+    const onWheel = (e) => {
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        e.preventDefault();
+        window.scrollBy({ top: e.deltaX });
+      }
+    };
+    row.addEventListener('wheel', onWheel, { passive: false });
+    return () => row.removeEventListener('wheel', onWheel);
+  }, []);
+
   const onKey = (e) => {
-    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+    const map = {
+      ArrowRight: current + 1,
+      ArrowDown: current + 1,
+      ArrowLeft: current - 1,
+      ArrowUp: current - 1,
+      Home: 0,
+      End: count - 1,
+    };
+    if (e.key in map) {
       e.preventDefault();
-      goTo(Math.min(count - 1, current + 1));
-    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-      e.preventDefault();
-      goTo(Math.max(0, current - 1));
-    } else if (e.key === 'Home') {
-      e.preventDefault();
-      goTo(0);
-    } else if (e.key === 'End') {
-      e.preventDefault();
-      goTo(count - 1);
+      goTo(Math.min(count - 1, Math.max(0, map[e.key])));
     }
   };
 
-  const line = onDark ? 'bg-canvas/20' : 'bg-noir/15';
-  const fill = onDark ? 'bg-accent' : 'bg-noir';
-  // A short pill, as in a scrubber — its place on the line is what matters.
-  const handleW = '96px';
+  const lineTone = onDark ? 'bg-canvas/20' : 'bg-noir/15';
+  const fillTone = onDark ? 'bg-accent' : 'bg-noir';
+  const gutter = 'max(1.25rem, calc(50vw - 36rem))';
 
   return (
-    <div>
-      {/* the row bleeds to the right edge of the window, but starts in line
-          with the heading above it */}
-      <div
-        ref={viewRef}
-        onPointerDown={onCardsDown}
-        className={`no-scrollbar mx-[calc(50%-50vw)] flex gap-4 overflow-x-auto px-[max(1.25rem,calc(50vw-36rem))] pb-3 pt-1 sm:gap-5 ${
-          grabbing ? 'cursor-grabbing select-none' : 'cursor-grab'
-        }`}
-        style={{ scrollPaddingInline: 'max(1.25rem, calc(50vw - 36rem))' }}
-      >
-        {children}
-      </div>
+    <section
+      ref={sectionRef}
+      id={id}
+      data-bg={bg}
+      className="relative"
+      style={{ height: `calc(100dvh + ${travel}px)` }}
+    >
+      <div className="sticky top-0 flex h-[100dvh] flex-col overflow-hidden pb-[clamp(1.25rem,4dvh,2.75rem)] pt-[clamp(5.75rem,13dvh,8rem)]">
+        {onDark && (
+          <div className="dot-field pointer-events-none absolute inset-0" aria-hidden="true" />
+        )}
 
-      <div className="mt-8 flex items-center gap-5">
+        <div className="relative mx-auto w-full max-w-6xl shrink-0 px-5">{header}</div>
+
         <div
-          ref={lineRef}
-          onPointerDown={onLineDown}
-          className="relative h-6 flex-1 cursor-pointer touch-none"
+          ref={rowRef}
+          onPointerDown={(e) => {
+            if (e.pointerType !== 'mouse' || e.button !== 0) return;
+            drag.current = { kind: 'cards', x: e.clientX, y: window.scrollY, moved: false };
+            setGrabbing(true);
+          }}
+          className={`relative mt-[clamp(1rem,4dvh,2.5rem)] min-h-0 flex-1 overflow-hidden ${grabbing ? 'cursor-grabbing select-none' : 'cursor-grab'}`}
         >
-          <span
-            className={`absolute inset-x-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full ${line}`}
-          />
-          <span
-            className={`absolute left-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full ${fill} ${marks ? '' : 'opacity-40'}`}
-            style={{
-              width: marks
-                ? `calc(12px + (100% - 24px) * ${progress})`
-                : `calc(${handleW} + (100% - ${handleW}) * ${progress})`,
-            }}
-          />
-          {marks &&
-            Array.from({ length: count }, (_, i) => (
-              <button
-                key={i}
-                type="button"
-                tabIndex={-1}
-                aria-label={`Step ${i + 1}`}
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                  goTo(i);
-                }}
-                className={`absolute top-1/2 grid h-6 w-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full text-[10px] font-bold transition ${
-                  i <= current
-                    ? onDark
-                      ? 'bg-accent text-noir'
-                      : 'bg-noir text-canvas'
-                    : onDark
-                      ? 'bg-noir-deep text-canvas/60 ring-2 ring-canvas/20'
-                      : 'bg-canvas text-ink-muted ring-2 ring-noir/15'
-                }`}
-                style={{ left: `calc(12px + (100% - 24px) * ${count > 1 ? i / (count - 1) : 0})` }}
-              >
-                {i + 1}
-              </button>
-            ))}
-          {!marks && (
-            <span
-              role="slider"
-              tabIndex={0}
-              aria-label={label}
-              aria-valuemin={1}
-              aria-valuemax={count}
-              aria-valuenow={current + 1}
-              onKeyDown={onKey}
-              className={`absolute top-1/2 h-4 -translate-y-1/2 rounded-full ${fill} shadow-[0_2px_8px_rgba(31,26,35,0.25)] transition-[width] focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/50 ${
-                grabbing ? 'cursor-grabbing' : 'cursor-grab'
-              }`}
-              style={{ width: handleW, left: `calc((100% - ${handleW}) * ${progress})` }}
-            />
-          )}
-          {marks && (
-            <span
-              role="slider"
-              tabIndex={0}
-              aria-label={label}
-              aria-valuemin={1}
-              aria-valuemax={count}
-              aria-valuenow={current + 1}
-              onKeyDown={onKey}
-              className="absolute inset-0 rounded-full focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/50"
-            />
-          )}
+          <div
+            ref={trackRef}
+            className="flex h-full w-max gap-4 will-change-transform sm:gap-5"
+            style={{ paddingInline: gutter, transform: `translate3d(${-progress * travel}px,0,0)` }}
+          >
+            {children}
+          </div>
         </div>
-        <span className={`mono shrink-0 text-sm ${onDark ? 'text-canvas/60' : 'text-ink-muted'}`}>
-          <span className={`font-bold ${onDark ? 'text-canvas' : 'text-noir'}`}>
-            {String(current + 1).padStart(2, '0')}
-          </span>{' '}
-          / {String(count).padStart(2, '0')}
-        </span>
+
+        <div className="relative mx-auto mt-[clamp(1rem,3.5dvh,2rem)] flex w-full max-w-6xl shrink-0 items-center gap-5 px-5">
+          <div
+            ref={lineRef}
+            onPointerDown={(e) => {
+              drag.current = { kind: 'line' };
+              setGrabbing(true);
+              lineTo(e.clientX);
+            }}
+            role="slider"
+            tabIndex={0}
+            aria-label={label}
+            aria-valuemin={1}
+            aria-valuemax={count}
+            aria-valuenow={current + 1}
+            onKeyDown={onKey}
+            className="relative h-6 flex-1 cursor-pointer touch-none rounded-full focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/50"
+          >
+            <span
+              className={`absolute inset-x-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full ${lineTone}`}
+            />
+            {marks ? (
+              <>
+                <span
+                  className={`absolute left-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full ${fillTone}`}
+                  style={{ width: `calc(12px + (100% - 24px) * ${progress})` }}
+                />
+                {Array.from({ length: count }, (_, i) => (
+                  <span
+                    key={i}
+                    aria-hidden="true"
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      goTo(i);
+                    }}
+                    className={`absolute top-1/2 grid h-6 w-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full text-[10px] font-bold transition ${
+                      i <= current
+                        ? onDark
+                          ? 'bg-accent text-noir'
+                          : 'bg-noir text-canvas'
+                        : onDark
+                          ? 'bg-noir-deep text-canvas/60 ring-2 ring-canvas/20'
+                          : 'bg-canvas text-ink-muted ring-2 ring-noir/15'
+                    }`}
+                    style={{
+                      left: `calc(12px + (100% - 24px) * ${count > 1 ? i / (count - 1) : 0})`,
+                    }}
+                  >
+                    {i + 1}
+                  </span>
+                ))}
+              </>
+            ) : (
+              <span
+                className={`absolute top-1/2 h-4 w-24 -translate-y-1/2 rounded-full ${fillTone} shadow-[0_2px_8px_rgba(31,26,35,0.25)]`}
+                style={{ left: `calc((100% - 6rem) * ${progress})` }}
+              />
+            )}
+          </div>
+          <span className={`mono shrink-0 text-sm ${onDark ? 'text-canvas/60' : 'text-ink-muted'}`}>
+            <span className={`font-bold ${onDark ? 'text-canvas' : 'text-noir'}`}>
+              {String(current + 1).padStart(2, '0')}
+            </span>{' '}
+            / {String(count).padStart(2, '0')}
+          </span>
+        </div>
       </div>
-    </div>
+    </section>
+  );
+}
+
+/** A card in a pinned row: a coloured panel that takes the height left over,
+ *  with its title and text beneath. */
+function RowCard({ panel, panelClass, title, body, onDark }) {
+  return (
+    <article className="flex h-full max-h-[520px] w-[min(80vw,330px)] shrink-0 select-none flex-col self-center">
+      <div
+        className={`relative min-h-[110px] flex-1 overflow-hidden rounded-[1.75rem] ${panelClass}`}
+      >
+        {panel}
+      </div>
+      {/* The same height under every card, so the panels above all line up. */}
+      <div data-card-text className="mt-4 h-[9.75rem] shrink-0 sm:h-[9.25rem]">
+        <h3
+          className={`font-display-sm text-[clamp(1.25rem,2.9dvh,1.625rem)] leading-tight ${onDark ? 'text-canvas' : 'text-noir'}`}
+        >
+          {title}
+        </h3>
+        <p
+          className={`mt-1.5 text-[13px] leading-relaxed sm:text-sm ${onDark ? 'text-canvas/60' : 'text-ink-muted'}`}
+        >
+          {body}
+        </p>
+      </div>
+    </article>
   );
 }
 
@@ -721,60 +756,56 @@ const JOURNEY = [
 
 function JourneySection() {
   return (
-    <Section bg="dark" id="how-it-works" className="relative px-5 py-24 sm:py-32">
-      <div className="dot-field pointer-events-none absolute inset-0" aria-hidden="true" />
-      <div className="relative mx-auto w-full max-w-6xl">
-        <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
-          <Reveal>
+    <PinnedRow
+      id="how-it-works"
+      bg="dark"
+      onDark
+      marks
+      label="Steps from upload to evidence"
+      count={JOURNEY.length}
+      header={
+        <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
+          <div>
             <span className="text-[11px] font-semibold uppercase tracking-wider text-canvas/50">
               How it works
             </span>
-            <h2 className="mt-3 font-display text-[clamp(2.25rem,5.4vw,4.25rem)] leading-[0.98]">
+            <h2 className="mt-2 font-display text-[clamp(2rem,min(5vw,7dvh),4rem)] leading-[0.98]">
               <span className="block text-canvas">From upload</span>
               <span className="block text-accent">to evidence.</span>
             </h2>
-          </Reveal>
-          <Reveal delay={120}>
-            <p className="max-w-[36ch] text-sm leading-relaxed text-canvas/60 sm:text-base">
-              Six steps, every one of them recorded. Drag the cards or the line to follow a document
-              from the moment it is uploaded.
-            </p>
-          </Reveal>
+          </div>
+          <p className="hidden max-w-[36ch] text-sm leading-relaxed text-canvas/60 sm:block">
+            Six steps, every one of them recorded. Keep scrolling — or drag the cards or the line —
+            to follow a document from upload to evidence.
+          </p>
         </div>
-
-        <Reveal delay={200} className="mt-12">
-          <DragSlider label="Steps from upload to evidence" count={JOURNEY.length} marks onDark>
-            {JOURNEY.map((step, i) => (
-              <article
-                key={step.title}
-                data-slide
-                className="w-[min(78vw,330px)] shrink-0 select-none"
-              >
-                <div
-                  className={`relative flex aspect-[5/4] flex-col justify-between overflow-hidden rounded-[1.75rem] border-[3px] border-noir ${step.fill} p-5 text-noir`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="rounded-full bg-noir px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-canvas">
-                      {step.who}
-                    </span>
-                    <span className="grid h-11 w-11 place-items-center rounded-2xl bg-noir text-canvas">
-                      <LandingIcon name={step.icon} className="h-5 w-5" />
-                    </span>
-                  </div>
-                  <span className="font-display text-[6.5rem] leading-[0.8] text-noir/85">
-                    {String(i + 1).padStart(2, '0')}
-                  </span>
-                </div>
-                <h3 className="font-display-sm mt-5 text-[26px] leading-tight text-canvas">
-                  {step.title}
-                </h3>
-                <p className="mt-2 text-sm leading-relaxed text-canvas/60">{step.body}</p>
-              </article>
-            ))}
-          </DragSlider>
-        </Reveal>
-      </div>
-    </Section>
+      }
+    >
+      {JOURNEY.map((step, i) => (
+        <RowCard
+          key={step.title}
+          onDark
+          title={step.title}
+          body={step.body}
+          panelClass={`border-[3px] border-noir ${step.fill} text-noir`}
+          panel={
+            <div className="flex h-full flex-col justify-between p-4 sm:p-5">
+              <div className="flex items-start justify-between gap-3">
+                <span className="rounded-full bg-noir px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-canvas">
+                  {step.who}
+                </span>
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-noir text-canvas">
+                  <LandingIcon name={step.icon} className="h-5 w-5" />
+                </span>
+              </div>
+              <span className="font-display text-[clamp(3rem,11dvh,6.5rem)] leading-[0.8] text-noir/85">
+                {String(i + 1).padStart(2, '0')}
+              </span>
+            </div>
+          }
+        />
+      ))}
+    </PinnedRow>
   );
 }
 
@@ -821,56 +852,50 @@ const FEATURES = [
 
 function FeaturesSection() {
   return (
-    <Section bg="base" id="features" className="px-5 py-24 sm:py-32">
-      <div className="mx-auto w-full max-w-6xl">
-        <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
-          <Reveal>
+    <PinnedRow
+      id="features"
+      bg="base"
+      label="What Provenance is built on"
+      count={FEATURES.length}
+      header={
+        <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
+          <div>
             <span className="eyebrow">What it is built on</span>
-            <h2 className="mt-3 font-display text-[clamp(2.25rem,5.4vw,4.25rem)] leading-[0.98]">
+            <h2 className="mt-2 font-display text-[clamp(2rem,min(5vw,7dvh),4rem)] leading-[0.98]">
               <span className="block text-noir">Built for the way</span>
               <span className="tone-accent block">leaks really happen.</span>
             </h2>
-          </Reveal>
-          <Reveal delay={120}>
-            <p className="max-w-[36ch] text-sm leading-relaxed text-ink-muted sm:text-base">
-              Six parts working together, so a leak can be traced even after someone has tried to
-              hide where it came from.
-            </p>
-          </Reveal>
+          </div>
+          <p className="hidden max-w-[36ch] text-sm leading-relaxed text-ink-muted sm:block">
+            Six parts working together, so a leak can be traced even after someone has tried to hide
+            where it came from.
+          </p>
         </div>
-
-        <Reveal delay={200} className="mt-12">
-          <DragSlider label="What Provenance is built on" count={FEATURES.length}>
-            {FEATURES.map((f, i) => (
-              <article
-                key={f.title}
-                data-slide
-                className="group w-[min(78vw,330px)] shrink-0 select-none"
+      }
+    >
+      {FEATURES.map((f, i) => (
+        <RowCard
+          key={f.title}
+          title={f.title}
+          body={f.body}
+          panelClass={`group grid place-items-center ${f.fill}`}
+          panel={
+            <>
+              <span
+                aria-hidden="true"
+                className="absolute bottom-2 right-5 font-display text-[clamp(2.75rem,8dvh,4.5rem)] leading-none opacity-15"
               >
-                <div
-                  className={`relative grid aspect-[5/4] place-items-center overflow-hidden rounded-[1.75rem] ${f.fill}`}
-                >
-                  <span
-                    aria-hidden="true"
-                    className="absolute bottom-3 right-5 font-display text-[4.5rem] leading-none opacity-15"
-                  >
-                    {String(i + 1).padStart(2, '0')}
-                  </span>
-                  <LandingIcon
-                    name={f.icon}
-                    className="h-20 w-20 transition duration-500 group-hover:-rotate-6 group-hover:scale-110"
-                  />
-                </div>
-                <h3 className="font-display-sm mt-5 text-[24px] leading-tight text-noir">
-                  {f.title}
-                </h3>
-                <p className="mt-2 text-sm leading-relaxed text-ink-muted">{f.body}</p>
-              </article>
-            ))}
-          </DragSlider>
-        </Reveal>
-      </div>
-    </Section>
+                {String(i + 1).padStart(2, '0')}
+              </span>
+              <LandingIcon
+                name={f.icon}
+                className="h-[clamp(3rem,9dvh,5rem)] w-[clamp(3rem,9dvh,5rem)] transition duration-500 group-hover:-rotate-6 group-hover:scale-110"
+              />
+            </>
+          }
+        />
+      ))}
+    </PinnedRow>
   );
 }
 
