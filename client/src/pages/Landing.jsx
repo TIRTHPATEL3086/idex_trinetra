@@ -459,6 +459,9 @@ function CopiesIllustration() {
  * the line, a sideways trackpad swipe and the arrow keys all move the page's
  * scroll, so every input stays in step with every other.
  */
+/** Tall enough to pin a row and still fit heading, cards and line. */
+const PIN_QUERY = '(min-height: 620px)';
+
 function PinnedRow({ id, bg, onDark = false, header, label, count, marks = false, children }) {
   const sectionRef = useRef(null);
   const rowRef = useRef(null);
@@ -468,6 +471,18 @@ function PinnedRow({ id, bg, onDark = false, header, label, count, marks = false
   const [travel, setTravel] = useState(0);
   const [progress, setProgress] = useState(0);
   const [grabbing, setGrabbing] = useState(false);
+  // A screen too short to hold heading, cards and line at once (a phone on
+  // its side) gets an ordinary section with a row to swipe instead.
+  const [pin, setPin] = useState(
+    () => typeof window === 'undefined' || window.matchMedia(PIN_QUERY).matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(PIN_QUERY);
+    const sync = () => setPin(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
 
   // How far the row has to move: its full width less what the window shows.
   useEffect(() => {
@@ -481,35 +496,38 @@ function PinnedRow({ id, bg, onDark = false, header, label, count, marks = false
     if (trackRef.current) ro.observe(trackRef.current);
     if (rowRef.current) ro.observe(rowRef.current);
     return () => ro.disconnect();
-  }, []);
+  }, [pin]);
 
   useEffect(() => {
     let frame = 0;
     const read = () => {
       frame = 0;
+      if (!travel) return setProgress(0);
+      if (!pin) return setProgress(Math.min(1, Math.max(0, rowRef.current.scrollLeft / travel)));
       const el = sectionRef.current;
-      if (!el || !travel) return setProgress(0);
-      setProgress(Math.min(1, Math.max(0, -el.getBoundingClientRect().top / travel)));
+      if (el) setProgress(Math.min(1, Math.max(0, -el.getBoundingClientRect().top / travel)));
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(read);
     };
     read();
-    window.addEventListener('scroll', onScroll, { passive: true });
+    const source = pin ? window : rowRef.current;
+    source.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', onScroll, { passive: true });
     return () => {
       if (frame) cancelAnimationFrame(frame);
-      window.removeEventListener('scroll', onScroll);
+      source.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onScroll);
     };
-  }, [travel]);
+  }, [travel, pin]);
 
   const sectionTop = () => sectionRef.current.getBoundingClientRect().top + window.scrollY;
-  const scrollToProgress = (p, smooth = false) =>
-    window.scrollTo({
-      top: sectionTop() + Math.min(1, Math.max(0, p)) * travel,
-      behavior: smooth ? 'smooth' : 'auto',
-    });
+  const scrollToProgress = (p, smooth = false) => {
+    const at = Math.min(1, Math.max(0, p)) * travel;
+    const behavior = smooth ? 'smooth' : 'auto';
+    if (pin) window.scrollTo({ top: sectionTop() + at, behavior });
+    else rowRef.current.scrollTo({ left: at, behavior });
+  };
   const goTo = (i) => scrollToProgress(count > 1 ? i / (count - 1) : 0, true);
   const current = count > 1 ? Math.round(progress * (count - 1)) : 0;
 
@@ -527,7 +545,8 @@ function PinnedRow({ id, bg, onDark = false, header, label, count, marks = false
       if (d.kind === 'line') return lineTo(e.clientX);
       const dx = e.clientX - d.x;
       if (Math.abs(dx) > 4) d.moved = true;
-      window.scrollTo({ top: d.y - dx });
+      if (pin) window.scrollTo({ top: d.y - dx });
+      else rowRef.current.scrollLeft = d.y - dx;
     };
     const up = () => {
       drag.current = null;
@@ -546,7 +565,7 @@ function PinnedRow({ id, bg, onDark = false, header, label, count, marks = false
   // A sideways trackpad swipe moves the row, by moving the page.
   useEffect(() => {
     const row = rowRef.current;
-    if (!row) return undefined;
+    if (!row || !pin) return undefined;
     const onWheel = (e) => {
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
         e.preventDefault();
@@ -555,7 +574,7 @@ function PinnedRow({ id, bg, onDark = false, header, label, count, marks = false
     };
     row.addEventListener('wheel', onWheel, { passive: false });
     return () => row.removeEventListener('wheel', onWheel);
-  }, []);
+  }, [pin]);
 
   const onKey = (e) => {
     const map = {
@@ -582,9 +601,15 @@ function PinnedRow({ id, bg, onDark = false, header, label, count, marks = false
       id={id}
       data-bg={bg}
       className="relative"
-      style={{ height: `calc(100dvh + ${travel}px)` }}
+      style={pin ? { height: `calc(100dvh + ${travel}px)` } : undefined}
     >
-      <div className="sticky top-0 flex h-[100dvh] flex-col overflow-hidden pb-[clamp(1.25rem,4dvh,2.75rem)] pt-[clamp(5.75rem,13dvh,8rem)]">
+      <div
+        className={
+          pin
+            ? 'sticky top-0 flex h-[100dvh] flex-col overflow-hidden pb-[clamp(1.25rem,4dvh,2.75rem)] pt-[clamp(5.75rem,13dvh,8rem)]'
+            : 'relative flex flex-col pb-16 pt-24'
+        }
+      >
         {onDark && (
           <div className="dot-field pointer-events-none absolute inset-0" aria-hidden="true" />
         )}
@@ -595,15 +620,24 @@ function PinnedRow({ id, bg, onDark = false, header, label, count, marks = false
           ref={rowRef}
           onPointerDown={(e) => {
             if (e.pointerType !== 'mouse' || e.button !== 0) return;
-            drag.current = { kind: 'cards', x: e.clientX, y: window.scrollY, moved: false };
+            drag.current = {
+              kind: 'cards',
+              x: e.clientX,
+              y: pin ? window.scrollY : rowRef.current.scrollLeft,
+              moved: false,
+            };
             setGrabbing(true);
           }}
-          className={`relative mt-[clamp(1rem,4dvh,2.5rem)] min-h-0 flex-1 overflow-hidden ${grabbing ? 'cursor-grabbing select-none' : 'cursor-grab'}`}
+          data-free={pin ? undefined : ''}
+          className={`group/row relative mt-[clamp(1rem,4dvh,2.5rem)] ${pin ? 'min-h-0 flex-1 overflow-hidden' : 'no-scrollbar overflow-x-auto pb-1'} ${grabbing ? 'cursor-grabbing select-none' : 'cursor-grab'}`}
         >
           <div
             ref={trackRef}
-            className="flex h-full w-max gap-4 will-change-transform sm:gap-5"
-            style={{ paddingInline: gutter, transform: `translate3d(${-progress * travel}px,0,0)` }}
+            className={`flex w-max gap-4 sm:gap-5 ${pin ? 'h-full will-change-transform' : ''}`}
+            style={{
+              paddingInline: gutter,
+              transform: pin ? `translate3d(${-progress * travel}px,0,0)` : undefined,
+            }}
           >
             {children}
           </div>
@@ -683,9 +717,9 @@ function PinnedRow({ id, bg, onDark = false, header, label, count, marks = false
  *  with its title and text beneath. */
 function RowCard({ panel, panelClass, title, body, onDark }) {
   return (
-    <article className="flex h-full max-h-[520px] w-[min(80vw,330px)] shrink-0 select-none flex-col self-center">
+    <article className="flex h-full max-h-[520px] w-[min(80vw,330px)] shrink-0 select-none flex-col self-center group-data-[free]/row:h-auto">
       <div
-        className={`relative min-h-[110px] flex-1 overflow-hidden rounded-[1.75rem] ${panelClass}`}
+        className={`relative min-h-[110px] flex-1 overflow-hidden rounded-[1.75rem] group-data-[free]/row:h-[200px] group-data-[free]/row:flex-none ${panelClass}`}
       >
         {panel}
       </div>
