@@ -23,6 +23,7 @@ import traceRouter from './routes/trace.js';
 import auditRouter from './routes/audit.js';
 import metricsRouter from './routes/metrics.js';
 import keysRouter from './routes/keys.js';
+import { backfillPdfPsnr } from './lib/psnrBackfill.js';
 
 /**
  * The Express application: routes, CORS, the shared error shape, and a boot
@@ -175,6 +176,14 @@ async function start() {
     console.log(`  DELTA    ${env.watermarkDelta}`);
     console.log('');
   });
+
+  // PDF releases from before PDFs were measured get their PSNR, once, in the
+  // background; the server is already answering while this runs.
+  if (db === 'up') {
+    backfillPdfPsnr((m) => console.log('  ' + m)).catch((err) =>
+      console.warn(`  [psnr] backfill skipped: ${err.message}`)
+    );
+  }
 
   // A clear message beats an unhandled 'error' stack trace when the port is
   // already taken — the single most common thing to go wrong on boot.
