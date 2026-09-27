@@ -82,9 +82,25 @@ app.use('/api/files', filesRouter);
 // the internet. In development Vite serves the client instead.
 if (process.env.SERVE_CLIENT === '1') {
   const dist = path.join(ROOT, 'client', 'dist');
-  app.use(express.static(dist, { index: false }));
+  // Files under assets/ are named by their content, so a browser may keep
+  // them for a year: a new build produces new names. index.html and the
+  // service worker are always checked, so a deploy is picked up at once.
+  const noCache = (res) => res.setHeader('Cache-Control', 'no-cache');
+  app.use(
+    express.static(dist, {
+      index: false,
+      setHeaders(res, file) {
+        if (/[\\/]assets[\\/]/.test(file)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        } else if (/\.html$|[\\/]sw\.js$/.test(file)) {
+          noCache(res);
+        }
+      },
+    })
+  );
   app.get(/^(?!\/api\/).*/, (req, res, next) => {
     if (!req.accepts('html')) return next();
+    noCache(res);
     res.sendFile(path.join(dist, 'index.html'));
   });
 }

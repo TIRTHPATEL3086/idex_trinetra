@@ -156,7 +156,8 @@ async function extractAtCandidateSizes(buffer, candidates, { tones = false } = {
 
   for (const ev of events) {
     const copy = await readMarked(ev);
-    if (!copy) continue; // the released copy is gone; nothing to align to
+    // Gone, or a PDF: neither is a picture the upload could be aligned to.
+    if (!copy || isPdf(copy)) continue;
     const size = await sharp(copy).metadata();
     const dims = `${size.width}x${size.height}`;
     const deltas = [...new Set([ev.deltaUsed, 12, 14].filter(Boolean))];

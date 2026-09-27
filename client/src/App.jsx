@@ -1,5 +1,5 @@
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 
 import { getHealth } from './lib/api.js';
 import { useAuth, ROLE_UI, initialsOf } from './lib/auth.jsx';
@@ -9,15 +9,17 @@ import Preloader from './components/Preloader.jsx';
 import { CloseIcon, ShieldIcon as ShieldGlyph, SignOutIcon } from './components/icons.jsx';
 import Landing from './pages/Landing.jsx';
 import Login from './pages/Login.jsx';
-import Assets from './pages/Assets.jsx';
-import Decrypt from './pages/Decrypt.jsx';
-import Trace from './pages/Trace.jsx';
-import Timeline from './pages/Timeline.jsx';
-import Robustness from './pages/Robustness.jsx';
-import History from './pages/History.jsx';
-import PqcEnroll from './pages/PqcEnroll.jsx';
-import Inspect from './pages/Inspect.jsx';
-import Officers from './pages/Officers.jsx';
+// The signed-in screens load only when opened, so a visitor to the landing or
+// sign-in page does not download the charts, the wallet code or every screen.
+const Assets = lazy(() => import('./pages/Assets.jsx'));
+const Decrypt = lazy(() => import('./pages/Decrypt.jsx'));
+const Trace = lazy(() => import('./pages/Trace.jsx'));
+const Timeline = lazy(() => import('./pages/Timeline.jsx'));
+const Robustness = lazy(() => import('./pages/Robustness.jsx'));
+const History = lazy(() => import('./pages/History.jsx'));
+const PqcEnroll = lazy(() => import('./pages/PqcEnroll.jsx'));
+const Inspect = lazy(() => import('./pages/Inspect.jsx'));
+const Officers = lazy(() => import('./pages/Officers.jsx'));
 
 /**
  * Application shell — a white, large-radius app panel on a warm cream canvas,
@@ -48,11 +50,21 @@ const NAV = [
   { to: '/officers', label: 'Officers', icon: UsersIcon, cap: 'users:write' },
 ];
 
+const INTRO_SEEN = 'provenance:intro-seen';
+
 export default function App() {
   // The intro plays on a fresh load of the landing page, not on in-app
   // navigation back to it.
   const [booting, setBooting] = useState(() => {
-    const show = window.location.pathname === '/';
+    // Once per browser session: a refresh or a second visit goes straight in.
+    let seen = false;
+    try {
+      seen = sessionStorage.getItem(INTRO_SEEN) === '1';
+      sessionStorage.setItem(INTRO_SEEN, '1');
+    } catch {
+      // Storage blocked (private mode): play it, as before.
+    }
+    const show = window.location.pathname === '/' && !seen;
     // Mark the page as covered before anything renders, so no entrance on the
     // landing page can start ahead of the loader's own effect.
     if (show) document.documentElement.classList.add('is-preloading');
@@ -156,87 +168,89 @@ function Shell() {
 
           <main className="scroll-slim min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3.5 py-5 sm:px-6 sm:py-6 xl:px-8">
             <div className="mx-auto w-full max-w-6xl">
-              <Routes>
-                {/* Land on the first screen this role can actually use. */}
-                <Route path="/" element={<Navigate to={user?.landing || '/assets'} replace />} />
-                <Route
-                  path="/login"
-                  element={<Navigate to={user?.landing || '/assets'} replace />}
-                />
-                <Route
-                  path="/assets"
-                  element={
-                    <RequireCap capability="assets:read">
-                      <Assets />
-                    </RequireCap>
-                  }
-                />
-                <Route
-                  path="/decrypt"
-                  element={
-                    <RequireCap capability="decrypt:self">
-                      <Decrypt />
-                    </RequireCap>
-                  }
-                />
-                <Route
-                  path="/inspect"
-                  element={
-                    <RequireCap capability="decrypt:any">
-                      <Inspect />
-                    </RequireCap>
-                  }
-                />
-                <Route
-                  path="/trace"
-                  element={
-                    <RequireCap capability="trace:run">
-                      <Trace />
-                    </RequireCap>
-                  }
-                />
-                <Route
-                  path="/timeline"
-                  element={
-                    <RequireCap capability="audit:own">
-                      <Timeline />
-                    </RequireCap>
-                  }
-                />
-                <Route
-                  path="/robustness"
-                  element={
-                    <RequireCap capability="metrics:read">
-                      <Robustness />
-                    </RequireCap>
-                  }
-                />
-                <Route
-                  path="/history"
-                  element={
-                    <RequireCap capability="audit:read">
-                      <History />
-                    </RequireCap>
-                  }
-                />
-                <Route
-                  path="/officers"
-                  element={
-                    <RequireCap capability="users:write">
-                      <Officers />
-                    </RequireCap>
-                  }
-                />
-                <Route
-                  path="/enroll"
-                  element={
-                    <RequireCap capability="assets:upload">
-                      <PqcEnroll />
-                    </RequireCap>
-                  }
-                />
-                <Route path="*" element={<p className="text-ink-muted">No such screen.</p>} />
-              </Routes>
+              <Suspense fallback={<ScreenLoading />}>
+                <Routes>
+                  {/* Land on the first screen this role can actually use. */}
+                  <Route path="/" element={<Navigate to={user?.landing || '/assets'} replace />} />
+                  <Route
+                    path="/login"
+                    element={<Navigate to={user?.landing || '/assets'} replace />}
+                  />
+                  <Route
+                    path="/assets"
+                    element={
+                      <RequireCap capability="assets:read">
+                        <Assets />
+                      </RequireCap>
+                    }
+                  />
+                  <Route
+                    path="/decrypt"
+                    element={
+                      <RequireCap capability="decrypt:self">
+                        <Decrypt />
+                      </RequireCap>
+                    }
+                  />
+                  <Route
+                    path="/inspect"
+                    element={
+                      <RequireCap capability="decrypt:any">
+                        <Inspect />
+                      </RequireCap>
+                    }
+                  />
+                  <Route
+                    path="/trace"
+                    element={
+                      <RequireCap capability="trace:run">
+                        <Trace />
+                      </RequireCap>
+                    }
+                  />
+                  <Route
+                    path="/timeline"
+                    element={
+                      <RequireCap capability="audit:own">
+                        <Timeline />
+                      </RequireCap>
+                    }
+                  />
+                  <Route
+                    path="/robustness"
+                    element={
+                      <RequireCap capability="metrics:read">
+                        <Robustness />
+                      </RequireCap>
+                    }
+                  />
+                  <Route
+                    path="/history"
+                    element={
+                      <RequireCap capability="audit:read">
+                        <History />
+                      </RequireCap>
+                    }
+                  />
+                  <Route
+                    path="/officers"
+                    element={
+                      <RequireCap capability="users:write">
+                        <Officers />
+                      </RequireCap>
+                    }
+                  />
+                  <Route
+                    path="/enroll"
+                    element={
+                      <RequireCap capability="assets:upload">
+                        <PqcEnroll />
+                      </RequireCap>
+                    }
+                  />
+                  <Route path="*" element={<p className="text-ink-muted">No such screen.</p>} />
+                </Routes>
+              </Suspense>
             </div>
           </main>
         </div>
@@ -536,6 +550,15 @@ const S = {
 
 /** Icons inherit their colour from the control, so one rule covers the light
     top bar, the dark rail, and the coral active pill. */
+/** Shown in the content area for the moment a screen's code is loading. */
+function ScreenLoading() {
+  return (
+    <div className="grid min-h-[40vh] place-items-center" role="status" aria-label="Loading">
+      <span className="h-7 w-7 animate-spin rounded-full border-[3px] border-accent border-t-transparent" />
+    </div>
+  );
+}
+
 function NavIcon({ children }) {
   return (
     <svg
