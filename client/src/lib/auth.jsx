@@ -12,6 +12,27 @@ import { getMe, login as apiLogin, logout as apiLogout, onSessionLost } from './
 
 const AuthContext = createContext(null);
 
+/**
+ * Marks this tab as one that has already been open. sessionStorage lives as
+ * long as the tab: a refresh keeps it, closing the tab drops it. So a load
+ * without it is a new tab or a reopened site, and that starts signed out.
+ */
+const TAB_SESSION = 'idex:tab-open';
+
+/** True on the first load in this tab; marks the tab either way. */
+function markTab() {
+  try {
+    const fresh = sessionStorage.getItem(TAB_SESSION) !== '1';
+    sessionStorage.setItem(TAB_SESSION, '1');
+    return fresh;
+  } catch {
+    return false; // storage blocked: fall back to the cookie alone
+  }
+}
+
+/** Decided once per page load, however often the provider mounts. */
+const FRESH_TAB = markTab();
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   // 'checking' until the boot-time /me has answered — the router must not
@@ -20,7 +41,16 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let alive = true;
-    getMe()
+    // Closing the tab ends the session: a new tab, or the site reopened,
+    // signs out on the server before anything is shown. A refresh keeps it.
+    const session = FRESH_TAB
+      ? apiLogout()
+          .catch(() => {})
+          .then(() => {
+            throw new Error('A new tab starts signed out.');
+          })
+      : getMe();
+    session
       .then((r) => {
         if (!alive) return;
         setUser(r.user);
@@ -109,7 +139,8 @@ export const ROLE_UI = {
   CRYPTO_CUSTODIAN: {
     label: 'Cryptographic Custodian',
     short: 'Custodian',
-    blurb: 'WESEE Signals HQ: Originates dispatches, multi-recipient ML-KEM-768 broadcast encryption.',
+    blurb:
+      'WESEE Signals HQ: Originates dispatches, multi-recipient ML-KEM-768 broadcast encryption.',
     badge: 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/30',
     tint: 'bg-emerald-500',
     demo: { email: 'custodian@navy.gov.in', password: 'custodian123' },
@@ -117,7 +148,8 @@ export const ROLE_UI = {
   TACTICAL_OFFICER: {
     label: 'Tactical Recipient Officer',
     short: 'CO Vikrant',
-    blurb: 'Naval Operations: Decrypts authorized dispatches with personal ML-KEM private key, signs with ML-DSA.',
+    blurb:
+      'Naval Operations: Decrypts authorized dispatches with personal ML-KEM private key, signs with ML-DSA.',
     badge: 'bg-cyan-950/80 text-cyan-300 border border-cyan-500/30',
     tint: 'bg-cyan-500',
     demo: { email: 'co.vikrant@navy.gov.in', password: 'officer123' },
@@ -125,7 +157,8 @@ export const ROLE_UI = {
   FORENSIC_ANALYST: {
     label: 'Naval Cyber Forensic Analyst',
     short: 'Provost',
-    blurb: 'Naval Cyber Cell: Traces leaked media, DWT extraction, issues Sec 65B/63 BSA Court Dossier.',
+    blurb:
+      'Naval Cyber Cell: Traces leaked media, DWT extraction, issues Sec 65B/63 BSA Court Dossier.',
     badge: 'bg-amber-950/80 text-amber-300 border border-amber-500/30',
     tint: 'bg-amber-500',
     demo: { email: 'provost@navy.gov.in', password: 'analyst123' },

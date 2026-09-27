@@ -72,7 +72,7 @@ router.post('/login', validate(LoginBody), async (req, res, next) => {
       data: { lastLoginAt: new Date() },
     });
 
-    res.setHeader('Set-Cookie', sessionCookie(token, expiresAt));
+    res.setHeader('Set-Cookie', sessionCookie(token));
     res.json({
       user: publicUser({ ...updated, lastLoginAt: user.lastLoginAt }),
       expiresAt: expiresAt.toISOString(),

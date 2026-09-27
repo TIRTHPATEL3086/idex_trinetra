@@ -133,15 +133,15 @@ export function parseCookies(header) {
  * httpOnly so no script can read the session, SameSite=Lax so a cross-site
  * form post cannot carry it, Secure once we are actually on https.
  */
-export function sessionCookie(token, expiresAt) {
+export function sessionCookie(token) {
   const sameSite = env.nodeEnv === 'production' ? 'SameSite=None' : 'SameSite=Lax';
   const parts = [
     `${SESSION_COOKIE}=${encodeURIComponent(token)}`,
     'Path=/',
     'HttpOnly',
     sameSite,
-    `Expires=${expiresAt.toUTCString()}`,
-    `Max-Age=${Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000))}`,
+    // No Expires / Max-Age: a browser-session cookie, gone when the browser
+    // closes. The token inside still expires on the server as issued.
   ];
   if (env.nodeEnv === 'production') parts.push('Secure');
   return parts.join('; ');
