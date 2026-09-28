@@ -209,6 +209,21 @@ test/              smoke test, attack suite, contract tests
 | `npm run db:migrate` · `db:seed` · `db:studio` | Prisma                                                    |
 | `npm run lint` · `npm run format`              | ESLint, Prettier                                          |
 
+## Hosting
+
+The website is on **Vercel** and the API on **Render**.
+
+- **Vercel** builds `client/` (project root directory `client`). `client/vercel.json`
+  forwards every `/api/*` request to the Render API, so the browser sees one site:
+  the session cookie stays first-party and no cross-site setup is needed. A proxied
+  request may take up to 120 s, which covers a trace.
+- **Render** runs `npm start` from `tirth` and also still serves the site itself.
+  Its `CORS_ORIGIN` must list every address the site is opened from, comma-separated
+  — the Render address and the Vercel address — because browsers send an `Origin`
+  header on every POST, including sign-in.
+
+If the Render address changes, update the `destination` in `client/vercel.json`.
+
 ## Status
 
 All core modules are fully implemented and verified:
