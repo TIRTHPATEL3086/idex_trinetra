@@ -53,6 +53,19 @@ const router = Router();
 const MIN_BITS_WITHOUT_CRC = 30;
 
 /**
+ * Below this many bits a reading is weak enough that chance alone reaches it:
+ * a trace compares one upload with many copies many ways, and a photo of a
+ * document nobody here released read 30-32 against a recent release. So a
+ * weak reading names an officer only when the upload also looks like that
+ * release (pHash within MAX_VISUAL_PHASH_DIST) — the watermark then only has
+ * to tell apart the recipients of a document the picture plainly shows. A
+ * phone photo of a released image measured 0-9/64 against it; the unrelated
+ * photo 32-34/64. At STRONG_BITS and above, the watermark stands on its own.
+ */
+const STRONG_BITS = 36;
+const MAX_VISUAL_PHASH_DIST = 12;
+
+/**
  * Whether bits name a real release: a valid CRC alone is not enough, because
  * degenerate readings (all zeros, all ones) from a mark that did not survive
  * can satisfy an 8-bit CRC by construction.
@@ -688,7 +701,22 @@ router.post('/', requireCap('trace:run'), singleFile, async (req, res, next) => 
       // i.e. > 62% bit agreement) and a clear lead over runner-up suspects.
       // Margin >= 2 (or margin >= 1 if matches >= 32) prevents arbitrary accusations or ties.
       const minThreshold = margin >= 2 ? MIN_BITS_WITHOUT_CRC : 32;
-      if (!isDegenerate && top.matches >= minThreshold && margin >= 1) {
+
+      // A weak reading (under STRONG_BITS) must also come from an upload that
+      // looks like that release: from the capture that found it, else the
+      // hash search, else measured directly.
+      const listed = candidates.find((c) => c.id === top.event.id);
+      const visualDist =
+        capture && capture.releaseId === top.event.id
+          ? capture.dists.pHashDist
+          : listed?.pHashDist != null
+            ? listed.pHashDist
+            : top.event.pHash != null
+              ? hamming(leaked.pHash, top.event.pHash)
+              : 64;
+      const seenOrStrong = top.matches >= STRONG_BITS || visualDist <= MAX_VISUAL_PHASH_DIST;
+
+      if (!isDegenerate && top.matches >= minThreshold && margin >= 1 && seenOrStrong) {
         event = top.event;
       }
     }
