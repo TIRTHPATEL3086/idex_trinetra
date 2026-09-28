@@ -15,10 +15,17 @@ export const env = {
   // ---------- server ----------
   port: num(process.env.PORT, 4000),
   nodeEnv: process.env.NODE_ENV || 'development',
-  corsOrigin: (process.env.CORS_ORIGIN || 'http://localhost:5173')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean),
+  corsOrigin: [
+    ...new Set([
+      ...(process.env.CORS_ORIGIN || 'http://localhost:5173')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+      // The website hosted on Vercel, which forwards /api/* here (client/vercel.json).
+      // Browsers send its address as Origin on every POST, sign-in included.
+      'https://idex-trinetra.vercel.app',
+    ]),
+  ],
 
   // ---------- crypto ----------
   masterKeyHex: process.env.MASTER_KEY_HEX || '00'.repeat(32),

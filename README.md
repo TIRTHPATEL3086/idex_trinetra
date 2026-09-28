@@ -213,16 +213,18 @@ test/              smoke test, attack suite, contract tests
 
 The website is on **Vercel** and the API on **Render**.
 
-- **Vercel** builds `client/` (project root directory `client`). `client/vercel.json`
-  forwards every `/api/*` request to the Render API, so the browser sees one site:
-  the session cookie stays first-party and no cross-site setup is needed. A proxied
-  request may take up to 120 s, which covers a trace.
-- **Render** runs `npm start` from `tirth` and also still serves the site itself.
-  Its `CORS_ORIGIN` must list every address the site is opened from, comma-separated
-  — the Render address and the Vercel address — because browsers send an `Origin`
-  header on every POST, including sign-in.
+- **Vercel** — https://idex-trinetra.vercel.app — serves `client/`.
+  `client/vercel.json` forwards every `/api/*` request to the Render API, so the
+  browser sees one site: the session cookie stays first-party and no cross-site
+  setup is needed. A proxied request may take up to 120 s, which covers a trace.
+  It is deployed from this machine, not from Git: `cd client && npx vercel deploy --prod`.
+- **Render** — https://crypto-2-g2sf.onrender.com — runs `npm start` from `tirth`
+  and also still serves the site itself. The API accepts requests whose `Origin` is
+  in `CORS_ORIGIN` or is the Vercel address (`server/lib/env.js`), since browsers
+  send an `Origin` header on every POST, including sign-in.
 
-If the Render address changes, update the `destination` in `client/vercel.json`.
+If the Render address changes, update the `destination` in `client/vercel.json`;
+if the Vercel address changes, update it in `server/lib/env.js`.
 
 ## Status
 
