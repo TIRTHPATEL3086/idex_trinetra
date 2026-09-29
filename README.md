@@ -256,20 +256,7 @@ Each role is deliberately missing a power, so no single person can both create a
 ---
 
 <div align="center">
-  <img src="https://capsule-render.vercel.app/api?type=rect&color=9e5ecf&height=60&text=📈%20ROADMAP&fontColor=fff8f8&fontSize=30" alt="Roadmap Banner"/>
-</div>
-
-<br/>
-
-- [x] **Phase 1:** AES-256-GCM vault, DWT + QIM watermark, Reed-Solomon payload codec.
-- [x] **Phase 2:** On-chain receipts, perceptual hash BK-tree, three-band confidence scoring.
-- [x] **Phase 3:** Role-based access, post-quantum key wrap and signatures, PDF watermarking.
-- [x] **Phase 4:** Evidence dossier export, Sepolia deployment, attack-suite benchmarks.
-- [ ] **Phase 5:** Merkle-batched receipt anchoring (one transaction per batch).
-- [ ] **Phase 6:** Full-page raster watermark extraction for printed-and-scanned PDFs.
-
-<br/>
-
+ 
 ---
 
 <div align="center">
