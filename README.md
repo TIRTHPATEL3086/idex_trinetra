@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:9e5ecf,50:cc91f0,100:ffb0c2&height=250&section=header&text=Decryption%20Provenance&fontSize=72&fontAlignY=38&desc=Forensic%20Leak%20Attribution%20for%20Classified%20Documents&descAlignY=60&descAlign=50&fontColor=fff8f8&animation=fadeIn" width="100%" alt="Header" />
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:9e5ecf,50:cc91f0,100:ffb0c2&height=250&section=header&text=Idex%20Trinetra&fontSize=72&fontAlignY=38&desc=Forensic%20Leak%20Attribution%20for%20Classified%20Documents&descAlignY=60&descAlign=50&fontColor=fff8f8&animation=fadeIn" width="100%" alt="Header" />
 
 <br/>
 
